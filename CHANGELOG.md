@@ -4,6 +4,19 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project uses
 [semantic versioning](https://semver.org/).
 
+## [1.0.13] - 2026-09-15
+
+### Fixed
+
+- **Installs kept running an old build.** The scheduled task runs the copy of LiveClaude under
+  `%LOCALAPPDATA%\LiveClaude\supervisor`, so while the task is running those files are locked — and
+  the refresh skipped them without a word. Every elevated install therefore ran whatever build was
+  there before the update, which on an older build meant doing nothing at all and exiting 0. The copy
+  is refreshed before any registration now: what is running is stopped first, and if a file still
+  cannot be replaced the card says so instead of registering a stale build.
+- The result of an install names the build it registered, so "nothing happened" can be told apart
+  from "an old build happened".
+
 ## [1.0.12] - 2026-09-15
 
 ### Added
@@ -222,6 +235,7 @@ First release.
 - Rolling per-instance logs and a supervisor log under `%ProgramData%\LiveClaude\logs`.
 - Packaging: portable zips (x64, arm64, self-contained), ClickOnce, and winget manifests.
 
+[1.0.13]: https://github.com/LeandroCannizzaro/LiveClaude/releases/tag/v1.0.13
 [1.0.12]: https://github.com/LeandroCannizzaro/LiveClaude/releases/tag/v1.0.12
 [1.0.11]: https://github.com/LeandroCannizzaro/LiveClaude/releases/tag/v1.0.11
 [1.0.10]: https://github.com/LeandroCannizzaro/LiveClaude/releases/tag/v1.0.10

@@ -3,6 +3,15 @@ using System.Runtime.InteropServices;
 namespace LiveClaude.Core.Hosting;
 
 /// <summary>
+/// Outcome of refreshing the stable copy: which files could not be replaced, and the version that
+/// ended up there.
+/// </summary>
+public sealed record DeploymentResult(string ExecutablePath, IReadOnlyList<string> Locked, string? Version)
+{
+    public bool UpToDate => Locked.Count == 0;
+}
+
+/// <summary>
 /// Gives the supervisor a path that does not move.
 ///
 /// A ClickOnce install lives under %LOCALAPPDATA%\Apps\2.0\&lt;random&gt;\ and a winget portable one
@@ -29,21 +38,48 @@ public static class SupervisorDeployment
     /// Returns the supervisor path to register. Copies the application files to
     /// <see cref="StableDirectory"/> first when the current location is a volatile one.
     /// </summary>
-    public static string EnsureDeployed(string? sourceDirectory = null)
+    public static string EnsureDeployed(string? sourceDirectory = null) => Deploy(sourceDirectory).ExecutablePath;
+
+    /// <summary>
+    /// Refreshes the stable copy and reports what it could not replace.
+    ///
+    /// The scheduled task runs the copy, so while it is running those files are locked and the
+    /// refresh silently kept an old build around — which is how an install could run yesterday's
+    /// code and do nothing at all. The caller is expected to stop the supervisor and try again.
+    /// </summary>
+    public static DeploymentResult Deploy(string? sourceDirectory = null)
     {
         sourceDirectory ??= AppContext.BaseDirectory;
         var source = sourceDirectory.TrimEnd('\\', '/');
         var localExecutable = Path.Combine(source, SupervisorExecutable);
 
         if (!IsVolatileLocation(source))
-            return localExecutable;
+            return new DeploymentResult(localExecutable, [], ReadVersion(localExecutable));
 
         var target = StableDirectory;
         Directory.CreateDirectory(target);
-        DeployTo(source, target);
+        var locked = DeployTo(source, target);
 
         var deployed = Path.Combine(target, SupervisorExecutable);
-        return File.Exists(deployed) ? deployed : localExecutable;
+        var path = File.Exists(deployed) ? deployed : localExecutable;
+
+        // The app executable is what gets registered on a ClickOnce install, so report its version.
+        var appCopy = Path.Combine(target, "LiveClaude.exe");
+        return new DeploymentResult(path, locked, ReadVersion(File.Exists(appCopy) ? appCopy : path));
+    }
+
+    public static string? ReadVersion(string executablePath)
+    {
+        try
+        {
+            return File.Exists(executablePath)
+                ? System.Diagnostics.FileVersionInfo.GetVersionInfo(executablePath).ProductVersion
+                : null;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return null;
+        }
     }
 
     /// <summary>Describes what the app did, for the message shown after installing.</summary>
@@ -52,9 +88,14 @@ public static class SupervisorDeployment
             ? $"The supervisor was copied to {StableDirectory} so the registration survives app updates."
             : null;
 
-    /// <summary>Copies what changed and clears the Mark of the Web from every copy.</summary>
-    public static void DeployTo(string source, string target)
+    /// <summary>
+    /// Copies what changed and clears the Mark of the Web from every copy. Returns the files that
+    /// could not be replaced — normally because a supervisor started from this folder is running.
+    /// </summary>
+    public static IReadOnlyList<string> DeployTo(string source, string target)
     {
+        var locked = new List<string>();
+
         foreach (var directory in Directory.EnumerateDirectories(source, "*", SearchOption.AllDirectories))
             Directory.CreateDirectory(directory.Replace(source, target, StringComparison.OrdinalIgnoreCase));
 
@@ -76,9 +117,11 @@ public static class SupervisorDeployment
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
             {
-                // A file in use (the running app itself) is not worth failing the deployment over.
+                locked.Add(Path.GetFileName(file));
             }
         }
+
+        return locked;
     }
 
     /// <summary>

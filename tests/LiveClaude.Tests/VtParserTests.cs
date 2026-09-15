@@ -347,6 +347,51 @@ public class ScheduledTaskXmlTests
         }
     }
 
+    /// <summary>
+    /// The scheduled task runs the deployed copy, so those files are locked while it runs. Skipping
+    /// them silently left an old build in place, and every install then ran that old build.
+    /// </summary>
+    [Fact]
+    public void FilesThatCannotBeReplacedAreReported()
+    {
+        var source = Path.Combine(Path.GetTempPath(), $"liveclaude-src-{Guid.NewGuid():n}");
+        var target = Path.Combine(Path.GetTempPath(), $"liveclaude-dst-{Guid.NewGuid():n}");
+        Directory.CreateDirectory(source);
+        Directory.CreateDirectory(target);
+
+        // The stale copy must look older and different, or the refresh rightly skips it.
+        File.WriteAllText(Path.Combine(target, "LiveClaude.exe"), "old");
+        File.SetLastWriteTimeUtc(Path.Combine(target, "LiveClaude.exe"), DateTime.UtcNow.AddHours(-2));
+
+        File.WriteAllText(Path.Combine(source, "LiveClaude.exe"), "a newer build");
+        File.WriteAllText(Path.Combine(source, "other.dll"), "a newer build");
+
+        // Hold the destination open, the way a running supervisor holds its own executable.
+        using (var _ = new FileStream(Path.Combine(target, "LiveClaude.exe"), FileMode.Open, FileAccess.Read, FileShare.Read))
+        {
+            try
+            {
+                var locked = SupervisorDeployment.DeployTo(source, target);
+
+                Assert.Contains("LiveClaude.exe", locked);
+                Assert.DoesNotContain("other.dll", locked);
+                Assert.Equal("old", File.ReadAllText(Path.Combine(target, "LiveClaude.exe")));
+                Assert.Equal("a newer build", File.ReadAllText(Path.Combine(target, "other.dll")));
+            }
+            finally
+            {
+                // released below
+            }
+        }
+
+        // With nothing holding it, the same call replaces the file and reports nothing locked.
+        Assert.Empty(SupervisorDeployment.DeployTo(source, target));
+        Assert.Equal("a newer build", File.ReadAllText(Path.Combine(target, "LiveClaude.exe")));
+
+        Directory.Delete(source, recursive: true);
+        Directory.Delete(target, recursive: true);
+    }
+
     private static bool HasZoneIdentifier(string path)
     {
         try

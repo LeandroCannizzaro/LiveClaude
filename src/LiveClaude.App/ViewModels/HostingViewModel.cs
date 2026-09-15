@@ -73,6 +73,53 @@ public sealed class HostingViewModel : ObservableObject
     public string SupervisorPath => _supervisorPath ??= SupervisorDeployment.EnsureDeployed();
 
     /// <summary>
+    /// Refreshes the stable copy before registering anything.
+    ///
+    /// The scheduled task runs that copy, so its files are locked while it runs and the refresh used
+    /// to be skipped without a word: every install then ran whatever build was there before, which
+    /// is how an install could quietly do nothing. The supervisor is stopped, the copy refreshed and
+    /// the supervisor left for the caller to start again.
+    /// </summary>
+    private async Task<(SupervisorCommand Command, string Note)> PrepareAsync(bool asService)
+    {
+        var deployment = SupervisorDeployment.Deploy();
+
+        if (!deployment.UpToDate)
+        {
+            // Stop whatever is holding the files, then try once more.
+            await ScheduledTaskInstaller.EndAsync();
+            await WindowsServiceInstaller.StopAsync();
+            await Task.Delay(TimeSpan.FromSeconds(2));
+
+            deployment = SupervisorDeployment.Deploy();
+        }
+
+        _supervisorPath = deployment.ExecutablePath;
+        var command = ResolveCommand(asService);
+
+        var notes = new List<string>();
+
+        if (SupervisorDeployment.DescribeDeployment(deployment.ExecutablePath) is { } deployed)
+            notes.Add(deployed);
+
+        if (command.Note is not null)
+            notes.Add(command.Note);
+
+        if (deployment.Version is not null)
+            notes.Add($"Registered build: {deployment.Version}.");
+
+        if (!deployment.UpToDate)
+        {
+            notes.Add(
+                $"Warning: {deployment.Locked.Count} file(s) could not be refreshed because something still has them " +
+                $"open ({string.Join(", ", deployment.Locked.Take(3))}). Close every LiveClaude window, stop the task " +
+                "and the service, then install again — otherwise this registers an older build.");
+        }
+
+        return (command, string.Join(" ", notes));
+    }
+
+    /// <summary>
     /// The executable and arguments to register. A ClickOnce install cannot start
     /// LiveClaude.Service.exe (its runtime configuration is not deployed), so there the desktop
     /// application hosts the supervisor itself.
@@ -110,8 +157,7 @@ public sealed class HostingViewModel : ObservableObject
     /// </summary>
     public Task InstallTaskAsync() => RunAsync(result => TaskResult = result, async () =>
     {
-        var command = ResolveCommand(asService: false);
-        var note = Combine(SupervisorDeployment.DescribeDeployment(SupervisorPath) ?? "", command.Note ?? "").Trim();
+        var (command, note) = await PrepareAsync(asService: false);
 
         if (ProcessHelper.IsElevated)
         {
@@ -229,8 +275,7 @@ public sealed class HostingViewModel : ObservableObject
                    "cannot reach the Claude Code sign-in.";
         }
 
-        var command = ResolveCommand(asService: true);
-        var note = Combine(SupervisorDeployment.DescribeDeployment(SupervisorPath) ?? "", command.Note ?? "").Trim();
+        var (command, note) = await PrepareAsync(asService: true);
 
         var args = new List<string>
         {
