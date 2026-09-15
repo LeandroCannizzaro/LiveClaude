@@ -28,8 +28,13 @@ public partial class App : Application
         // A ClickOnce install does not ship the runtime configuration of LiveClaude.Service.exe, so
         // that executable cannot start there. This one always can, and hosts the supervisor itself
         // when the scheduled task or the service launches it with --supervise / --service.
-        var asService = e.Args.Any(a => a.Equals("--service", StringComparison.OrdinalIgnoreCase));
-        var supervise = asService || e.Args.Any(a => a.Equals("--supervise", StringComparison.OrdinalIgnoreCase));
+        //
+        // Only the FIRST argument selects the mode. Scanning the whole list made
+        // "install-task … --args --supervise" — the command that registers the task — start a
+        // supervisor instead of installing anything, and exit 0 as if it had worked.
+        var mode = e.Args.FirstOrDefault();
+        var asService = string.Equals(mode, "--service", StringComparison.OrdinalIgnoreCase);
+        var supervise = asService || string.Equals(mode, "--supervise", StringComparison.OrdinalIgnoreCase);
 
         if (supervise)
         {

@@ -4,6 +4,20 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project uses
 [semantic versioning](https://semver.org/).
 
+## [1.0.11] - 2026-09-15
+
+### Fixed
+
+- **The scheduled task was never created, while the app reported success.** The command that
+  registers it ends with `--args --supervise`, and the app decided its mode by looking for
+  `--supervise` *anywhere* on the command line. The elevated installer therefore became a supervisor
+  instead of installing anything; the "only one supervisor" guard then stopped it, it exited 0, and
+  that zero was read as "installed". Only the first argument selects the mode now. The same mistake
+  affected `install-service` through `--args --service`.
+- Installing no longer trusts the exit code: the task and the service are queried afterwards, and a
+  success that left nothing behind is reported as such — the task install falls back to the
+  unelevated path instead of claiming it worked.
+
 ## [1.0.10] - 2026-09-15
 
 ### Fixed
@@ -192,6 +206,7 @@ First release.
 - Rolling per-instance logs and a supervisor log under `%ProgramData%\LiveClaude\logs`.
 - Packaging: portable zips (x64, arm64, self-contained), ClickOnce, and winget manifests.
 
+[1.0.11]: https://github.com/LeandroCannizzaro/LiveClaude/releases/tag/v1.0.11
 [1.0.10]: https://github.com/LeandroCannizzaro/LiveClaude/releases/tag/v1.0.10
 [1.0.9]: https://github.com/LeandroCannizzaro/LiveClaude/releases/tag/v1.0.9
 [1.0.8]: https://github.com/LeandroCannizzaro/LiveClaude/releases/tag/v1.0.8

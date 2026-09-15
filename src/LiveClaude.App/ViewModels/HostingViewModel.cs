@@ -146,16 +146,23 @@ public sealed class HostingViewModel : ObservableObject
 
         if (exitCode == 0)
         {
+            // Never take the exit code's word for it: verify the task is really there.
             var verification = await ScheduledTaskInstaller.QueryAsync();
+
+            if (verification.Installed == true)
+                return Combine($"Installed with the logon and boot triggers, and started ({verification.Status ?? "ready"}).", note);
+
             if (verification.Installed is null)
             {
-                note = Combine(note,
-                    "Windows will not let this account read the task back — it was registered through the " +
-                    "elevation prompt by another administrator account — so the card above cannot show its state. " +
-                    "The task itself runs.");
+                return Combine(
+                    "Installed with the logon and boot triggers, and started. Windows will not let this account " +
+                    "read the task back — it was registered through the elevation prompt by another administrator " +
+                    "account — so the card above cannot show its state.",
+                    note);
             }
 
-            return Combine("Installed with the logon and boot triggers, and started.", note);
+            // Reported success, no task: fall through to the unelevated install rather than lie.
+            TaskResult = "The elevated install reported success but no task exists; retrying without elevation.";
         }
 
         var fallback = await ScheduledTaskInstaller.InstallAsync(
@@ -240,9 +247,15 @@ public sealed class HostingViewModel : ObservableObject
             return "The elevation prompt was declined, so the service was not installed.";
         }
 
-        return exitCode == 0
-            ? Combine("Service installed and started.", note)
-            : $"Service installation returned exit code {exitCode}.";
+        if (exitCode != 0)
+            return $"Service installation returned exit code {exitCode}.";
+
+        // Same rule as the task: confirm with the service control manager before claiming success.
+        var state = WindowsServiceInstaller.Query();
+        return state.Installed
+            ? Combine($"Service installed ({state.Status ?? "created"}).", note)
+            : "The installer reported success but the service is not registered. Check the elevation prompt was " +
+              "accepted, and look at %ProgramData%\\LiveClaude\\logs\\supervisor.log.";
     });
 
     public Task UninstallServiceAsync() => RunAsync(result => ServiceResult = result, async () =>

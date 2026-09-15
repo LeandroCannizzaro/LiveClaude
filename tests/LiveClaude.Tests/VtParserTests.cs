@@ -276,6 +276,32 @@ public class ScheduledTaskXmlTests
         Assert.Equal("not installed", state.Describe());
     }
 
+    /// <summary>
+    /// The install command carries "--args --supervise" as the arguments to register. Deciding the
+    /// mode by scanning the whole command line therefore turned the installer into a supervisor:
+    /// it registered nothing and exited 0, so the app reported success for a task that never existed.
+    /// Only the first argument may select the mode.
+    /// </summary>
+    [Theory]
+    [InlineData(new[] { "--supervise" }, true, false)]
+    [InlineData(new[] { "--service" }, true, true)]
+    [InlineData(new[] { "install-task", "--user", @"CANLE\cl", "--exe", @"C:\app\LiveClaude.exe", "--args", "--supervise" }, false, false)]
+    [InlineData(new[] { "install-service", "--exe", @"C:\app\LiveClaude.exe", "--args", "--service" }, false, false)]
+    [InlineData(new string[0], false, false)]
+    public void OnlyTheFirstArgumentSelectsTheMode(string[] args, bool expectSupervise, bool expectService)
+    {
+        var mode = args.FirstOrDefault();
+        var asService = string.Equals(mode, "--service", StringComparison.OrdinalIgnoreCase);
+        var supervise = asService || string.Equals(mode, "--supervise", StringComparison.OrdinalIgnoreCase);
+
+        Assert.Equal(expectSupervise, supervise);
+        Assert.Equal(expectService, asService);
+
+        // The same command lines must still be recognised as install verbs.
+        if (!supervise && args.Length > 0)
+            Assert.True(LiveClaude.Service.SupervisorCli.IsVerb(args[0]));
+    }
+
     [Fact]
     public void TheRegisteredArgumentsEndUpInTheTaskAndTheService()
     {

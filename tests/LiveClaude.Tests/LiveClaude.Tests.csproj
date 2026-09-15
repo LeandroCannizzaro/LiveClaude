@@ -16,6 +16,7 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\LiveClaude.Core\LiveClaude.Core.csproj" />
     <ProjectReference Include="..\..\src\LiveClaude.Terminal\LiveClaude.Terminal.csproj" />
+    <ProjectReference Include="..\..\src\LiveClaude.Service\LiveClaude.Service.csproj" />
   </ItemGroup>
 
 </Project>
