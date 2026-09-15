@@ -275,6 +275,13 @@ dotnet run --project src\LiveClaude.Service -- status
 
 `LiveClaude.exe --terminal <directory>` opens the app straight into the embedded terminal for that folder — the fastest route to a trust prompt.
 
+## How this was built
+
+[Issue #1](https://github.com/LeandroCannizzaro/LiveClaude/issues/1) is the build log: one comment per
+phase, from the first question to v1.0.15, including the bugs that reported success while doing
+nothing. Worth reading before changing the hosting, deployment or environment code — most of those
+decisions look arbitrary until you know what they are guarding against.
+
 ## Contributing
 
 Issues and pull requests are welcome. Keep the C#-only rule: no Node, no web views, no native dependencies beyond Win32.
