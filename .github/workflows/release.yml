@@ -1,0 +1,199 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to publish (e.g. 1.0.0)'
+        required: true
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+env:
+  DOTNET_VERSION: '10.0.x'
+
+jobs:
+  release:
+    name: Build, package and publish
+    runs-on: windows-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Resolve version
+        id: version
+        shell: pwsh
+        run: |
+          $version = if ('${{ github.event_name }}' -eq 'workflow_dispatch') {
+            '${{ github.event.inputs.version }}'
+          } else {
+            '${{ github.ref_name }}'.TrimStart('v')
+          }
+          "version=$version" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+          Write-Host "Publishing version $version"
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - name: Set up MSBuild (ClickOnce needs the .NET Framework MSBuild)
+        uses: microsoft/setup-msbuild@v2
+
+      - name: Restore
+        run: dotnet restore
+
+      - name: Test
+        run: dotnet test -c Release --logger "trx;LogFileName=tests.trx" --results-directory artifacts/test-results
+
+      - name: Publish framework-dependent (win-x64)
+        run: >
+          dotnet publish src/LiveClaude.App/LiveClaude.App.csproj
+          -c Release -r win-x64 --self-contained false
+          -p:Version=${{ steps.version.outputs.version }}
+          -o artifacts/win-x64
+
+      - name: Publish framework-dependent (win-arm64)
+        run: >
+          dotnet publish src/LiveClaude.App/LiveClaude.App.csproj
+          -c Release -r win-arm64 --self-contained false
+          -p:Version=${{ steps.version.outputs.version }}
+          -o artifacts/win-arm64
+
+      - name: Publish self-contained (win-x64)
+        run: >
+          dotnet publish src/LiveClaude.App/LiveClaude.App.csproj
+          -c Release -r win-x64 --self-contained true
+          -p:Version=${{ steps.version.outputs.version }}
+          -o artifacts/win-x64-selfcontained
+
+      - name: Add the portable installer script to every package
+        shell: pwsh
+        run: |
+          foreach ($dir in 'win-x64', 'win-arm64', 'win-x64-selfcontained') {
+            Copy-Item packaging/scripts/Install-LiveClaude.ps1 "artifacts/$dir/" -Force
+          }
+
+      - name: Create zips
+        shell: pwsh
+        run: |
+          $version = '${{ steps.version.outputs.version }}'
+          New-Item -ItemType Directory -Force -Path artifacts/packages | Out-Null
+          Compress-Archive artifacts/win-x64/* "artifacts/packages/LiveClaude-$version-win-x64.zip"
+          Compress-Archive artifacts/win-arm64/* "artifacts/packages/LiveClaude-$version-win-arm64.zip"
+          Compress-Archive artifacts/win-x64-selfcontained/* "artifacts/packages/LiveClaude-$version-win-x64-selfcontained.zip"
+
+      - name: Publish ClickOnce
+        shell: pwsh
+        run: |
+          msbuild src/LiveClaude.App/LiveClaude.App.csproj `
+            /t:Publish `
+            /p:PublishProfile=ClickOnce `
+            /p:Configuration=Release `
+            /p:ApplicationVersion=${{ steps.version.outputs.version }}.0 `
+            /p:Version=${{ steps.version.outputs.version }} `
+            /v:minimal
+          Compress-Archive artifacts/clickonce/* "artifacts/packages/LiveClaude-${{ steps.version.outputs.version }}-clickonce.zip"
+
+      - name: Compute checksums
+        id: hashes
+        shell: pwsh
+        run: |
+          $version = '${{ steps.version.outputs.version }}'
+          $lines = @()
+          Get-ChildItem artifacts/packages/*.zip | ForEach-Object {
+            $hash = (Get-FileHash $_.FullName -Algorithm SHA256).Hash
+            $lines += "$hash  $($_.Name)"
+            if ($_.Name -like '*win-x64.zip') {
+              "x64sha=$hash" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+            }
+            if ($_.Name -like '*win-arm64.zip') {
+              "arm64sha=$hash" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+            }
+          }
+          $lines | Out-File artifacts/packages/SHA256SUMS.txt -Encoding utf8
+          Get-Content artifacts/packages/SHA256SUMS.txt
+
+      - name: Render winget manifests
+        shell: pwsh
+        run: |
+          ./packaging/winget/Update-Manifests.ps1 `
+            -Version '${{ steps.version.outputs.version }}' `
+            -X64Sha256 '${{ steps.hashes.outputs.x64sha }}' `
+            -Arm64Sha256 '${{ steps.hashes.outputs.arm64sha }}' `
+            -OutputDirectory artifacts/winget
+          Compress-Archive artifacts/winget/* "artifacts/packages/LiveClaude-${{ steps.version.outputs.version }}-winget-manifests.zip"
+
+      - name: Create the GitHub release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $version = '${{ steps.version.outputs.version }}'
+          $notes = @"
+          ## LiveClaude $version
+
+          | Download | For |
+          |---|---|
+          | ``LiveClaude-$version-win-x64.zip`` | Windows x64, needs the [.NET 10 Desktop Runtime](https://dotnet.microsoft.com/download/dotnet/10.0) |
+          | ``LiveClaude-$version-win-arm64.zip`` | Windows on ARM |
+          | ``LiveClaude-$version-win-x64-selfcontained.zip`` | Windows x64, no prerequisites |
+          | ``LiveClaude-$version-clickonce.zip`` | ClickOnce payload (also published to the product page) |
+
+          ``winget install LeandroCannizzaro.LiveClaude``
+
+          Checksums are in ``SHA256SUMS.txt``.
+          "@
+          gh release create "v$version" (Get-ChildItem artifacts/packages/* | ForEach-Object { $_.FullName }) `
+            --title "LiveClaude $version" --notes $notes
+
+      - name: Assemble the GitHub Pages site
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path artifacts/site | Out-Null
+          Copy-Item docs/* artifacts/site -Recurse -Force
+          New-Item -ItemType Directory -Force -Path artifacts/site/clickonce | Out-Null
+          Copy-Item artifacts/clickonce/* artifacts/site/clickonce -Recurse -Force
+
+      - name: Upload the Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: artifacts/site
+
+  deploy-pages:
+    name: Deploy the product page
+    needs: release
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
+
+  winget:
+    name: Submit to winget-pkgs
+    needs: release
+    runs-on: ubuntu-latest
+    env:
+      WINGET_TOKEN: ${{ secrets.WINGET_TOKEN }}
+    steps:
+      - name: Publish the manifest
+        if: env.WINGET_TOKEN != ''
+        uses: vedantmgoyal9/winget-releaser@v2
+        with:
+          identifier: LeandroCannizzaro.LiveClaude
+          version: ${{ needs.release.outputs.version }}
+          installers-regex: 'win-(x64|arm64)\.zip$'
+          token: ${{ secrets.WINGET_TOKEN }}
+
+      - name: Explain the skip
+        if: env.WINGET_TOKEN == ''
+        run: echo "WINGET_TOKEN is not set, so the winget-pkgs pull request was skipped. Manifests are attached to the release."

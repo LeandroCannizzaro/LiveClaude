@@ -1,0 +1,342 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>LiveClaude — keep Claude Code Remote Control alive on Windows</title>
+  <meta name="description" content="A Windows supervisor and desktop app that keeps Claude Code Remote Control servers running across crashes, logons and reboots — with an embedded terminal. Written entirely in C#." />
+  <link rel="icon" href="assets/favicon.ico" />
+  <meta property="og:title" content="LiveClaude" />
+  <meta property="og:description" content="Keep Claude Code Remote Control alive on your Windows machine — many projects, one supervisor, one desktop app." />
+  <meta property="og:image" content="assets/dashboard.png" />
+  <meta property="og:type" content="website" />
+  <style>
+    :root {
+      --bg: #0b0d11;
+      --surface: #14181f;
+      --surface-alt: #1b212a;
+      --border: #28303b;
+      --text: #e8ebef;
+      --muted: #9aa4b2;
+      --accent: #d97757;
+      --accent-soft: rgba(217, 119, 87, 0.14);
+      --success: #4ade80;
+      --radius: 14px;
+      --max: 1120px;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font: 16px/1.65 -apple-system, "Segoe UI", system-ui, sans-serif;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    a { color: var(--accent); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+
+    .wrap { max-width: var(--max); margin: 0 auto; padding: 0 24px; }
+
+    header {
+      position: sticky; top: 0; z-index: 10;
+      backdrop-filter: blur(12px);
+      background: rgba(11, 13, 17, 0.82);
+      border-bottom: 1px solid var(--border);
+    }
+    header .wrap { display: flex; align-items: center; gap: 16px; height: 64px; }
+    header img { width: 28px; height: 28px; }
+    header .name { font-weight: 700; letter-spacing: -0.2px; }
+    header nav { margin-left: auto; display: flex; gap: 22px; font-size: 14.5px; }
+    header nav a { color: var(--muted); }
+    header nav a:hover { color: var(--text); text-decoration: none; }
+
+    .hero { padding: 84px 0 56px; text-align: center; }
+    .hero h1 {
+      font-size: clamp(38px, 6vw, 62px);
+      line-height: 1.05;
+      margin: 0 0 18px;
+      letter-spacing: -1.6px;
+    }
+    .hero h1 span { color: var(--accent); }
+    .hero p.lead {
+      font-size: clamp(17px, 2.2vw, 20px);
+      color: var(--muted);
+      max-width: 720px;
+      margin: 0 auto 32px;
+    }
+
+    .cta { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
+    .btn {
+      display: inline-flex; align-items: center; gap: 8px;
+      padding: 12px 22px; border-radius: 10px;
+      border: 1px solid var(--border); background: var(--surface-alt);
+      color: var(--text); font-weight: 600; font-size: 15px;
+    }
+    .btn:hover { background: #222a35; text-decoration: none; }
+    .btn.primary { background: var(--accent); border-color: var(--accent); color: #180d08; }
+    .btn.primary:hover { background: #e68b6d; }
+
+    .shot {
+      margin: 56px auto 0; max-width: var(--max);
+      border-radius: var(--radius); overflow: hidden;
+      border: 1px solid var(--border);
+      box-shadow: 0 30px 80px rgba(0, 0, 0, 0.55);
+    }
+    .shot img { display: block; width: 100%; }
+    figcaption { color: var(--muted); font-size: 14px; text-align: center; padding: 14px 16px; background: var(--surface); }
+
+    section { padding: 72px 0; }
+    section h2 { font-size: clamp(26px, 3.4vw, 34px); letter-spacing: -0.6px; margin: 0 0 12px; }
+    section p.sub { color: var(--muted); max-width: 760px; margin: 0 0 36px; }
+
+    .grid { display: grid; gap: 18px; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); }
+    .card {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: var(--radius); padding: 24px;
+    }
+    .card h3 { margin: 0 0 8px; font-size: 17px; }
+    .card p { margin: 0; color: var(--muted); font-size: 14.5px; }
+    .card .tag {
+      display: inline-block; font-size: 11.5px; letter-spacing: 0.4px; text-transform: uppercase;
+      color: var(--accent); background: var(--accent-soft); padding: 3px 9px; border-radius: 999px;
+      margin-bottom: 12px; font-weight: 700;
+    }
+
+    .tabs { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 18px; }
+    .tabs button {
+      font: inherit; font-size: 14.5px; font-weight: 600;
+      padding: 9px 18px; border-radius: 999px; cursor: pointer;
+      background: var(--surface); color: var(--muted);
+      border: 1px solid var(--border);
+    }
+    .tabs button[aria-selected="true"] { background: var(--accent); border-color: var(--accent); color: #180d08; }
+
+    pre {
+      background: #0a0c10; border: 1px solid var(--border); border-radius: 12px;
+      padding: 18px 20px; overflow-x: auto; margin: 0 0 14px;
+      font: 13.5px/1.7 "Cascadia Mono", Consolas, monospace; color: #d7dde5;
+    }
+    pre .c { color: #7f8a99; }
+    .panel[hidden] { display: none; }
+    .panel p { color: var(--muted); font-size: 14.5px; margin: 0 0 14px; }
+
+    table { width: 100%; border-collapse: collapse; font-size: 14.5px; }
+    th, td { text-align: left; padding: 12px 14px; border-bottom: 1px solid var(--border); vertical-align: top; }
+    th { color: var(--muted); font-weight: 600; font-size: 13px; text-transform: uppercase; letter-spacing: 0.4px; }
+    td code, p code, li code { background: var(--surface-alt); padding: 2px 6px; border-radius: 5px; font-size: 13px; }
+
+    .note {
+      border-left: 3px solid var(--accent); background: var(--accent-soft);
+      padding: 16px 20px; border-radius: 0 10px 10px 0; color: #f0d9cf; font-size: 14.5px;
+    }
+
+    footer { border-top: 1px solid var(--border); padding: 40px 0 60px; color: var(--muted); font-size: 14px; }
+    footer .wrap { display: flex; gap: 18px; flex-wrap: wrap; align-items: center; }
+    footer .spacer { margin-left: auto; }
+
+    @media (max-width: 640px) {
+      header nav { display: none; }
+      .hero { padding: 56px 0 40px; }
+      section { padding: 52px 0; }
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="wrap">
+    <img src="assets/logo.png" alt="" />
+    <span class="name">LiveClaude</span>
+    <nav>
+      <a href="#features">Features</a>
+      <a href="#install">Install</a>
+      <a href="#how">How it works</a>
+      <a href="https://github.com/LeandroCannizzaro/LiveClaude">GitHub</a>
+    </nav>
+  </div>
+</header>
+
+<div class="wrap hero">
+  <h1>Your machine stays <span>reachable</span>.</h1>
+  <p class="lead">
+    LiveClaude keeps Claude Code Remote Control servers running on Windows — one per project directory,
+    restarted after a crash, at logon and after a reboot. Plus a desktop app with a real terminal inside it.
+  </p>
+  <div class="cta">
+    <a class="btn primary" href="https://github.com/LeandroCannizzaro/LiveClaude/releases/latest">Download for Windows</a>
+    <a class="btn" href="https://github.com/LeandroCannizzaro/LiveClaude">View on GitHub</a>
+  </div>
+</div>
+
+<div class="wrap">
+  <figure class="shot" style="margin-top:0">
+    <img src="assets/dashboard.png" alt="The LiveClaude dashboard listing supervised Remote Control servers" />
+    <figcaption>Every project directory, its state, its session URL and its logs — in one place.</figcaption>
+  </figure>
+</div>
+
+<section id="features" class="wrap">
+  <h2>What you get</h2>
+  <p class="sub">
+    Remote Control is a foreground process in a terminal: close the window, hit a crash or reboot the machine
+    and your phone loses the machine. LiveClaude turns it into infrastructure.
+  </p>
+
+  <div class="grid">
+    <div class="card">
+      <span class="tag">Supervision</span>
+      <h3>Restarts that actually hold</h3>
+      <p>Exponential backoff after a crash, a restart budget you choose, and automatic reattachment to the
+         previous session when it is still inside Remote Control's four-hour window.</p>
+    </div>
+    <div class="card">
+      <span class="tag">Hosting</span>
+      <h3>Scheduled task or Windows service</h3>
+      <p>The task runs in your own session and survives logon and boot. The service starts before sign-in.
+         Both are installed, started and removed from the app.</p>
+    </div>
+    <div class="card">
+      <span class="tag">Control</span>
+      <h3>Sessions with every parameter</h3>
+      <p>Spawn mode, permission mode, capacity, worktrees, session-name prefix, fixed session id, sandbox,
+         model, extra arguments — with a live preview of the exact command line.</p>
+    </div>
+    <div class="card">
+      <span class="tag">Terminal</span>
+      <h3>A real pseudo console, embedded</h3>
+      <p>Workspace trust, the one-time Remote Control confirmation and <code>/login</code> all need a terminal.
+         There is one in the app — and you can attach to a running server and type into it.</p>
+    </div>
+    <div class="card">
+      <span class="tag">Visibility</span>
+      <h3>State and logs, live</h3>
+      <p>Running, starting, needs attention, backing off, failed. Session URLs one click away, rolling per-instance
+         logs, and a supervisor log for the host itself.</p>
+    </div>
+    <div class="card">
+      <span class="tag">Engineering</span>
+      <h3>Entirely C#</h3>
+      <p>.NET 10 and WPF. ConPTY and the VT emulator are written from scratch — no Node, no web view, no tmux,
+         no native dependencies beyond Win32.</p>
+    </div>
+  </div>
+</section>
+
+<div class="wrap">
+  <figure class="shot" style="margin-top:0">
+    <img src="assets/terminal.png" alt="Claude Code running inside the app's embedded terminal" />
+    <figcaption>Claude Code's real TUI, rendered by the app's own terminal — colours, diffs, prompts and all.</figcaption>
+  </figure>
+</div>
+
+<section id="install" class="wrap">
+  <h2>Install</h2>
+  <p class="sub">Windows 10 1809+ or Windows 11, and a Claude Code sign-in on a Pro, Max, Team or Enterprise plan.</p>
+
+  <div class="tabs" role="tablist">
+    <button role="tab" aria-selected="true" aria-controls="p-winget" id="t-winget">winget</button>
+    <button role="tab" aria-selected="false" aria-controls="p-zip" id="t-zip">Zip</button>
+    <button role="tab" aria-selected="false" aria-controls="p-clickonce" id="t-clickonce">ClickOnce</button>
+    <button role="tab" aria-selected="false" aria-controls="p-source" id="t-source">From source</button>
+  </div>
+
+  <div class="panel" id="p-winget" role="tabpanel" aria-labelledby="t-winget">
+    <pre>winget install LeandroCannizzaro.LiveClaude</pre>
+    <p>Installs both <code>liveclaude</code> (the app) and <code>liveclaude-service</code> (the supervisor CLI).</p>
+  </div>
+
+  <div class="panel" id="p-zip" role="tabpanel" aria-labelledby="t-zip" hidden>
+    <pre><span class="c"># after extracting the zip</span>
+./Install-LiveClaude.ps1 -RegisterTask -Launch</pre>
+    <p>
+      The script copies the files to <code>%LOCALAPPDATA%\Programs\LiveClaude</code>, creates a Start Menu
+      shortcut and registers the supervisor task. No administrator rights needed. Pick the
+      <code>-selfcontained</code> zip to skip the .NET runtime prerequisite.
+    </p>
+    <p><a href="https://github.com/LeandroCannizzaro/LiveClaude/releases/latest">Download the latest zip →</a></p>
+  </div>
+
+  <div class="panel" id="p-clickonce" role="tabpanel" aria-labelledby="t-clickonce" hidden>
+    <p>Installs for the current user and checks for updates on every launch.</p>
+    <p><a class="btn primary" href="clickonce/index.html">Launch the ClickOnce installer</a></p>
+    <p>Requires the <a href="https://dotnet.microsoft.com/download/dotnet/10.0">.NET 10 Desktop Runtime</a>.</p>
+  </div>
+
+  <div class="panel" id="p-source" role="tabpanel" aria-labelledby="t-source" hidden>
+    <pre>git clone https://github.com/LeandroCannizzaro/LiveClaude.git
+cd LiveClaude
+dotnet build -c Release
+dotnet run --project src\LiveClaude.App</pre>
+  </div>
+</section>
+
+<section id="how" class="wrap">
+  <h2>How it works</h2>
+  <p class="sub">
+    The supervisor owns one <code>claude remote-control</code> server per directory, each inside its own
+    pseudo console. The app talks to it over a named pipe, so you can close the window and the servers keep going.
+  </p>
+
+  <table>
+    <tr>
+      <th>Step</th>
+      <th>What happens</th>
+    </tr>
+    <tr>
+      <td>Add a session</td>
+      <td>A directory, a name and the flags you want. Saved to <code>%ProgramData%\LiveClaude\config.json</code>,
+          which the supervisor watches.</td>
+    </tr>
+    <tr>
+      <td>Trust once</td>
+      <td>Claude Code asks for workspace trust the first time it runs in a folder, and again for the one-time
+          Remote Control confirmation. Both are answered in the app's terminal tab.</td>
+    </tr>
+    <tr>
+      <td>Supervise</td>
+      <td>The server is started windowless in a ConPTY. Output is parsed for the session URL and for the
+          states that need you, and written to a rolling log.</td>
+    </tr>
+    <tr>
+      <td>Recover</td>
+      <td>On exit: backoff, restart, and <code>--continue</code> when the previous session can still be
+          reattached. At logon and after a reboot: the task or the service brings everything back.</td>
+    </tr>
+  </table>
+
+  <p style="margin-top:28px" class="note">
+    <strong>Remote Control's four-hour window.</strong> A stopped server's sessions can only be brought back for
+    about four hours. LiveClaude reattaches while it can and starts a fresh session afterwards — the conversations
+    themselves stay resumable locally with <code>claude --resume</code>.
+  </p>
+</section>
+
+<footer>
+  <div class="wrap">
+    <span>MIT licensed · © Leandro Cannizzaro</span>
+    <span class="spacer"></span>
+    <a href="https://github.com/LeandroCannizzaro/LiveClaude">GitHub</a>
+    <a href="https://github.com/LeandroCannizzaro/LiveClaude/issues">Issues</a>
+    <a href="https://code.claude.com/docs/en/remote-control">Remote Control docs</a>
+  </div>
+  <div class="wrap" style="margin-top:14px; font-size:13px;">
+    Independent project — not affiliated with, endorsed by or sponsored by Anthropic.
+  </div>
+</footer>
+
+<script>
+  document.querySelectorAll('.tabs button').forEach(function (button) {
+    button.addEventListener('click', function () {
+      document.querySelectorAll('.tabs button').forEach(function (other) {
+        other.setAttribute('aria-selected', String(other === button));
+        document.getElementById(other.getAttribute('aria-controls')).hidden = other !== button;
+      });
+    });
+  });
+</script>
+
+</body>
+</html>

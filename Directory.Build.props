@@ -1,0 +1,21 @@
+<Project>
+
+  <PropertyGroup>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
+    <!-- WPF text formatting needs real culture data, so invariant globalization stays off. -->
+    <InvariantGlobalization>false</InvariantGlobalization>
+    <Company>Leandro Cannizzaro</Company>
+    <Product>LiveClaude</Product>
+    <Authors>Leandro Cannizzaro</Authors>
+    <Copyright>Copyright (c) Leandro Cannizzaro</Copyright>
+    <RepositoryUrl>https://github.com/LeandroCannizzaro/LiveClaude</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <VersionPrefix>1.0.0</VersionPrefix>
+    <NeutralLanguage>en</NeutralLanguage>
+  </PropertyGroup>
+
+</Project>

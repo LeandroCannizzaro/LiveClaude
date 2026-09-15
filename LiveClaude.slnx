@@ -1,0 +1,11 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/LiveClaude.App/LiveClaude.App.csproj" />
+    <Project Path="src/LiveClaude.Core/LiveClaude.Core.csproj" />
+    <Project Path="src/LiveClaude.Service/LiveClaude.Service.csproj" />
+    <Project Path="src/LiveClaude.Terminal/LiveClaude.Terminal.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/LiveClaude.Tests/LiveClaude.Tests.csproj" />
+  </Folder>
+</Solution>

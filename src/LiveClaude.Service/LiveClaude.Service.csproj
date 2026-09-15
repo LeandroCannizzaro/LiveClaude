@@ -1,0 +1,27 @@
+<Project Sdk="Microsoft.NET.Sdk.Worker">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <!--
+      Windowed on purpose: a console-owning process hands its console to every child, which makes
+      Windows ignore the pseudo-console attribute and breaks the embedded terminal. CLI commands
+      attach to the caller's console at runtime instead (see ConsoleBridge).
+    -->
+    <OutputType>WinExe</OutputType>
+    <AssemblyName>LiveClaude.Service</AssemblyName>
+    <RootNamespace>LiveClaude.Service</RootNamespace>
+    <UserSecretsId>liveclaude-service</UserSecretsId>
+    <EnableWindowsTargeting>true</EnableWindowsTargeting>
+    <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.Hosting" Version="10.0.0" />
+    <PackageReference Include="Microsoft.Extensions.Hosting.WindowsServices" Version="10.0.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\LiveClaude.Core\LiveClaude.Core.csproj" />
+  </ItemGroup>
+
+</Project>

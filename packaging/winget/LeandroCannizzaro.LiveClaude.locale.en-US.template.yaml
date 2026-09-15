@@ -1,0 +1,39 @@
+# yaml-language-server: $schema=https://aka.ms/winget-manifest.defaultLocale.1.6.0.schema.json
+PackageIdentifier: LeandroCannizzaro.LiveClaude
+PackageVersion: "{VERSION}"
+PackageLocale: en-US
+Publisher: Leandro Cannizzaro
+PublisherUrl: https://github.com/LeandroCannizzaro
+PublisherSupportUrl: https://github.com/LeandroCannizzaro/LiveClaude/issues
+PackageName: LiveClaude
+PackageUrl: https://github.com/LeandroCannizzaro/LiveClaude
+License: MIT
+LicenseUrl: https://github.com/LeandroCannizzaro/LiveClaude/blob/main/LICENSE
+Copyright: Copyright (c) Leandro Cannizzaro
+ShortDescription: Supervisor and desktop app that keeps Claude Code Remote Control servers running on Windows.
+Description: |-
+  LiveClaude runs one 'claude remote-control' server per project directory and keeps it alive: it
+  restarts a server after a crash with exponential backoff, at logon and after a reboot, hosted
+  either as a Windows scheduled task or as a Windows service.
+
+  The desktop app creates, edits and removes sessions with their full parameter set (spawn mode,
+  permission mode, capacity, worktrees, reattach), shows live state and logs, and embeds a real
+  pseudo console so the one-time flows that need a terminal - workspace trust, the Remote Control
+  confirmation, signing in - happen inside the app. You can also attach to a running server and
+  type into it.
+
+  Written entirely in C# (.NET 10, WPF). Not affiliated with Anthropic.
+Moniker: liveclaude
+Tags:
+  - claude
+  - claude-code
+  - remote-control
+  - supervisor
+  - windows-service
+  - developer-tools
+ReleaseNotesUrl: https://github.com/LeandroCannizzaro/LiveClaude/releases/tag/v{VERSION}
+Documentations:
+  - DocumentLabel: Product page
+    DocumentUrl: https://leandrocannizzaro.github.io/LiveClaude/
+ManifestType: defaultLocale
+ManifestVersion: 1.6.0

@@ -1,0 +1,60 @@
+name: Product page
+
+on:
+  push:
+    branches: [main]
+    paths: ['docs/**', '.github/workflows/pages.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Assemble the site
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Copy the docs
+        run: |
+          mkdir -p site
+          cp -r docs/* site/
+
+      # The ClickOnce payload is produced by the release workflow. Carry the published one over so a
+      # docs-only change never takes the installer offline.
+      - name: Carry over the published ClickOnce payload
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set +e
+          asset=$(gh release list --limit 1 --json tagName --jq '.[0].tagName')
+          if [ -n "$asset" ]; then
+            gh release download "$asset" --pattern '*clickonce.zip' --dir /tmp || true
+            if ls /tmp/*clickonce.zip >/dev/null 2>&1; then
+              mkdir -p site/clickonce
+              unzip -o /tmp/*clickonce.zip -d site/clickonce
+            fi
+          fi
+          exit 0
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+  deploy:
+    name: Deploy
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
