@@ -56,7 +56,7 @@ The `-selfcontained` zip has no prerequisites. The plain zip needs the [.NET 10 
 
 ### ClickOnce (auto-updating)
 
-Install from [leandrocannizzaro.github.io/LiveClaude/clickonce/](https://leandrocannizzaro.github.io/LiveClaude/clickonce/). Updates are checked on every launch.
+Open [LiveClaude.application](https://leandrocannizzaro.github.io/LiveClaude/clickonce/LiveClaude.application) — it installs for the current user and checks for updates on every launch. The manifests are unsigned, so SmartScreen asks once.
 
 ### From source
 
