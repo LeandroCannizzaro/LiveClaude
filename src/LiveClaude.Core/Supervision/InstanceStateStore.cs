@@ -9,6 +9,9 @@ public sealed class PersistedInstanceState
     public DateTimeOffset? LastStopUtc { get; set; }
     public string? LastSessionUrl { get; set; }
     public int RestartCount { get; set; }
+
+    /// <summary>Bridge environment registered by the last run, so the UI can tell live from stale.</summary>
+    public string? LastEnvironmentId { get; set; }
 }
 
 /// <summary>Per-instance state files under %ProgramData%\LiveClaude\state.</summary>

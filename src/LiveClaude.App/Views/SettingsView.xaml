@@ -139,6 +139,25 @@
             </StackPanel>
           </Grid>
 
+          <Grid Margin="0,4,0,0">
+            <Grid.ColumnDefinitions>
+              <ColumnDefinition Width="*" />
+              <ColumnDefinition Width="3*" />
+            </Grid.ColumnDefinitions>
+
+            <StackPanel Grid.Column="0" Margin="0,0,10,0">
+              <TextBlock Text="Clean shutdown wait (s)" Style="{StaticResource FieldLabel}" />
+              <TextBox Text="{Binding GracefulStopSeconds, UpdateSourceTrigger=PropertyChanged}" />
+            </StackPanel>
+
+            <StackPanel Grid.Column="1" Margin="10,0,0,0" VerticalAlignment="Bottom">
+              <TextBlock Style="{StaticResource Mono}" FontSize="11" TextWrapping="Wrap" Margin="0,0,0,6"
+                         Text="Stopping sends Ctrl+C and waits this long before terminating. The CLI uses that window to deregister its bridge environment — a hard kill is what leaves dead entries in the session picker." />
+              <CheckBox Content="Track which environment each server registers (needs the Anthropic API)"
+                        IsChecked="{Binding TrackEnvironments}" Margin="0,0,0,0" />
+            </StackPanel>
+          </Grid>
+
           <StackPanel Orientation="Horizontal" Margin="0,16,0,0">
             <Button Content="Save settings" Style="{StaticResource PrimaryButton}" Command="{Binding SaveSettingsCommand}" />
             <Button Content="Reconnect to supervisor" Command="{Binding ReconnectCommand}" />

@@ -44,6 +44,8 @@ public sealed class SupervisedInstance : IAsyncDisposable
     private string? _attentionReason;
     private string? _lastError;
     private int _restartCount;
+    private string? _environmentId;
+    private int _environmentLookupStarted;
 
     public SupervisedInstance(
         SessionConfig config,
@@ -99,6 +101,7 @@ public sealed class SupervisedInstance : IAsyncDisposable
                 RestartCount = _restartCount,
                 NextRetryUtc = _nextRetryUtc,
                 SessionUrl = _sessionUrl ?? _state.LastSessionUrl,
+                EnvironmentId = _environmentId,
                 LastOutput = _lastOutput,
                 AttentionReason = _attentionReason,
                 LastError = _lastError
@@ -173,27 +176,29 @@ public sealed class SupervisedInstance : IAsyncDisposable
     {
         CancellationTokenSource? cts;
         Task? loop;
-        PtyProcess? pty;
 
         lock (_gate)
         {
             cts = _loopCts;
             loop = _loop;
-            pty = _pty;
         }
 
+        // Cancelling makes the run loop stop the server with Ctrl+C (see ShutdownAsync) instead of
+        // killing it, so the CLI deregisters its bridge environment on the way out.
         cts?.Cancel();
-        pty?.Kill();
 
         if (loop is not null)
         {
+            var budget = TimeSpan.FromSeconds(Math.Max(5, _appConfig.GracefulStopSeconds) + 8);
             try
             {
-                await loop.WaitAsync(TimeSpan.FromSeconds(15)).ConfigureAwait(false);
+                await loop.WaitAsync(budget).ConfigureAwait(false);
             }
             catch (Exception ex) when (ex is TimeoutException or OperationCanceledException)
             {
-                _logger.LogWarning("Instance {Name} did not stop cleanly within 15s.", _config.Name);
+                _logger.LogWarning("Instance {Name} did not stop within {Seconds}s.", _config.Name, budget.TotalSeconds);
+                lock (_gate)
+                    _pty?.Kill();
             }
         }
 
@@ -365,6 +370,8 @@ public sealed class SupervisedInstance : IAsyncDisposable
             _attentionReason = null;
             _lastError = null;
             _sessionUrl = null;
+            _environmentId = null;
+            _environmentLookupStarted = 0;
             _recentOutput.Clear();
         }
 
@@ -380,7 +387,7 @@ public sealed class SupervisedInstance : IAsyncDisposable
         }
         catch (OperationCanceledException)
         {
-            pty.Kill();
+            await ShutdownAsync(pty).ConfigureAwait(false);
             throw;
         }
         catch (TimeoutException)
@@ -395,6 +402,82 @@ public sealed class SupervisedInstance : IAsyncDisposable
             }
 
             pty.Dispose();
+        }
+    }
+
+    /// <summary>
+    /// Stops a server the way a person would: Ctrl+C, wait, and only then terminate. The CLI uses
+    /// that window to deregister its bridge environment; a hard kill leaves it behind, which is what
+    /// fills the session picker with dead entries for the same directory.
+    /// </summary>
+    private async Task ShutdownAsync(PtyProcess pty)
+    {
+        if (pty.HasExited)
+            return;
+
+        var budget = TimeSpan.FromSeconds(Math.Max(1, _appConfig.GracefulStopSeconds));
+        _log.Write($"[supervisor] stopping: Ctrl+C, then up to {budget.TotalSeconds:F0}s to shut down cleanly.");
+
+        pty.SendCtrlC();
+
+        try
+        {
+            await pty.Exited.WaitAsync(budget, CancellationToken.None).ConfigureAwait(false);
+            _log.Write("[supervisor] the server stopped on its own.");
+            return;
+        }
+        catch (TimeoutException)
+        {
+            _log.Write("[supervisor] no exit within the grace period; terminating. The bridge environment may be left behind.");
+        }
+        catch (Exception ex) when (ex is OperationCanceledException or ObjectDisposedException)
+        {
+            // fall through to the kill below
+        }
+
+        pty.Kill();
+    }
+
+    /// <summary>
+    /// Finds the bridge environment this run registered, so the Environments tab can tell it apart
+    /// from the leftovers of previous runs. Best effort: never fails a start.
+    /// </summary>
+    private async Task ResolveEnvironmentAsync(DateTimeOffset startedUtc)
+    {
+        if (!_appConfig.TrackEnvironments)
+            return;
+
+        try
+        {
+            // Give the server a moment to register before asking.
+            await Task.Delay(TimeSpan.FromSeconds(3)).ConfigureAwait(false);
+
+            using var client = new EnvironmentsClient();
+            var environments = await client.ListAsync().ConfigureAwait(false);
+
+            var directory = Config.Directory;
+            var match = environments
+                .Where(e => e.IsBridge && !e.IsArchived && EnvironmentClassifier.SamePath(e.Directory, directory))
+                .Where(e => e.CreatedUtc is null || e.CreatedUtc >= startedUtc.AddMinutes(-2))
+                .OrderByDescending(e => e.CreatedUtc ?? DateTimeOffset.MinValue)
+                .FirstOrDefault();
+
+            if (match is null)
+                return;
+
+            lock (_gate)
+            {
+                _environmentId = match.Id;
+                _state.LastEnvironmentId = match.Id;
+                _stateStore.Save(_config.Id, _state);
+            }
+
+            _log.Write($"[supervisor] registered bridge environment {match.Id} ({match.Name}).");
+            Notify();
+        }
+        catch (Exception ex)
+        {
+            _log.Write($"[supervisor] could not resolve the bridge environment: {ex.Message}");
         }
     }
 
@@ -469,6 +552,7 @@ public sealed class SupervisedInstance : IAsyncDisposable
         switch (OutputInterpreter.Classify(chunk))
         {
             case OutputSignal.Ready:
+                DateTimeOffset? startedUtc;
                 lock (_gate)
                 {
                     if (_stateValue is InstanceState.Starting or InstanceState.NeedsAttention)
@@ -477,7 +561,12 @@ public sealed class SupervisedInstance : IAsyncDisposable
                         _attentionReason = null;
                         stateChanged = true;
                     }
+
+                    startedUtc = _startedUtc;
                 }
+
+                if (startedUtc is { } started && Interlocked.Exchange(ref _environmentLookupStarted, 1) == 0)
+                    _ = Task.Run(() => ResolveEnvironmentAsync(started));
 
                 break;
 

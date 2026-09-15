@@ -169,6 +169,25 @@ public sealed class PtyProcess : IDisposable
         Input.Flush();
     }
 
+    /// <summary>
+    /// Sends Ctrl+C into the pseudo console. This is how a Remote Control server is meant to stop:
+    /// it deregisters itself, instead of leaving a dead entry behind as a hard kill does.
+    /// </summary>
+    public void SendCtrlC()
+    {
+        if (HasExited)
+            return;
+
+        try
+        {
+            Write("\x03");
+        }
+        catch (IOException)
+        {
+            // the pipe is already gone
+        }
+    }
+
     public void Kill()
     {
         if (_disposed != 0 || HasExited)

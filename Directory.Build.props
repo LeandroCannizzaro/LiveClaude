@@ -14,7 +14,7 @@
     <RepositoryUrl>https://github.com/LeandroCannizzaro/LiveClaude</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
-    <VersionPrefix>1.0.1</VersionPrefix>
+    <VersionPrefix>1.0.2</VersionPrefix>
     <NeutralLanguage>en</NeutralLanguage>
   </PropertyGroup>
 

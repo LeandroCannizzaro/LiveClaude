@@ -34,6 +34,9 @@ public sealed class ShellViewModel : ObservableObject, IAsyncDisposable
         Editor = new SessionEditorViewModel();
         Editor.LoadNew();
         Hosting = new HostingViewModel();
+        Environments = new EnvironmentsViewModel(
+            () => Instances.Select(i => i.Snapshot).ToList(),
+            () => _config.Sessions);
 
         RefreshCommand = new RelayCommand(_ => RefreshAsync());
         ReconnectCommand = new RelayCommand(_ => ConnectAsync(force: true));
@@ -76,6 +79,8 @@ public sealed class ShellViewModel : ObservableObject, IAsyncDisposable
     public SessionEditorViewModel Editor { get; }
 
     public HostingViewModel Hosting { get; }
+
+    public EnvironmentsViewModel Environments { get; }
 
     public ISupervisorApi? Api => _api;
 
@@ -149,6 +154,18 @@ public sealed class ShellViewModel : ObservableObject, IAsyncDisposable
     {
         get => _config.LogMaxSizeMb;
         set { _config.LogMaxSizeMb = Math.Clamp(value, 1, 512); OnPropertyChanged(); }
+    }
+
+    public int GracefulStopSeconds
+    {
+        get => _config.GracefulStopSeconds;
+        set { _config.GracefulStopSeconds = Math.Clamp(value, 1, 120); OnPropertyChanged(); }
+    }
+
+    public bool TrackEnvironments
+    {
+        get => _config.TrackEnvironments;
+        set { _config.TrackEnvironments = value; OnPropertyChanged(); }
     }
 
     public IReadOnlyList<ClaudeInstall> DetectedInstalls { get; private set; } = [];
@@ -237,6 +254,8 @@ public sealed class ShellViewModel : ObservableObject, IAsyncDisposable
         OnPropertyChanged(nameof(BackoffMaxSeconds));
         OnPropertyChanged(nameof(BackoffMaxRestarts));
         OnPropertyChanged(nameof(LogMaxSizeMb));
+        OnPropertyChanged(nameof(GracefulStopSeconds));
+        OnPropertyChanged(nameof(TrackEnvironments));
         OnPropertyChanged(nameof(DetectedInstalls));
     }
 

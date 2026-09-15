@@ -4,6 +4,26 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project uses
 [semantic versioning](https://semver.org/).
 
+## [1.0.2] - 2026-09-15
+
+### Added
+
+- **Environments tab.** Lists the bridge environments registered on your Claude account — one per
+  `claude remote-control` process, and they outlive the process, which is what fills the Claude
+  Desktop picker with dead copies of the same project. Entries are grouped by directory and marked
+  live, stale or untracked. **Select duplicates** keeps the live (or newest) environment per directory
+  and selects the rest; **Select stale** picks the ones whose directory LiveClaude supervises but has
+  no server for. Deletion asks for confirmation and can never include an environment in use.
+- Each supervised server now records the bridge environment it registered, so the live one is
+  identified exactly rather than guessed. Switch off with *Track which environment each server
+  registers*.
+
+### Fixed
+
+- **Stopping a server no longer creates a dead entry.** Stop and restart used to terminate the
+  process outright, so the CLI never deregistered. LiveClaude now sends Ctrl+C and waits (*Clean
+  shutdown wait*, 12 s by default) before terminating.
+
 ## [1.0.1] - 2026-09-15
 
 ### Fixed
@@ -43,5 +63,6 @@ First release.
 - Rolling per-instance logs and a supervisor log under `%ProgramData%\LiveClaude\logs`.
 - Packaging: portable zips (x64, arm64, self-contained), ClickOnce, and winget manifests.
 
+[1.0.2]: https://github.com/LeandroCannizzaro/LiveClaude/releases/tag/v1.0.2
 [1.0.1]: https://github.com/LeandroCannizzaro/LiveClaude/releases/tag/v1.0.1
 [1.0.0]: https://github.com/LeandroCannizzaro/LiveClaude/releases/tag/v1.0.0

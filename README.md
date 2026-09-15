@@ -106,6 +106,38 @@ LiveClaude.Service.exe status
 
 The app talks to whichever supervisor is running over a named pipe (`LiveClaude.v1`), so you can close the window and the servers keep running — and reopen it later to find them.
 
+## Dead entries in the session picker
+
+Every `claude remote-control` process registers a **bridge environment** on Anthropic's side, and the
+registration outlives the process. Stop a server and start it again and you get a second entry for the
+same directory; do it three times and the picker in Claude Desktop shows the project three times, one
+live and the rest dead. Archiving conversations does not touch them — they are environments, not
+sessions ([claude-code#50884](https://github.com/anthropics/claude-code/issues/50884)).
+
+LiveClaude handles both ends of that:
+
+- **It stops servers the way a person would.** Stopping sends Ctrl+C and waits (12 s by default, in
+  *Service & startup*) before terminating, so the CLI gets its chance to deregister. The previous
+  behaviour — a hard kill — is exactly what creates the dead entries.
+- **It knows which environment is which.** When a server comes up, LiveClaude asks the API which
+  bridge environment it just registered and remembers it, so a live entry can never be mistaken for a
+  leftover. Turn this off with *Track which environment each server registers* to stay fully offline.
+- **The Environments tab cleans up the rest.** It lists the bridge environments on your account
+  grouped by directory, marks each one live / stale / untracked, and deletes the ones you pick:
+  - **Select duplicates** keeps the live one — or the newest — for each directory and selects the
+    others. This is the answer to "three `doG`, one alive".
+  - **Select stale** picks the environments whose directory LiveClaude supervises but which have no
+    server behind them.
+  - An environment in use is never selectable, and deletion always asks first.
+
+The tab uses your own Claude Code sign-in (`~/.claude/.credentials.json`) against
+`api.anthropic.com/v1/environments` with the `environments-2025-11-01` beta header. That API is in
+beta and undocumented: if Anthropic changes it, the tab reports the error and the rest of LiveClaude
+keeps working.
+
+To keep the count down without any cleanup, restart a server within Remote Control's four-hour window
+so `--continue` reattaches instead of registering a fresh environment.
+
 ## Session parameters
 
 Each session maps one-to-one onto `claude remote-control` flags:

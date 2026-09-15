@@ -53,6 +53,9 @@
       <TabItem Header="Logs">
         <views:LogsView />
       </TabItem>
+      <TabItem Header="Environments">
+        <views:EnvironmentsView />
+      </TabItem>
       <TabItem Header="Service &amp; startup">
         <views:SettingsView />
       </TabItem>

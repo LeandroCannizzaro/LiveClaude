@@ -34,6 +34,18 @@ public sealed class AppConfig
     /// <summary>Use a pseudo console (ConPTY) to host the CLI. Required for the embedded terminal.</summary>
     public bool UsePseudoConsole { get; set; } = true;
 
+    /// <summary>
+    /// How long to wait after Ctrl+C before killing a server. A clean stop lets the CLI deregister
+    /// itself; killing it outright is what leaves dead entries in the session picker.
+    /// </summary>
+    public int GracefulStopSeconds { get; set; } = 12;
+
+    /// <summary>
+    /// Ask the API which bridge environment a server registered, so the Environments tab can tell
+    /// the live one from the leftovers. Turn off to keep LiveClaude entirely offline.
+    /// </summary>
+    public bool TrackEnvironments { get; set; } = true;
+
     public BackoffSettings Backoff { get; set; } = new();
 
     public List<SessionConfig> Sessions { get; set; } = new();
@@ -49,6 +61,8 @@ public sealed class AppConfig
         LogTailLines = LogTailLines,
         LogMaxSizeMb = LogMaxSizeMb,
         UsePseudoConsole = UsePseudoConsole,
+        GracefulStopSeconds = GracefulStopSeconds,
+        TrackEnvironments = TrackEnvironments,
         Backoff = new BackoffSettings
         {
             InitialSeconds = Backoff.InitialSeconds,

@@ -44,6 +44,12 @@ public sealed class InstanceSnapshot
     /// <summary>Session URL reported by the CLI, when it could be parsed from the output.</summary>
     public string? SessionUrl { get; set; }
 
+    /// <summary>
+    /// The bridge environment this server registered on Anthropic's side, resolved after startup.
+    /// Knowing it is what lets the Environments tab tell a live entry from a leftover.
+    /// </summary>
+    public string? EnvironmentId { get; set; }
+
     /// <summary>Last non-empty output line, with ANSI escapes stripped.</summary>
     public string? LastOutput { get; set; }
 
