@@ -43,12 +43,23 @@ public static class ScheduledTaskInstaller
         return new ScheduledTaskState(true, status, runAs);
     }
 
+    /// <summary>
+    /// Windows only lets an administrator register a task that triggers at system startup, so
+    /// <paramref name="runAtBoot"/> requires elevation; a logon-only task installs as a normal user.
+    /// </summary>
+    public static bool RequiresElevation(bool runAtBoot) => runAtBoot && !ProcessHelper.IsElevated;
+
+    /// <summary>True when a schtasks failure is the "you are not an administrator" one.</summary>
+    public static bool IsAccessDenied(ProcessResult result) =>
+        !result.Success && result.Combined.Contains("Access is denied", StringComparison.OrdinalIgnoreCase);
+
     public static async Task<ProcessResult> InstallAsync(
         string executablePath,
         bool runAtBoot = true,
+        string? userName = null,
         CancellationToken ct = default)
     {
-        var xml = BuildXml(executablePath, runAtBoot);
+        var xml = BuildXml(executablePath, runAtBoot, userName);
         var xmlPath = Path.Combine(Path.GetTempPath(), $"liveclaude-task-{Guid.NewGuid():n}.xml");
 
         // schtasks /XML expects UTF-16 with a BOM.
@@ -76,9 +87,14 @@ public static class ScheduledTaskInstaller
     public static Task<ProcessResult> EndAsync(CancellationToken ct = default) =>
         ProcessHelper.RunAsync("schtasks.exe", ["/End", "/TN", TaskName], ct: ct);
 
-    public static string BuildXml(string executablePath, bool runAtBoot)
+    /// <summary>
+    /// <paramref name="userName"/> matters when the install runs elevated: UAC may have been answered
+    /// with a different administrator account, and the task must still belong to the person whose
+    /// session the servers run in.
+    /// </summary>
+    public static string BuildXml(string executablePath, bool runAtBoot, string? userName = null)
     {
-        var user = WindowsIdentity.GetCurrent().Name;
+        var user = string.IsNullOrWhiteSpace(userName) ? WindowsIdentity.GetCurrent().Name : userName.Trim();
         var now = DateTime.Now.ToString("yyyy-MM-ddTHH:mm:ss");
 
         var bootTrigger = runAtBoot

@@ -4,6 +4,24 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project uses
 [semantic versioning](https://semver.org/).
 
+## [1.0.5] - 2026-09-15
+
+### Fixed
+
+- **"Install / update task" failed with `ERROR: Access is denied`.** Windows only lets an
+  administrator register a task with a boot trigger, and the app deliberately runs unelevated (a
+  ClickOnce install cannot be launched as administrator at all). Installing now asks for elevation
+  through the supervisor executable, and if the prompt is declined it falls back to a logon-only
+  task, which a standard user may register — saying so instead of failing.
+- The task is registered for the signed-in user even when UAC is answered with a different
+  administrator account.
+- **Registrations no longer break on update.** ClickOnce and winget replace the application folder on
+  every update, leaving the task or service pointing at a path that no longer exists. When the app
+  runs from such a location the supervisor is copied to `%LOCALAPPDATA%\LiveClaude\supervisor` first
+  and registered from there.
+- The outcome of a scheduled-task operation is shown under the scheduled-task card; it used to appear
+  under the Windows service one.
+
 ## [1.0.4] - 2026-09-15
 
 ### Fixed
@@ -99,6 +117,7 @@ First release.
 - Rolling per-instance logs and a supervisor log under `%ProgramData%\LiveClaude\logs`.
 - Packaging: portable zips (x64, arm64, self-contained), ClickOnce, and winget manifests.
 
+[1.0.5]: https://github.com/LeandroCannizzaro/LiveClaude/releases/tag/v1.0.5
 [1.0.4]: https://github.com/LeandroCannizzaro/LiveClaude/releases/tag/v1.0.4
 [1.0.3]: https://github.com/LeandroCannizzaro/LiveClaude/releases/tag/v1.0.3
 [1.0.2]: https://github.com/LeandroCannizzaro/LiveClaude/releases/tag/v1.0.2

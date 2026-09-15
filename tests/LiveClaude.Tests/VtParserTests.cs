@@ -134,4 +134,25 @@ public class ScheduledTaskXmlTests
         var xml = ScheduledTaskInstaller.BuildXml(@"C:\tools\LiveClaude.Service.exe", runAtBoot: false);
         Assert.DoesNotContain("<BootTrigger>", xml);
     }
+
+    /// <summary>
+    /// The boot trigger needs administrator rights, and UAC may be answered with another account —
+    /// the task must still belong to the user whose session the servers run in.
+    /// </summary>
+    [Fact]
+    public void TheTaskIsRegisteredForTheGivenUserNotTheElevatedOne()
+    {
+        var xml = ScheduledTaskInstaller.BuildXml(@"C:\tools\LiveClaude.Service.exe", runAtBoot: true, userName: @"CANLE\cl");
+
+        Assert.Contains(@"<UserId>CANLE\cl</UserId>", xml);
+        Assert.Contains("<LogonType>InteractiveToken</LogonType>", xml);
+    }
+
+    [Theory]
+    [InlineData(@"C:\Users\cl\AppData\Local\Apps\2.0\ABC123\LiveClaude", true)]
+    [InlineData(@"C:\Users\cl\AppData\Local\Microsoft\WinGet\Packages\Publisher.App\1.0", true)]
+    [InlineData(@"C:\Program Files\LiveClaude", false)]
+    [InlineData(@"C:\Users\cl\Programs\LiveClaude", false)]
+    public void UpdatableInstallLocationsAreRecognised(string directory, bool expected) =>
+        Assert.Equal(expected, SupervisorDeployment.IsVolatileLocation(directory));
 }

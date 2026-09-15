@@ -93,7 +93,7 @@ The server now shows up at [claude.ai/code](https://claude.ai/code) and in the C
 | Runs as | your signed-in user | the account you choose (use your own) |
 | Starts | at logon and 30 s after boot | at boot, before sign-in |
 | Restarts | every minute on failure, no time limit, keeps running on battery | `sc.exe` failure actions: 5 s, 10 s, then every 30 s |
-| Elevation | not required | required to install |
+| Elevation | only for the boot trigger (see below) | required to install |
 | Claude credentials | always found | only if the service runs as your user — LocalSystem has a different profile and cannot sign in |
 
 Both are installed from the app, or from the CLI:
@@ -103,6 +103,18 @@ LiveClaude.Service.exe install-task
 LiveClaude.Service.exe install-service --account "DOMAIN\you" --password "<windows password>"
 LiveClaude.Service.exe status
 ```
+
+**Why installing the task may ask for elevation.** Windows only lets an administrator register a task
+that triggers at system startup: as a normal user, `schtasks` answers `ERROR: Access is denied`. The app
+therefore asks for elevation through the supervisor executable — the app itself stays `asInvoker`, which
+also means a ClickOnce install (which cannot be launched elevated) works fine. Decline the prompt and the
+task is still installed with the logon trigger only: everything works except starting before anyone signs
+in. The task is always registered for *your* account, even when UAC is answered with a different one.
+
+**Installs that move.** ClickOnce and winget put the app in a folder that is replaced on every update,
+which would leave the task or service pointing at an executable that no longer exists. When LiveClaude
+detects such a location it first copies the supervisor to `%LOCALAPPDATA%\LiveClaude\supervisor` and
+registers that copy.
 
 The app talks to whichever supervisor is running over a named pipe (`LiveClaude.v1`), so you can close the window and the servers keep running — and reopen it later to find them.
 

@@ -102,11 +102,21 @@ static async Task<int> UninstallServiceAsync()
 static async Task<int> InstallTaskAsync(string[] args)
 {
     var noBoot = args.Contains("--no-boot", StringComparer.OrdinalIgnoreCase);
-    var result = await ScheduledTaskInstaller.InstallAsync(CurrentExecutablePath(), runAtBoot: !noBoot);
+
+    // When this runs elevated, UAC may have been answered with a different administrator account;
+    // --user keeps the task registered for the person whose session the servers run in.
+    var user = GetOption(args, "--user");
+
+    var result = await ScheduledTaskInstaller.InstallAsync(CurrentExecutablePath(), runAtBoot: !noBoot, userName: user);
     Console.WriteLine(result.Combined);
 
     if (!result.Success)
+    {
+        if (ScheduledTaskInstaller.IsAccessDenied(result) && !noBoot)
+            Console.Error.WriteLine("Registering the boot trigger needs administrator rights. Retry with --no-boot for a logon-only task.");
+
         return result.ExitCode;
+    }
 
     var run = await ScheduledTaskInstaller.RunAsync();
     Console.WriteLine(run.Combined);

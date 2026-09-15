@@ -1,4 +1,4 @@
-using System.IO;
+using System.ComponentModel;
 using LiveClaude.Core.Hosting;
 
 namespace LiveClaude.App.ViewModels;
@@ -9,8 +9,10 @@ public sealed class HostingViewModel : ObservableObject
     private string _serviceStatus = "unknown";
     private string _taskStatus = "unknown";
     private string _account = ProcessHelper.CurrentUserName;
-    private string _lastResult = "";
+    private string _taskResult = "";
+    private string _serviceResult = "";
     private bool _busy;
+    private string? _supervisorPath;
 
     public string ServiceStatus
     {
@@ -30,11 +32,31 @@ public sealed class HostingViewModel : ObservableObject
         set => SetProperty(ref _account, value);
     }
 
-    public string LastResult
+    /// <summary>Outcome of the last scheduled-task operation, shown under that card.</summary>
+    public string TaskResult
     {
-        get => _lastResult;
-        private set => SetProperty(ref _lastResult, value);
+        get => _taskResult;
+        private set
+        {
+            if (SetProperty(ref _taskResult, value))
+                OnPropertyChanged(nameof(HasTaskResult));
+        }
     }
+
+    public bool HasTaskResult => !string.IsNullOrWhiteSpace(TaskResult);
+
+    /// <summary>Outcome of the last Windows-service operation, shown under that card.</summary>
+    public string ServiceResult
+    {
+        get => _serviceResult;
+        private set
+        {
+            if (SetProperty(ref _serviceResult, value))
+                OnPropertyChanged(nameof(HasServiceResult));
+        }
+    }
+
+    public bool HasServiceResult => !string.IsNullOrWhiteSpace(ServiceResult);
 
     public bool Busy
     {
@@ -42,15 +64,11 @@ public sealed class HostingViewModel : ObservableObject
         private set => SetProperty(ref _busy, value);
     }
 
-    /// <summary>Path of the supervisor executable shipped next to the app.</summary>
-    public static string SupervisorPath
-    {
-        get
-        {
-            var candidate = Path.Combine(AppContext.BaseDirectory, "LiveClaude.Service.exe");
-            return File.Exists(candidate) ? candidate : candidate;
-        }
-    }
+    /// <summary>
+    /// Path of the supervisor to register. ClickOnce and winget put the app in a folder that is
+    /// replaced on every update, so in that case a stable copy is deployed first.
+    /// </summary>
+    public string SupervisorPath => _supervisorPath ??= SupervisorDeployment.EnsureDeployed();
 
     public async Task RefreshAsync()
     {
@@ -61,31 +79,87 @@ public sealed class HostingViewModel : ObservableObject
         TaskStatus = task.Installed ? task.Status ?? "installed" : "not installed";
     }
 
-    public async Task InstallTaskAsync()
+    /// <summary>
+    /// Installs the scheduled task. The boot trigger can only be registered by an administrator, so
+    /// this asks for elevation; declining falls back to a logon-only task, which works as a normal
+    /// user and covers everything except starting before sign-in.
+    /// </summary>
+    public Task InstallTaskAsync() => RunAsync(result => TaskResult = result, async () =>
     {
-        await RunAsync(async () =>
-        {
-            var result = await ScheduledTaskInstaller.InstallAsync(SupervisorPath);
-            if (result.Success)
-                await ScheduledTaskInstaller.RunAsync();
-            return result.Combined;
-        });
-    }
+        var exe = SupervisorPath;
+        var note = SupervisorDeployment.DescribeDeployment(exe);
 
-    public Task UninstallTaskAsync() => RunAsync(async () =>
+        if (ProcessHelper.IsElevated)
+        {
+            var elevatedInstall = await ScheduledTaskInstaller.InstallAsync(exe, runAtBoot: true, userName: ProcessHelper.CurrentUserName);
+            if (!elevatedInstall.Success)
+                return $"Could not install the task: {elevatedInstall.Combined}";
+
+            await ScheduledTaskInstaller.RunAsync();
+            return Combine("Installed with the logon and boot triggers, and started.", note);
+        }
+
+        var exitCode = -1;
+        try
+        {
+            // The supervisor executable does the install with administrator rights. The user is
+            // passed explicitly: UAC may be answered with a different administrator account.
+            exitCode = await ProcessHelper.RunElevatedAsync(exe, ["install-task", "--user", ProcessHelper.CurrentUserName]);
+        }
+        catch (Win32Exception)
+        {
+            // UAC declined, or no administrator available on this machine.
+        }
+
+        if (exitCode == 0)
+            return Combine("Installed with the logon and boot triggers, and started.", note);
+
+        var fallback = await ScheduledTaskInstaller.InstallAsync(exe, runAtBoot: false, userName: ProcessHelper.CurrentUserName);
+        if (!fallback.Success)
+        {
+            return ScheduledTaskInstaller.IsAccessDenied(fallback)
+                ? $"Windows refused the task: {fallback.Combined.Trim()} Your account may be blocked from creating scheduled tasks by policy; the Windows service below is the alternative."
+                : $"Could not install the task: {fallback.Combined}";
+        }
+
+        await ScheduledTaskInstaller.RunAsync();
+        return Combine(
+            "Installed without the boot trigger and started. It runs at every sign-in; " +
+            "registering the boot trigger needs administrator rights, so run this again and accept the prompt " +
+            "if you want the servers up before anyone signs in.",
+            note);
+    });
+
+    public Task UninstallTaskAsync() => RunAsync(result => TaskResult = result, async () =>
     {
         await ScheduledTaskInstaller.EndAsync();
         var result = await ScheduledTaskInstaller.UninstallAsync();
+
+        if (result.Success)
+            return "Task removed.";
+
+        if (!ProcessHelper.IsElevated)
+        {
+            var exitCode = await TryElevatedAsync("uninstall-task");
+            if (exitCode == 0)
+                return "Task removed.";
+        }
+
         return result.Combined;
     });
 
-    public Task StartTaskAsync() => RunAsync(async () => (await ScheduledTaskInstaller.RunAsync()).Combined);
+    public Task StartTaskAsync() =>
+        RunAsync(result => TaskResult = result, async () => (await ScheduledTaskInstaller.RunAsync()).Combined);
 
-    public Task StopTaskAsync() => RunAsync(async () => (await ScheduledTaskInstaller.EndAsync()).Combined);
+    public Task StopTaskAsync() =>
+        RunAsync(result => TaskResult = result, async () => (await ScheduledTaskInstaller.EndAsync()).Combined);
 
     /// <summary>Service management needs elevation, so it goes through the supervisor exe with UAC.</summary>
-    public Task InstallServiceAsync(string? password) => RunAsync(async () =>
+    public Task InstallServiceAsync(string? password) => RunAsync(result => ServiceResult = result, async () =>
     {
+        var exe = SupervisorPath;
+        var note = SupervisorDeployment.DescribeDeployment(exe);
+
         var args = new List<string> { "install-service" };
         if (!string.IsNullOrWhiteSpace(Account))
         {
@@ -95,32 +169,58 @@ public sealed class HostingViewModel : ObservableObject
             args.Add(password ?? "");
         }
 
-        var exitCode = await ProcessHelper.RunElevatedAsync(SupervisorPath, args);
+        int exitCode;
+        try
+        {
+            exitCode = await ProcessHelper.RunElevatedAsync(exe, args);
+        }
+        catch (Win32Exception)
+        {
+            return "The elevation prompt was declined, so the service was not installed.";
+        }
+
         return exitCode == 0
-            ? "Service installed and started."
+            ? Combine("Service installed and started.", note)
             : $"Service installation returned exit code {exitCode}.";
     });
 
-    public Task UninstallServiceAsync() => RunAsync(async () =>
+    public Task UninstallServiceAsync() => RunAsync(result => ServiceResult = result, async () =>
     {
-        var exitCode = await ProcessHelper.RunElevatedAsync(SupervisorPath, ["uninstall-service"]);
+        var exitCode = await TryElevatedAsync("uninstall-service");
         return exitCode == 0 ? "Service removed." : $"Uninstall returned exit code {exitCode}.";
     });
 
-    public Task StartServiceAsync() => RunAsync(async () => (await WindowsServiceInstaller.StartAsync()).Combined);
+    public Task StartServiceAsync() =>
+        RunAsync(result => ServiceResult = result, async () => (await WindowsServiceInstaller.StartAsync()).Combined);
 
-    public Task StopServiceAsync() => RunAsync(async () => (await WindowsServiceInstaller.StopAsync()).Combined);
+    public Task StopServiceAsync() =>
+        RunAsync(result => ServiceResult = result, async () => (await WindowsServiceInstaller.StopAsync()).Combined);
 
-    private async Task RunAsync(Func<Task<string>> action)
+    private async Task<int> TryElevatedAsync(params string[] arguments)
+    {
+        try
+        {
+            return await ProcessHelper.RunElevatedAsync(SupervisorPath, arguments);
+        }
+        catch (Win32Exception)
+        {
+            return -1;
+        }
+    }
+
+    private static string Combine(string message, string? note) =>
+        note is null ? message : $"{message} {note}";
+
+    private async Task RunAsync(Action<string> report, Func<Task<string>> action)
     {
         Busy = true;
         try
         {
-            LastResult = await action();
+            report(await action());
         }
         catch (Exception ex)
         {
-            LastResult = ex.Message;
+            report(ex.Message);
         }
         finally
         {
