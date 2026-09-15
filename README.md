@@ -247,6 +247,7 @@ A process that owns a console hands **its** console to every child it starts, an
 | Configuration | `%ProgramData%\LiveClaude\config.json` |
 | Instance logs | `%ProgramData%\LiveClaude\logs\<name>-<id>.log` |
 | Supervisor log | `%ProgramData%\LiveClaude\logs\supervisor.log` |
+| Install log | `%ProgramData%\LiveClaude\logs\install.log` (what the elevated install commands did) |
 | Reattach state | `%ProgramData%\LiveClaude\state\<id>.json` |
 | App errors | `%LOCALAPPDATA%\LiveClaude\app-errors.log` |
 

@@ -1,6 +1,7 @@
 using System.ComponentModel;
 using System.IO;
 using LiveClaude.Core.Hosting;
+using LiveClaude.Core.Logging;
 
 namespace LiveClaude.App.ViewModels;
 
@@ -162,7 +163,8 @@ public sealed class HostingViewModel : ObservableObject
             }
 
             // Reported success, no task: fall through to the unelevated install rather than lie.
-            TaskResult = "The elevated install reported success but no task exists; retrying without elevation.";
+            TaskResult = "The elevated install reported success but no task exists; retrying without elevation. " +
+                         $"What it did:{Environment.NewLine}{ReadInstallLog()}";
         }
 
         var fallback = await ScheduledTaskInstaller.InstallAsync(
@@ -218,6 +220,15 @@ public sealed class HostingViewModel : ObservableObject
     /// <summary>Service management needs elevation, so it goes through the supervisor exe with UAC.</summary>
     public Task InstallServiceAsync(string? password) => RunAsync(result => ServiceResult = result, async () =>
     {
+        // Windows never lets a user account log on as a service with a blank password, so there is
+        // no point elevating first and failing with 1069 afterwards.
+        if (!string.IsNullOrWhiteSpace(Account) && string.IsNullOrEmpty(password))
+        {
+            return $"Enter the Windows password for {Account}. A service cannot log on with a blank password " +
+                   "(error 1069). Leave the account empty to install it as LocalSystem instead — which usually " +
+                   "cannot reach the Claude Code sign-in.";
+        }
+
         var command = ResolveCommand(asService: true);
         var note = Combine(SupervisorDeployment.DescribeDeployment(SupervisorPath) ?? "", command.Note ?? "").Trim();
 
@@ -254,8 +265,8 @@ public sealed class HostingViewModel : ObservableObject
         var state = WindowsServiceInstaller.Query();
         return state.Installed
             ? Combine($"Service installed ({state.Status ?? "created"}).", note)
-            : "The installer reported success but the service is not registered. Check the elevation prompt was " +
-              "accepted, and look at %ProgramData%\\LiveClaude\\logs\\supervisor.log.";
+            : "The installer reported success but the service is not registered. What it did:" +
+              Environment.NewLine + ReadInstallLog();
     });
 
     public Task UninstallServiceAsync() => RunAsync(result => ServiceResult = result, async () =>
@@ -298,6 +309,28 @@ public sealed class HostingViewModel : ObservableObject
         catch (Win32Exception)
         {
             return -1;
+        }
+    }
+
+    /// <summary>
+    /// The last lines an install command printed. Those commands run elevated, in a process the user
+    /// never sees, so this is the only way the reason for a failure reaches the screen.
+    /// </summary>
+    private static string ReadInstallLog(int lines = 8)
+    {
+        try
+        {
+            var log = new RollingLogWriter(LiveClaude.Service.SupervisorCli.LogPath, maxSizeMb: 2);
+            var tail = log.Tail(lines);
+            log.Dispose();
+
+            return tail.Count == 0
+                ? $"(nothing was written to {LiveClaude.Service.SupervisorCli.LogPath})"
+                : string.Join(Environment.NewLine, tail);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return "(the install log could not be read)";
         }
     }
 

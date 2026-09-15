@@ -4,6 +4,22 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project uses
 [semantic versioning](https://semver.org/).
 
+## [1.0.12] - 2026-09-15
+
+### Added
+
+- **An install log.** Install and uninstall commands normally run elevated, in a process nobody sees,
+  so a failure inside them left no trace anywhere. Everything they print, plus the command line (with
+  the password redacted) and the exit code, is now written to
+  `%ProgramData%\LiveClaude\logs\install.log`, and the app shows the last lines when the result does
+  not match what was asked for.
+
+### Fixed
+
+- A service for a user account is refused before elevating when the password box is empty: Windows
+  never accepts a blank password for a service logon, so the old path elevated, created the service
+  and only then failed with 1069.
+
 ## [1.0.11] - 2026-09-15
 
 ### Fixed
@@ -206,6 +222,7 @@ First release.
 - Rolling per-instance logs and a supervisor log under `%ProgramData%\LiveClaude\logs`.
 - Packaging: portable zips (x64, arm64, self-contained), ClickOnce, and winget manifests.
 
+[1.0.12]: https://github.com/LeandroCannizzaro/LiveClaude/releases/tag/v1.0.12
 [1.0.11]: https://github.com/LeandroCannizzaro/LiveClaude/releases/tag/v1.0.11
 [1.0.10]: https://github.com/LeandroCannizzaro/LiveClaude/releases/tag/v1.0.10
 [1.0.9]: https://github.com/LeandroCannizzaro/LiveClaude/releases/tag/v1.0.9

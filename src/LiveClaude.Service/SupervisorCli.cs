@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using LiveClaude.Core.Config;
 using LiveClaude.Core.Hosting;
+using LiveClaude.Core.Logging;
 
 namespace LiveClaude.Service;
 
@@ -20,7 +21,65 @@ public static class SupervisorCli
     public static bool IsVerb(string? candidate) =>
         candidate is not null && Verbs.Contains(candidate, StringComparer.OrdinalIgnoreCase);
 
-    public static async Task<int> RunAsync(string[] args) => args.FirstOrDefault()?.ToLowerInvariant() switch
+    /// <summary>Where the output of an install run is kept, since it usually happens out of sight.</summary>
+    public static string LogPath => Path.Combine(ConfigStore.LogDirectory, "install.log");
+
+    /// <summary>
+    /// Runs a command and records everything it printed. These commands normally run elevated, in a
+    /// window nobody sees, so without this a failure leaves no trace at all.
+    /// </summary>
+    public static async Task<int> RunAsync(string[] args)
+    {
+        ConfigStore.EnsureDirectories();
+
+        using var log = new RollingLogWriter(LogPath, maxSizeMb: 2);
+        var original = Console.Out;
+        var tee = new TeeTextWriter(original, log);
+        Console.SetOut(tee);
+        Console.SetError(tee);
+
+        log.Write($"--- {string.Join(' ', Redact(args))} (elevated: {ProcessHelper.IsElevated}, user: {ProcessHelper.CurrentUserName})");
+
+        try
+        {
+            var exitCode = await ExecuteAsync(args).ConfigureAwait(false);
+            tee.Flush();
+            log.Write($"--- exit code {exitCode}");
+            return exitCode;
+        }
+        catch (Exception ex)
+        {
+            tee.Flush();
+            log.Write($"--- failed: {ex}");
+            Console.Error.WriteLine(ex.Message);
+            return 1;
+        }
+        finally
+        {
+            Console.SetOut(original);
+        }
+    }
+
+    /// <summary>The password must never reach a log file.</summary>
+    private static IEnumerable<string> Redact(string[] args)
+    {
+        var redactNext = false;
+
+        foreach (var arg in args)
+        {
+            if (redactNext)
+            {
+                yield return "***";
+                redactNext = false;
+                continue;
+            }
+
+            redactNext = arg.Equals("--password", StringComparison.OrdinalIgnoreCase);
+            yield return arg;
+        }
+    }
+
+    private static async Task<int> ExecuteAsync(string[] args) => args.FirstOrDefault()?.ToLowerInvariant() switch
     {
         "install-service" => await InstallServiceAsync(args),
         "uninstall-service" => await UninstallServiceAsync(),
