@@ -21,10 +21,9 @@ TestResults/
 coverage*.json
 coverage*.xml
 
-## ClickOnce
+## ClickOnce output (the app's own app.manifest is source and must stay tracked)
 *.application
-*.manifest
-!packaging/**/*.manifest
+artifacts/clickonce/
 
 ## OS
 Thumbs.db
