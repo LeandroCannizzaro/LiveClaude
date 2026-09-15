@@ -1,4 +1,4 @@
-name: Product page
+﻿name: Product page
 
 on:
   push:
@@ -20,7 +20,7 @@ jobs:
     name: Assemble the site
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Copy the docs
         run: |
