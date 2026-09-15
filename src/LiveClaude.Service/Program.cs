@@ -21,6 +21,8 @@ return command switch
     "--supervise" => await RunHostAsync(args, asService: false),
     "install-service" => await InstallServiceAsync(args),
     "uninstall-service" => await UninstallServiceAsync(),
+    "start-service" => await ControlServiceAsync(start: true),
+    "stop-service" => await ControlServiceAsync(start: false),
     "install-task" => await InstallTaskAsync(args),
     "uninstall-task" => await UninstallTaskAsync(),
     "status" => await ShowStatusAsync(),
@@ -72,15 +74,23 @@ static async Task<int> InstallServiceAsync(string[] args)
         Console.WriteLine($"Recommended: install-service --account \"{ProcessHelper.CurrentUserName}\" --password \"<windows password>\"");
     }
 
-    var exe = CurrentExecutablePath();
-    var result = await WindowsServiceInstaller.InstallAsync(exe, account, password);
+    if (!string.IsNullOrWhiteSpace(account) && string.IsNullOrEmpty(password))
+        Console.Error.WriteLine("Warning: a user account with a blank password cannot log on as a service (error 1069).");
 
-    Console.WriteLine(result.Combined);
-    if (!result.Success)
-        return result.ExitCode;
+    var exe = CurrentExecutablePath();
+    var install = await WindowsServiceInstaller.InstallAsync(exe, account, password);
+
+    Console.WriteLine(install.Message);
+    if (!install.Success)
+        return 1;
 
     var start = await WindowsServiceInstaller.StartAsync();
-    Console.WriteLine(start.Combined);
+    if (!start.Success)
+    {
+        Console.Error.WriteLine(WindowsServiceInstaller.Explain(start));
+        return start.ExitCode;
+    }
+
     Console.WriteLine($"Service '{WindowsServiceInstaller.ServiceName}' installed and started.");
     return 0;
 }
@@ -95,8 +105,24 @@ static async Task<int> UninstallServiceAsync()
 
     await WindowsServiceInstaller.StopAsync();
     var result = await WindowsServiceInstaller.UninstallAsync();
-    Console.WriteLine(result.Combined);
+    Console.WriteLine(result.Success ? "Service removed." : WindowsServiceInstaller.Explain(result));
     return result.Success ? 0 : result.ExitCode;
+}
+
+static async Task<int> ControlServiceAsync(bool start)
+{
+    var result = start
+        ? await WindowsServiceInstaller.StartAsync()
+        : await WindowsServiceInstaller.StopAsync();
+
+    if (result.Success)
+    {
+        Console.WriteLine(start ? "Service started." : "Service stopped.");
+        return 0;
+    }
+
+    Console.Error.WriteLine(WindowsServiceInstaller.Explain(result));
+    return result.ExitCode;
 }
 
 static async Task<int> InstallTaskAsync(string[] args)
@@ -160,7 +186,8 @@ static int ShowHelp(string? unknown = null)
           LiveClaude.Service.exe --service              Run as a Windows service
           LiveClaude.Service.exe install-service [--account DOMAIN\user --password ***]
           LiveClaude.Service.exe uninstall-service
-          LiveClaude.Service.exe install-task [--no-boot]
+          LiveClaude.Service.exe start-service | stop-service
+          LiveClaude.Service.exe install-task [--no-boot] [--user DOMAIN\user]
           LiveClaude.Service.exe uninstall-task
           LiveClaude.Service.exe status
         """);

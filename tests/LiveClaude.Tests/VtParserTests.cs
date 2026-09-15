@@ -148,6 +148,52 @@ public class ScheduledTaskXmlTests
         Assert.Contains("<LogonType>InteractiveToken</LogonType>", xml);
     }
 
+    /// <summary>
+    /// sc.exe parses its own command line: every option is "key= value" with the space after the
+    /// equals sign, and the executable is quoted inside the quoted binPath value so a path with
+    /// spaces survives. Passing the pairs through ProcessStartInfo.ArgumentList instead produced
+    /// "key= value" as one quoted token, which sc.exe rejected with a usage error.
+    /// </summary>
+    [Fact]
+    public void TheServiceCommandLineIsShapedTheWayScExeExpects()
+    {
+        var line = WindowsServiceInstaller.BuildCreateCommandLine(
+            @"C:\Program Files\LiveClaude\LiveClaude.Service.exe",
+            @"CANLE\cl",
+            "secret pass");
+
+        Assert.Contains(@"binPath= ""\""C:\Program Files\LiveClaude\LiveClaude.Service.exe\"" --service""", line);
+        Assert.Contains("start= auto", line);
+        Assert.Contains(@"obj= ""CANLE\cl""", line);
+        Assert.Contains(@"password= ""secret pass""", line);
+        Assert.DoesNotContain("\"binPath=", line);
+    }
+
+    [Fact]
+    public void WithoutAnAccountNoCredentialsGoOnTheCommandLine()
+    {
+        var line = WindowsServiceInstaller.BuildCreateCommandLine(@"C:\tools\LiveClaude.Service.exe");
+
+        Assert.DoesNotContain("obj=", line);
+        Assert.DoesNotContain("password=", line);
+    }
+
+    [Fact]
+    public void TheFailureActionsRestartTheServiceThreeTimes()
+    {
+        var line = WindowsServiceInstaller.BuildFailureCommandLine();
+
+        Assert.Contains("reset= 86400", line);
+        Assert.Contains("actions= restart/5000/restart/10000/restart/30000", line);
+    }
+
+    [Theory]
+    [InlineData("[SC] StartService FAILED 1069:", "Log on as a service")]
+    [InlineData("[SC] OpenSCManager FAILED 5: Access is denied.", "elevated")]
+    [InlineData("[SC] CreateService FAILED 1073:", "already exists")]
+    public void ServiceFailuresAreExplained(string output, string expected) =>
+        Assert.Contains(expected, WindowsServiceInstaller.Explain(new ProcessResult(1, output, "")));
+
     [Theory]
     [InlineData(@"C:\Users\cl\AppData\Local\Apps\2.0\ABC123\LiveClaude", true)]
     [InlineData(@"C:\Users\cl\AppData\Local\Microsoft\WinGet\Packages\Publisher.App\1.0", true)]

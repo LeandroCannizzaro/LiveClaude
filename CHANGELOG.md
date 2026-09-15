@@ -4,6 +4,26 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project uses
 [semantic versioning](https://semver.org/).
 
+## [1.0.6] - 2026-09-15
+
+### Fixed
+
+- **The Windows service could never be installed, elevation or not.** Its `sc.exe` options were
+  passed through `ProcessStartInfo.ArgumentList`, which turns each `key= value` pair into a single
+  quoted token; sc.exe parses its own command line and answered with a usage error (1639). Verified
+  against the real sc.exe: the command lines LiveClaude builds now stop only at the permission check.
+- **The service account gets the "Log on as a service" right.** `sc create obj=` does not grant it, so
+  the service was created and then failed to start with error 1069. The elevated install now adds
+  `SeServiceLogonRight` for the account.
+- Start and stop of the service retry with elevation instead of failing with access denied, and
+  sc.exe failures are translated (1069, 1057, 1073, access denied) rather than shown raw.
+- A blank password for a user account is called out before the install, since Windows always refuses
+  it for a service logon.
+
+### Added
+
+- `LiveClaude.Service.exe start-service` and `stop-service`.
+
 ## [1.0.5] - 2026-09-15
 
 ### Fixed
@@ -117,6 +137,7 @@ First release.
 - Rolling per-instance logs and a supervisor log under `%ProgramData%\LiveClaude\logs`.
 - Packaging: portable zips (x64, arm64, self-contained), ClickOnce, and winget manifests.
 
+[1.0.6]: https://github.com/LeandroCannizzaro/LiveClaude/releases/tag/v1.0.6
 [1.0.5]: https://github.com/LeandroCannizzaro/LiveClaude/releases/tag/v1.0.5
 [1.0.4]: https://github.com/LeandroCannizzaro/LiveClaude/releases/tag/v1.0.4
 [1.0.3]: https://github.com/LeandroCannizzaro/LiveClaude/releases/tag/v1.0.3

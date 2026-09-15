@@ -54,6 +54,39 @@ public static class ProcessHelper
         return new ProcessResult(process.ExitCode, await stdout.ConfigureAwait(false), await stderr.ConfigureAwait(false));
     }
 
+    /// <summary>
+    /// Runs a program with a command line built by the caller.
+    ///
+    /// sc.exe parses its own command line and rejects the quoting .NET applies to
+    /// <see cref="ProcessStartInfo.ArgumentList"/>: <c>sc create X "binPath= …"</c> comes back as a
+    /// usage error (1639). Its options have to be passed exactly as they would be typed.
+    /// </summary>
+    public static async Task<ProcessResult> RunRawAsync(
+        string fileName,
+        string arguments,
+        CancellationToken ct = default)
+    {
+        var psi = new ProcessStartInfo(fileName)
+        {
+            Arguments = arguments,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            UseShellExecute = false,
+            CreateNoWindow = true,
+            StandardOutputEncoding = Encoding.UTF8,
+            StandardErrorEncoding = Encoding.UTF8
+        };
+
+        using var process = Process.Start(psi)
+                            ?? throw new InvalidOperationException($"Could not start '{fileName}'.");
+
+        var stdout = process.StandardOutput.ReadToEndAsync(ct);
+        var stderr = process.StandardError.ReadToEndAsync(ct);
+        await process.WaitForExitAsync(ct).ConfigureAwait(false);
+
+        return new ProcessResult(process.ExitCode, await stdout.ConfigureAwait(false), await stderr.ConfigureAwait(false));
+    }
+
     /// <summary>Re-launches this executable elevated (UAC) with the given arguments and waits for it.</summary>
     public static async Task<int> RunElevatedAsync(string fileName, IEnumerable<string> arguments, CancellationToken ct = default)
     {

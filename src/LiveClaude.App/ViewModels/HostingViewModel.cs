@@ -190,11 +190,30 @@ public sealed class HostingViewModel : ObservableObject
         return exitCode == 0 ? "Service removed." : $"Uninstall returned exit code {exitCode}.";
     });
 
-    public Task StartServiceAsync() =>
-        RunAsync(result => ServiceResult = result, async () => (await WindowsServiceInstaller.StartAsync()).Combined);
+    public Task StartServiceAsync() => RunAsync(result => ServiceResult = result, async () =>
+    {
+        var start = await WindowsServiceInstaller.StartAsync();
+        if (start.Success)
+            return "Service started.";
 
-    public Task StopServiceAsync() =>
-        RunAsync(result => ServiceResult = result, async () => (await WindowsServiceInstaller.StopAsync()).Combined);
+        // Starting needs elevation too; retry through the supervisor before giving up.
+        if (!ProcessHelper.IsElevated && await TryElevatedAsync("start-service") == 0)
+            return "Service started.";
+
+        return WindowsServiceInstaller.Explain(start);
+    });
+
+    public Task StopServiceAsync() => RunAsync(result => ServiceResult = result, async () =>
+    {
+        var stop = await WindowsServiceInstaller.StopAsync();
+        if (stop.Success)
+            return "Service stopped.";
+
+        if (!ProcessHelper.IsElevated && await TryElevatedAsync("stop-service") == 0)
+            return "Service stopped.";
+
+        return WindowsServiceInstaller.Explain(stop);
+    });
 
     private async Task<int> TryElevatedAsync(params string[] arguments)
     {

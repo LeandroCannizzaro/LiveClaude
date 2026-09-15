@@ -111,6 +111,12 @@ also means a ClickOnce install (which cannot be launched elevated) works fine. D
 task is still installed with the logon trigger only: everything works except starting before anyone signs
 in. The task is always registered for *your* account, even when UAC is answered with a different one.
 
+**What the Windows service needs.** Installation is elevated (UAC, again through the supervisor
+executable). Running it under your own account additionally needs the **Log on as a service** right —
+`sc create obj=` does not grant it, and without it the service is created and then refuses to start
+with error 1069. LiveClaude grants it during the elevated install. The account also needs a real
+password: Windows never lets a user account log on as a service with a blank one.
+
 **Installs that move.** ClickOnce and winget put the app in a folder that is replaced on every update,
 which would leave the task or service pointing at an executable that no longer exists. When LiveClaude
 detects such a location it first copies the supervisor to `%LOCALAPPDATA%\LiveClaude\supervisor` and
