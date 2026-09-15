@@ -62,11 +62,23 @@
     </TabControl>
 
     <!-- Footer -->
-    <StackPanel Grid.Row="2" Orientation="Horizontal" Margin="0,12,0,0">
-      <TextBlock Style="{StaticResource Mono}" Text="Config:" Margin="0,0,6,0" />
-      <TextBlock Style="{StaticResource Mono}" Text="%ProgramData%\LiveClaude\config.json" Margin="0,0,16,0" />
-      <Button Content="Open config folder" Command="{Binding OpenConfigCommand}" Padding="8,3" FontSize="11.5" />
-      <Button Content="Open logs folder" Command="{Binding OpenLogFolderCommand}" Padding="8,3" FontSize="11.5" />
-    </StackPanel>
+    <Grid Grid.Row="2" Margin="0,12,0,0">
+      <Grid.ColumnDefinitions>
+        <ColumnDefinition Width="*" />
+        <ColumnDefinition Width="Auto" />
+      </Grid.ColumnDefinitions>
+
+      <StackPanel Grid.Column="0" Orientation="Horizontal">
+        <TextBlock Style="{StaticResource Mono}" Text="Config:" Margin="0,0,6,0" />
+        <TextBlock Style="{StaticResource Mono}" Text="%ProgramData%\LiveClaude\config.json" Margin="0,0,16,0" />
+        <Button Content="Open config folder" Command="{Binding OpenConfigCommand}" Padding="8,3" FontSize="11.5" />
+        <Button Content="Open logs folder" Command="{Binding OpenLogFolderCommand}" Padding="8,3" FontSize="11.5" />
+      </StackPanel>
+
+      <Button Grid.Column="1" Click="OnShowAbout" Margin="0" Padding="10,3" FontSize="11.5"
+              Background="Transparent" BorderBrush="Transparent"
+              ToolTip="About LiveClaude — version, licence and credits"
+              Content="{Binding AppVersion}" Foreground="{StaticResource MutedTextBrush}" />
+    </Grid>
   </Grid>
 </Window>

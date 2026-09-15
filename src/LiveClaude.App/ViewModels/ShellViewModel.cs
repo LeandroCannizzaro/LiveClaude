@@ -82,6 +82,9 @@ public sealed class ShellViewModel : ObservableObject, IAsyncDisposable
 
     public EnvironmentsViewModel Environments { get; }
 
+    /// <summary>Shown in the footer; clicking it opens the About window.</summary>
+    public string AppVersion => $"v{Views.AppInfo.Version}";
+
     public ISupervisorApi? Api => _api;
 
     public AppConfig Config => _config;

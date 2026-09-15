@@ -4,6 +4,28 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project uses
 [semantic versioning](https://semver.org/).
 
+## [1.0.4] - 2026-09-15
+
+### Fixed
+
+- **A running server's own environment could be deleted.** Protection relied on having resolved the
+  environment id over the API, which is best effort; when that lookup had not happened (or failed),
+  the environment a live server had just registered was shown as stale and could be selected. Force
+  then appeared to "do nothing", because the running server registered again within seconds.
+  Protection is now local and deterministic: a directory with a running server protects every
+  registration made during that run — including one created after a delete — whether or not the id
+  was ever resolved. Leftovers from earlier runs of the same directory stay deletable.
+- The reason a row cannot be deleted is spelled out on the row: *"A server is running for this
+  directory. Stop 'name' in the Dashboard first."*
+- When a delete succeeds but the entry comes straight back, the app says so instead of looking inert.
+- The bridge environment of a run is now resolved as soon as the server starts, with retries, rather
+  than waiting for a "ready" line that did not always appear.
+
+### Added
+
+- The version is shown in the bottom-right corner and opens an **About** window with the description,
+  copyright, licence and links.
+
 ## [1.0.3] - 2026-09-15
 
 ### Added
@@ -77,6 +99,7 @@ First release.
 - Rolling per-instance logs and a supervisor log under `%ProgramData%\LiveClaude\logs`.
 - Packaging: portable zips (x64, arm64, self-contained), ClickOnce, and winget manifests.
 
+[1.0.4]: https://github.com/LeandroCannizzaro/LiveClaude/releases/tag/v1.0.4
 [1.0.3]: https://github.com/LeandroCannizzaro/LiveClaude/releases/tag/v1.0.3
 [1.0.2]: https://github.com/LeandroCannizzaro/LiveClaude/releases/tag/v1.0.2
 [1.0.1]: https://github.com/LeandroCannizzaro/LiveClaude/releases/tag/v1.0.1

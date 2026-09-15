@@ -128,7 +128,11 @@ LiveClaude handles both ends of that:
     others. This is the answer to "three `doG`, one alive".
   - **Select stale** picks the environments whose directory LiveClaude supervises but which have no
     server behind them.
-  - An environment in use is never selectable, and deletion always asks first.
+  - An environment in use is never selectable, and deletion always asks first. Protection does not
+    depend on the API lookup succeeding: **a directory with a running server protects every
+    registration made during that run**, including one the server creates again after a delete. Stop
+    the session in the Dashboard to clear those. Leftovers from earlier runs of the same directory
+    stay deletable while the server runs.
 
 ### When a delete is refused
 

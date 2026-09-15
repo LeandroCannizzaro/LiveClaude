@@ -29,6 +29,9 @@ public partial class App : Application
         e.Handled = true;
     }
 
+    /// <summary>Records an exception the app recovered from, without interrupting the user.</summary>
+    public static void LogError(Exception exception) => Log(exception);
+
     private static void ShowError(Exception exception)
     {
         var details = Log(exception);

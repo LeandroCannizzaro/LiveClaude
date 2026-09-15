@@ -377,6 +377,14 @@ public sealed class SupervisedInstance : IAsyncDisposable
 
         Notify();
 
+        // Start resolving the bridge environment straight away: waiting for a "ready" line in the
+        // output made this depend on matching the CLI's wording, and it sometimes never fired.
+        if (Interlocked.Exchange(ref _environmentLookupStarted, 1) == 0)
+        {
+            var startedUtc = DateTimeOffset.UtcNow;
+            _ = Task.Run(() => ResolveEnvironmentAsync(startedUtc, ct), CancellationToken.None);
+        }
+
         var reader = Task.Run(() => PumpOutputAsync(pty), CancellationToken.None);
 
         try
@@ -439,45 +447,71 @@ public sealed class SupervisedInstance : IAsyncDisposable
     }
 
     /// <summary>
-    /// Finds the bridge environment this run registered, so the Environments tab can tell it apart
-    /// from the leftovers of previous runs. Best effort: never fails a start.
+    /// Finds the bridge environment this run registered, so the Environments tab can name it.
+    ///
+    /// Best effort, and retried: the registration can take a while, and the API can be briefly
+    /// unavailable. Protection in the UI never depends on this succeeding — a directory with a
+    /// running server is protected on its own — but a resolved id makes the reason precise.
     /// </summary>
-    private async Task ResolveEnvironmentAsync(DateTimeOffset startedUtc)
+    private async Task ResolveEnvironmentAsync(DateTimeOffset startedUtc, CancellationToken ct)
     {
         if (!_appConfig.TrackEnvironments)
             return;
 
-        try
+        TimeSpan[] attempts = [TimeSpan.FromSeconds(4), TimeSpan.FromSeconds(12), TimeSpan.FromSeconds(30), TimeSpan.FromSeconds(60)];
+
+        foreach (var delay in attempts)
         {
-            // Give the server a moment to register before asking.
-            await Task.Delay(TimeSpan.FromSeconds(3)).ConfigureAwait(false);
-
-            using var client = new EnvironmentsClient();
-            var environments = await client.ListAsync().ConfigureAwait(false);
-
-            var directory = Config.Directory;
-            var match = environments
-                .Where(e => e.IsBridge && !e.IsArchived && EnvironmentClassifier.SamePath(e.Directory, directory))
-                .Where(e => e.CreatedUtc is null || e.CreatedUtc >= startedUtc.AddMinutes(-2))
-                .OrderByDescending(e => e.CreatedUtc ?? DateTimeOffset.MinValue)
-                .FirstOrDefault();
-
-            if (match is null)
-                return;
-
-            lock (_gate)
+            try
             {
-                _environmentId = match.Id;
-                _state.LastEnvironmentId = match.Id;
-                _stateStore.Save(_config.Id, _state);
+                await Task.Delay(delay, ct).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException)
+            {
+                return;
             }
 
-            _log.Write($"[supervisor] registered bridge environment {match.Id} ({match.Name}).");
-            Notify();
-        }
-        catch (Exception ex)
-        {
-            _log.Write($"[supervisor] could not resolve the bridge environment: {ex.Message}");
+            // Nothing to resolve once the server is gone.
+            lock (_gate)
+            {
+                if (_pty is null || _pty.HasExited)
+                    return;
+            }
+
+            try
+            {
+                using var client = new EnvironmentsClient(log: line => _log.Write($"[environments] {line}"));
+                var environments = await client.ListAsync(ct).ConfigureAwait(false);
+
+                var directory = Config.Directory;
+                var match = environments
+                    .Where(e => e.IsBridge && !e.IsArchived && EnvironmentClassifier.SamePath(e.Directory, directory))
+                    .Where(e => e.CreatedUtc is null || e.CreatedUtc >= startedUtc.AddMinutes(-1))
+                    .OrderByDescending(e => e.CreatedUtc ?? DateTimeOffset.MinValue)
+                    .FirstOrDefault();
+
+                if (match is null)
+                    continue;
+
+                lock (_gate)
+                {
+                    _environmentId = match.Id;
+                    _state.LastEnvironmentId = match.Id;
+                    _stateStore.Save(_config.Id, _state);
+                }
+
+                _log.Write($"[supervisor] registered bridge environment {match.Id} ({match.Name}).");
+                Notify();
+                return;
+            }
+            catch (OperationCanceledException)
+            {
+                return;
+            }
+            catch (Exception ex)
+            {
+                _log.Write($"[supervisor] could not resolve the bridge environment: {ex.Message}");
+            }
         }
     }
 
@@ -552,7 +586,6 @@ public sealed class SupervisedInstance : IAsyncDisposable
         switch (OutputInterpreter.Classify(chunk))
         {
             case OutputSignal.Ready:
-                DateTimeOffset? startedUtc;
                 lock (_gate)
                 {
                     if (_stateValue is InstanceState.Starting or InstanceState.NeedsAttention)
@@ -561,12 +594,7 @@ public sealed class SupervisedInstance : IAsyncDisposable
                         _attentionReason = null;
                         stateChanged = true;
                     }
-
-                    startedUtc = _startedUtc;
                 }
-
-                if (startedUtc is { } started && Interlocked.Exchange(ref _environmentLookupStarted, 1) == 0)
-                    _ = Task.Run(() => ResolveEnvironmentAsync(started));
 
                 break;
 

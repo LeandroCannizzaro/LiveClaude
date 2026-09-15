@@ -80,6 +80,11 @@
                     <TextBlock Style="{StaticResource Mono}" FontSize="11" Text="{Binding Branch}" />
                   </StackPanel>
 
+                  <TextBlock Text="{Binding Note}" Style="{StaticResource Mono}" FontSize="11"
+                             Margin="17,7,0,0" TextWrapping="Wrap"
+                             Foreground="{StaticResource SuccessBrush}"
+                             Visibility="{Binding HasNote, Converter={StaticResource BoolToVisibility}}" />
+
                   <TextBlock Text="{Binding LastError}" Style="{StaticResource Mono}" FontSize="11"
                              Margin="17,7,0,0" TextWrapping="Wrap"
                              Foreground="{StaticResource DangerBrush}"

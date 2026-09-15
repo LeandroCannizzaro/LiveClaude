@@ -1,0 +1,47 @@
+<Window x:Class="LiveClaude.App.Views.AboutWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="About LiveClaude"
+        Width="560" SizeToContent="Height"
+        WindowStartupLocation="CenterOwner"
+        ResizeMode="NoResize"
+        ShowInTaskbar="False"
+        Background="{StaticResource BackgroundBrush}">
+
+  <Border Style="{StaticResource Card}" Margin="20" Padding="24">
+    <StackPanel>
+      <StackPanel Orientation="Horizontal">
+        <Border Width="44" Height="44" CornerRadius="10" Background="{StaticResource SurfaceAltBrush}"
+                BorderBrush="{StaticResource AccentBrush}" BorderThickness="1" VerticalAlignment="Top">
+          <TextBlock Text="&gt;_" FontFamily="Cascadia Mono, Consolas" FontSize="17" FontWeight="Bold"
+                     Foreground="{StaticResource AccentBrush}"
+                     HorizontalAlignment="Center" VerticalAlignment="Center" />
+        </Border>
+        <StackPanel Margin="14,0,0,0">
+          <TextBlock Text="LiveClaude" FontSize="22" FontWeight="Bold" />
+          <TextBlock x:Name="VersionText" Style="{StaticResource Mono}" Margin="0,2,0,0" />
+        </StackPanel>
+      </StackPanel>
+
+      <TextBlock Style="{StaticResource SubHeading}" Margin="0,16,0,0" TextWrapping="Wrap"
+                 Text="Keeps Claude Code Remote Control servers running on Windows: one supervised server per project directory, restarted after a crash, at logon and after a reboot — as a Windows service or a scheduled task. Includes an embedded terminal for the flows that need one, and cleanup of the bridge environments that pile up on your account." />
+
+      <Border Background="{StaticResource SurfaceAltBrush}" CornerRadius="8" Padding="14,12" Margin="0,4,0,0">
+        <StackPanel>
+          <TextBlock Text="Copyright (c) 2026 Leandro Cannizzaro" FontSize="12.5" />
+          <TextBlock Style="{StaticResource Mono}" FontSize="11.5" Margin="0,6,0,0" TextWrapping="Wrap"
+                     Text="Released under the MIT License. The software is provided &quot;as is&quot;, without warranty of any kind, express or implied." />
+          <TextBlock Style="{StaticResource Mono}" FontSize="11.5" Margin="0,8,0,0" TextWrapping="Wrap"
+                     Text="Independent project — not affiliated with, endorsed by or sponsored by Anthropic. Claude and Claude Code are trademarks of Anthropic." />
+        </StackPanel>
+      </Border>
+
+      <StackPanel Orientation="Horizontal" Margin="0,18,0,0">
+        <Button Content="Repository" Click="OnOpenRepository" />
+        <Button Content="Product page" Click="OnOpenProductPage" />
+        <Button Content="License" Click="OnOpenLicense" />
+        <Button Content="Close" Style="{StaticResource PrimaryButton}" Click="OnClose" Margin="0" />
+      </StackPanel>
+    </StackPanel>
+  </Border>
+</Window>

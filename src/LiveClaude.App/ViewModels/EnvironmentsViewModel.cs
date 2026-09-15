@@ -14,11 +14,12 @@ public sealed class EnvironmentViewModel : ObservableObject
     private bool _isSelected;
     private string? _lastError;
 
-    public EnvironmentViewModel(RemoteEnvironment environment, EnvironmentUsage usage, string? instanceName)
+    public EnvironmentViewModel(RemoteEnvironment environment, EnvironmentClassification classification)
     {
         Environment = environment;
-        Usage = usage;
-        InstanceName = instanceName;
+        Usage = classification.Usage;
+        InstanceName = classification.OwnerName;
+        Note = classification.ProtectionNote;
     }
 
     public RemoteEnvironment Environment { get; }
@@ -26,6 +27,11 @@ public sealed class EnvironmentViewModel : ObservableObject
     public EnvironmentUsage Usage { get; }
 
     public string? InstanceName { get; }
+
+    /// <summary>Why this row cannot be deleted, spelled out instead of just greying the box.</summary>
+    public string? Note { get; }
+
+    public bool HasNote => !string.IsNullOrWhiteSpace(Note);
 
     public string Id => Environment.Id;
 
@@ -41,7 +47,7 @@ public sealed class EnvironmentViewModel : ObservableObject
 
     public string UsageText => Usage switch
     {
-        EnvironmentUsage.InUse => InstanceName is null ? "live" : $"live — {InstanceName}",
+        EnvironmentUsage.InUse => InstanceName is null ? "live — protected" : $"live — {InstanceName}",
         EnvironmentUsage.Stale => "stale — no server for this directory",
         _ => Environment.IsBridge ? "not tracked by LiveClaude" : "not a Remote Control bridge"
     };
@@ -223,14 +229,11 @@ public sealed class EnvironmentsViewModel : ObservableObject
 
             foreach (var environment in ordered)
             {
-                var usage = EnvironmentClassifier.Classify(environment, instances, sessions);
                 if (!environment.IsBridge && !ShowUnrelated)
                     continue;
 
-                var instanceName = instances
-                    .FirstOrDefault(i => string.Equals(i.EnvironmentId, environment.Id, StringComparison.Ordinal))?.Name;
-
-                var item = new EnvironmentViewModel(environment, usage, instanceName);
+                var classification = EnvironmentClassifier.Describe(environment, instances, sessions);
+                var item = new EnvironmentViewModel(environment, classification);
 
                 // Keep the explanation of a failed delete visible across a refresh.
                 if (_lastErrors.TryGetValue(environment.Id, out var error))
@@ -357,15 +360,29 @@ public sealed class EnvironmentsViewModel : ObservableObject
 
         Log($"--- delete run finished: {deleted} deleted, {failures.Count} failed.");
 
+        var attempted = selected.Select(i => i.Id).ToHashSet(StringComparer.Ordinal);
+        await RefreshAsync();
+
+        // A server that is still running registers again within seconds, which looks exactly like
+        // "the delete did nothing". Say so instead of leaving the user guessing.
+        var reappeared = Items.Where(i => attempted.Contains(i.Id)).ToList();
+
+        if (deleted > 0 && reappeared.Count > 0)
+        {
+            var note = $"Deleted {deleted}, but {reappeared.Count} came back: a server is still running for that " +
+                       "directory and registers again after every delete. Stop the session in the Dashboard first.";
+            failures.Insert(0, note);
+            Log($"[warning] {reappeared.Count} environment(s) re-registered right after deletion.");
+        }
+
         FailureSummary = failures.Count == 0
             ? ""
             : string.Join(Environment.NewLine, failures);
 
         StatusMessage = failures.Count == 0
             ? $"Deleted {deleted} environment(s)."
-            : $"Deleted {deleted}, {failures.Count} failed — details below. Full log: {_log.Path}";
+            : $"Deleted {deleted}, {failures.Count} issue(s) — details below. Full log: {_log.Path}";
 
-        await RefreshAsync();
         UpdateCounts();
     }
 

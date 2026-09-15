@@ -15,6 +15,11 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <!-- Shown in the About window. -->
+    <Resource Include="Assets\liveclaude.png" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\LiveClaude.Core\LiveClaude.Core.csproj" />
     <ProjectReference Include="..\LiveClaude.Terminal\LiveClaude.Terminal.csproj" />
     <ProjectReference Include="..\LiveClaude.Service\LiveClaude.Service.csproj" />

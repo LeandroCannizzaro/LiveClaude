@@ -54,6 +54,24 @@ public partial class MainWindow : Window
         await TerminalTab.AttachAsync(instanceId);
     }
 
+    private void OnShowAbout(object sender, RoutedEventArgs e)
+    {
+        // A decorative dialog must never be able to take the supervisor's window down with it.
+        try
+        {
+            new Views.AboutWindow { Owner = this }.ShowDialog();
+        }
+        catch (Exception ex)
+        {
+            App.LogError(ex);
+            MessageBox.Show(
+                $"The About window could not be opened.\n\n{ex.Message}",
+                "LiveClaude",
+                MessageBoxButton.OK,
+                MessageBoxImage.Warning);
+        }
+    }
+
     protected override async void OnClosing(CancelEventArgs e)
     {
         base.OnClosing(e);

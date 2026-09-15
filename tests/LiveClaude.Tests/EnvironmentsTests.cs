@@ -197,6 +197,132 @@ public class EnvironmentClassifierTests
             EnvironmentClassifier.Classify(environment, instances, [Session(@"C:\repos\doG")]));
     }
 
+    /// <summary>
+    /// The regression that let a running server's own environment be deleted: resolving the
+    /// environment id over the API is best effort, and when it has not happened yet the directory
+    /// of a live server must still protect what that server registered.
+    /// </summary>
+    [Fact]
+    public void ARunningServerProtectsItsDirectoryEvenBeforeItsEnvironmentIsIdentified()
+    {
+        var started = DateTimeOffset.UtcNow.AddMinutes(-5);
+        var environment = Bridge("env_just_registered", @"C:\repos\doG");
+        environment.CreatedUtc = started.AddSeconds(20);
+
+        var instances = new[]
+        {
+            new InstanceSnapshot
+            {
+                Id = "1",
+                Name = "doG",
+                Directory = @"C:\repos\doG",
+                State = InstanceState.Running,
+                StartedUtc = started,
+                EnvironmentId = null
+            }
+        };
+
+        var classification = EnvironmentClassifier.Describe(environment, instances, [Session(@"C:\repos\doG")]);
+
+        Assert.Equal(EnvironmentUsage.InUse, classification.Usage);
+        Assert.Equal("doG", classification.OwnerName);
+        Assert.Contains("Stop 'doG'", classification.ProtectionNote);
+    }
+
+    [Fact]
+    public void AnEnvironmentRegisteredAgainAfterADeleteIsAlsoProtected()
+    {
+        var started = DateTimeOffset.UtcNow.AddMinutes(-30);
+        var reRegistered = Bridge("env_reborn", @"C:\repos\doG");
+        reRegistered.CreatedUtc = DateTimeOffset.UtcNow;
+
+        var instances = new[]
+        {
+            new InstanceSnapshot
+            {
+                Id = "1",
+                Name = "doG",
+                Directory = @"C:\repos\doG",
+                State = InstanceState.Running,
+                StartedUtc = started,
+                EnvironmentId = "env_deleted_a_moment_ago"
+            }
+        };
+
+        Assert.Equal(EnvironmentUsage.InUse, EnvironmentClassifier.Classify(reRegistered, instances, []));
+    }
+
+    [Fact]
+    public void LeftoversFromEarlierRunsStayDeletableWhileAServerRuns()
+    {
+        var started = DateTimeOffset.UtcNow.AddMinutes(-10);
+        var old = Bridge("env_yesterday", @"C:\repos\doG");
+        old.CreatedUtc = started.AddHours(-6);
+
+        var instances = new[]
+        {
+            new InstanceSnapshot
+            {
+                Id = "1",
+                Name = "doG",
+                Directory = @"C:\repos\doG",
+                State = InstanceState.Running,
+                StartedUtc = started,
+                EnvironmentId = "env_live"
+            }
+        };
+
+        Assert.Equal(EnvironmentUsage.Stale, EnvironmentClassifier.Classify(old, instances, [Session(@"C:\repos\doG")]));
+    }
+
+    [Fact]
+    public void AStoppedSessionReleasesItsDirectory()
+    {
+        var environment = Bridge("env_any", @"C:\repos\doG");
+        environment.CreatedUtc = DateTimeOffset.UtcNow;
+
+        var instances = new[]
+        {
+            new InstanceSnapshot
+            {
+                Id = "1",
+                Name = "doG",
+                Directory = @"C:\repos\doG",
+                State = InstanceState.Stopped,
+                StartedUtc = null
+            }
+        };
+
+        Assert.Equal(EnvironmentUsage.Stale, EnvironmentClassifier.Classify(environment, instances, [Session(@"C:\repos\doG")]));
+    }
+
+    [Fact]
+    public void DuplicateSelectionNeverIncludesWhatARunningServerMayHaveRegistered()
+    {
+        var started = DateTimeOffset.UtcNow.AddMinutes(-5);
+        var older = Bridge("env_old", @"C:\repos\doG");
+        older.CreatedUtc = started.AddHours(-2);
+        var current = Bridge("env_current", @"C:\repos\doG");
+        current.CreatedUtc = started.AddSeconds(10);
+
+        var instances = new[]
+        {
+            new InstanceSnapshot
+            {
+                Id = "1",
+                Name = "doG",
+                Directory = @"C:\repos\doG",
+                State = InstanceState.Running,
+                StartedUtc = started,
+                EnvironmentId = null
+            }
+        };
+
+        var duplicates = EnvironmentClassifier.FindDuplicates([older, current], instances);
+
+        Assert.Equal("env_old", Assert.Single(duplicates).Id);
+    }
+
     [Fact]
     public void DuplicatesKeepTheNewestRegistrationPerDirectory()
     {
