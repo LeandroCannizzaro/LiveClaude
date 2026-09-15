@@ -11,8 +11,7 @@ on:
 
 permissions:
   contents: write
-  pages: write
-  id-token: write
+  actions: write
 
 env:
   DOTNET_VERSION: '10.0.x'
@@ -154,29 +153,13 @@ jobs:
           gh release create "v$version" (Get-ChildItem artifacts/packages/* | ForEach-Object { $_.FullName }) `
             --title "LiveClaude $version" --notes $notes
 
-      - name: Assemble the GitHub Pages site
+      # Pages only deploys from the default branch, so the product page is refreshed by its own
+      # workflow, which picks the ClickOnce payload up from this release.
+      - name: Refresh the product page
         shell: pwsh
-        run: |
-          New-Item -ItemType Directory -Force -Path artifacts/site | Out-Null
-          Copy-Item docs/* artifacts/site -Recurse -Force
-          New-Item -ItemType Directory -Force -Path artifacts/site/clickonce | Out-Null
-          Copy-Item artifacts/clickonce/* artifacts/site/clickonce -Recurse -Force
-
-      - name: Upload the Pages artifact
-        uses: actions/upload-pages-artifact@v3
-        with:
-          path: artifacts/site
-
-  deploy-pages:
-    name: Deploy the product page
-    needs: release
-    runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    steps:
-      - id: deployment
-        uses: actions/deploy-pages@v4
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run pages.yml --ref main
 
   winget:
     name: Submit to winget-pkgs
