@@ -168,10 +168,19 @@ public sealed class HostingViewModel : ObservableObject
         }
 
         await ScheduledTaskInstaller.RunAsync();
+
+        var verified = await ScheduledTaskInstaller.QueryAsync();
+        var outcome = verified.Installed switch
+        {
+            true => $"Installed for logon only and started (Task Scheduler reports: {verified.Status ?? "ready"}).",
+            false => "Windows reported success but does not list the task afterwards — check Task Scheduler for 'LiveClaude Supervisor'.",
+            _ => "Installed for logon only and started; this account cannot read the task back to confirm."
+        };
+
         return Combine(
-            "Installed without the boot trigger and started. It runs at every sign-in; " +
-            "registering the boot trigger needs administrator rights, so run this again and accept the prompt " +
-            "if you want the servers up before anyone signs in.",
+            outcome +
+            " The elevation prompt was declined or cancelled, so there is no boot trigger: the servers start at " +
+            "sign-in, not before. Run this again and accept the prompt to add it.",
             note);
     });
 

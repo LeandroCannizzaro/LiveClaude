@@ -1,3 +1,5 @@
+using System.Runtime.InteropServices;
+
 namespace LiveClaude.Core.Hosting;
 
 /// <summary>
@@ -38,7 +40,7 @@ public static class SupervisorDeployment
 
         var target = StableDirectory;
         Directory.CreateDirectory(target);
-        CopyNewer(source, target);
+        DeployTo(source, target);
 
         var deployed = Path.Combine(target, SupervisorExecutable);
         return File.Exists(deployed) ? deployed : localExecutable;
@@ -50,7 +52,8 @@ public static class SupervisorDeployment
             ? $"The supervisor was copied to {StableDirectory} so the registration survives app updates."
             : null;
 
-    private static void CopyNewer(string source, string target)
+    /// <summary>Copies what changed and clears the Mark of the Web from every copy.</summary>
+    public static void DeployTo(string source, string target)
     {
         foreach (var directory in Directory.EnumerateDirectories(source, "*", SearchOption.AllDirectories))
             Directory.CreateDirectory(directory.Replace(source, target, StringComparison.OrdinalIgnoreCase));
@@ -69,6 +72,7 @@ public static class SupervisorDeployment
                 }
 
                 File.Copy(file, destination, overwrite: true);
+                RemoveMarkOfTheWeb(destination);
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
             {
@@ -76,4 +80,29 @@ public static class SupervisorDeployment
             }
         }
     }
+
+    /// <summary>
+    /// Drops the Zone.Identifier stream from a copied file.
+    ///
+    /// Files that arrived from the internet — everything a ClickOnce install puts on disk — carry
+    /// that stream, and File.Copy carries it along. Launching such a file through the shell (which
+    /// is how the elevation prompt works) then adds "The publisher could not be verified. Are you
+    /// sure you want to run this software?" on top of UAC. .NET cannot address an alternate data
+    /// stream, so this goes through Win32.
+    /// </summary>
+    private static void RemoveMarkOfTheWeb(string path)
+    {
+        try
+        {
+            DeleteFileW(path + ":Zone.Identifier");
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or EntryPointNotFoundException)
+        {
+            // The warning is cosmetic; never fail a deployment over it.
+        }
+    }
+
+    [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool DeleteFileW(string path);
 }

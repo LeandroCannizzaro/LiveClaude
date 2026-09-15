@@ -4,6 +4,18 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project uses
 [semantic versioning](https://semver.org/).
 
+## [1.0.10] - 2026-09-15
+
+### Fixed
+
+- **"The publisher could not be verified" before the elevation prompt.** Everything a ClickOnce
+  install puts on disk carries the internet zone marker, `File.Copy` carries it to the supervisor
+  copy, and launching that copy through the shell (how elevation works) added a second, scarier
+  dialog on top of UAC. The marker is now cleared from every deployed file.
+- Installing the task without elevation verifies afterwards and reports what Task Scheduler actually
+  says, instead of claiming success blindly — and names the declined or cancelled prompt as the
+  reason there is no boot trigger.
+
 ## [1.0.9] - 2026-09-15
 
 ### Fixed
@@ -180,6 +192,7 @@ First release.
 - Rolling per-instance logs and a supervisor log under `%ProgramData%\LiveClaude\logs`.
 - Packaging: portable zips (x64, arm64, self-contained), ClickOnce, and winget manifests.
 
+[1.0.10]: https://github.com/LeandroCannizzaro/LiveClaude/releases/tag/v1.0.10
 [1.0.9]: https://github.com/LeandroCannizzaro/LiveClaude/releases/tag/v1.0.9
 [1.0.8]: https://github.com/LeandroCannizzaro/LiveClaude/releases/tag/v1.0.8
 [1.0.7]: https://github.com/LeandroCannizzaro/LiveClaude/releases/tag/v1.0.7

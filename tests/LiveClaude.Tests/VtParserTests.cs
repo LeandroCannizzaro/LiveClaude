@@ -287,6 +287,52 @@ public class ScheduledTaskXmlTests
         Assert.Contains(@"binPath= ""\""C:\app\LiveClaude.exe\"" --service""", line);
     }
 
+    /// <summary>
+    /// Files a ClickOnce install put on disk carry the internet zone marker, File.Copy carries it
+    /// along, and launching such a copy through the shell — which is how the elevation prompt works —
+    /// adds "The publisher could not be verified" on top of UAC.
+    /// </summary>
+    [Fact]
+    public void DeployedFilesLoseTheInternetZoneMarker()
+    {
+        var source = Path.Combine(Path.GetTempPath(), $"liveclaude-src-{Guid.NewGuid():n}");
+        var target = Path.Combine(Path.GetTempPath(), $"liveclaude-dst-{Guid.NewGuid():n}");
+        Directory.CreateDirectory(source);
+        Directory.CreateDirectory(target);
+
+        var file = Path.Combine(source, "LiveClaude.Service.exe");
+        File.WriteAllText(file, "binary");
+        File.WriteAllText($"{file}:Zone.Identifier", "[ZoneTransfer]\r\nZoneId=3");
+
+        try
+        {
+            Assert.True(HasZoneIdentifier(file), "the source file should start marked");
+
+            SupervisorDeployment.DeployTo(source, target);
+
+            var copy = Path.Combine(target, "LiveClaude.Service.exe");
+            Assert.True(File.Exists(copy));
+            Assert.False(HasZoneIdentifier(copy), "the deployed copy must not carry the marker");
+        }
+        finally
+        {
+            Directory.Delete(source, recursive: true);
+            Directory.Delete(target, recursive: true);
+        }
+    }
+
+    private static bool HasZoneIdentifier(string path)
+    {
+        try
+        {
+            return File.ReadAllText($"{path}:Zone.Identifier").Length > 0;
+        }
+        catch (Exception ex) when (ex is FileNotFoundException or IOException or DirectoryNotFoundException)
+        {
+            return false;
+        }
+    }
+
     [Theory]
     [InlineData(@"C:\Users\cl\AppData\Local\Apps\2.0\ABC123\LiveClaude", true)]
     [InlineData(@"C:\Users\cl\AppData\Local\Microsoft\WinGet\Packages\Publisher.App\1.0", true)]
