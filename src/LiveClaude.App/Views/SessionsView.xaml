@@ -97,7 +97,8 @@
             <StackPanel Grid.Row="0" Grid.Column="0" Margin="0,0,10,0">
               <TextBlock Text="Spawn mode" Style="{StaticResource FieldLabel}" />
               <ComboBox ItemsSource="{Binding Source={x:Static vm:SessionEditorViewModel.SpawnModes}}"
-                        SelectedItem="{Binding Spawn}" />
+                        SelectedItem="{Binding Spawn}"
+                        ItemTemplate="{StaticResource CliLabelTemplate}" />
               <TextBlock Style="{StaticResource Mono}" FontSize="11" Margin="0,4,0,0" TextWrapping="Wrap"
                          Text="same-dir: every session shares this folder · worktree: each remote session gets its own git worktree · session: exactly one session" />
             </StackPanel>
@@ -105,7 +106,8 @@
             <StackPanel Grid.Row="0" Grid.Column="1" Margin="10,0,0,0">
               <TextBlock Text="Permission mode" Style="{StaticResource FieldLabel}" />
               <ComboBox ItemsSource="{Binding Source={x:Static vm:SessionEditorViewModel.PermissionModes}}"
-                        SelectedItem="{Binding PermissionMode}" />
+                        SelectedItem="{Binding PermissionMode}"
+                        ItemTemplate="{StaticResource CliLabelTemplate}" />
               <TextBlock Style="{StaticResource Mono}" FontSize="11" Margin="0,4,0,0" TextWrapping="Wrap"
                          Text="acceptEdits or auto keep the server moving when nobody is at the keyboard." />
             </StackPanel>

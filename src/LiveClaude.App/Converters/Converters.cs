@@ -23,6 +23,30 @@ public sealed class InverseBooleanToVisibilityConverter : IValueConverter
         throw new NotSupportedException();
 }
 
+/// <summary>
+/// Shows spawn and permission modes the way the CLI spells them, so the picker and the command
+/// preview read the same.
+/// </summary>
+public sealed class CliLabelConverter : IValueConverter
+{
+    public object Convert(object? value, Type targetType, object? parameter, CultureInfo culture) => value switch
+    {
+        LiveClaude.Core.Model.SpawnMode.SameDir => "same-dir",
+        LiveClaude.Core.Model.SpawnMode.Worktree => "worktree",
+        LiveClaude.Core.Model.SpawnMode.Session => "session",
+        LiveClaude.Core.Model.PermissionMode.Default => "default",
+        LiveClaude.Core.Model.PermissionMode.AcceptEdits => "acceptEdits",
+        LiveClaude.Core.Model.PermissionMode.Auto => "auto",
+        LiveClaude.Core.Model.PermissionMode.BypassPermissions => "bypassPermissions",
+        LiveClaude.Core.Model.PermissionMode.DontAsk => "dontAsk",
+        LiveClaude.Core.Model.PermissionMode.Plan => "plan",
+        _ => value?.ToString() ?? ""
+    };
+
+    public object ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture) =>
+        throw new NotSupportedException();
+}
+
 /// <summary>Shows an element when a string has content.</summary>
 public sealed class StringToVisibilityConverter : IValueConverter
 {

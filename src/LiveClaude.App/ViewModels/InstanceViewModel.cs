@@ -65,7 +65,16 @@ public sealed class InstanceViewModel : ObservableObject
                 parts.Add($"{_snapshot.RestartCount} restart(s)");
 
             if (_config is not null)
-                parts.Add($"{_config.Spawn.ToString().ToLowerInvariant()} · capacity {_config.Capacity} · {_config.PermissionMode}");
+            {
+                var spawn = _config.Spawn switch
+                {
+                    SpawnMode.Worktree => "worktree",
+                    SpawnMode.Session => "session",
+                    _ => "same-dir"
+                };
+
+                parts.Add($"{spawn} · capacity {_config.Capacity} · {_config.PermissionMode}");
+            }
 
             return string.Join("   ·   ", parts);
         }
