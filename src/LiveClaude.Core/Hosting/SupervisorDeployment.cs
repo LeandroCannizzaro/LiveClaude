@@ -29,14 +29,13 @@ public static class SupervisorDeployment
         "supervisor");
 
     /// <summary>
-    /// Each build gets its own folder.
+    /// One folder, on purpose: a registration must keep pointing at the same path across updates.
     ///
-    /// With a single folder, the supervisor started from it held its own files open, so an update
-    /// could not replace them: the refresh skipped them and every install went on registering — and
-    /// running — the build that was there before. A folder named after the version is never in use
-    /// when it is created, so the copy is always complete.
+    /// Its files can be held open by a supervisor started from here, which once left an old build in
+    /// place. That is handled by stopping whatever runs from this folder before refreshing it — not
+    /// by moving the folder, which would make every update invalidate the registration.
     /// </summary>
-    public static string StableDirectory => Path.Combine(StableRoot, RunningVersion);
+    public static string StableDirectory => StableRoot;
 
     public static string RunningVersion =>
         ReadVersion(Environment.ProcessPath ?? "")?.Split('+')[0] ?? "current";
@@ -73,7 +72,7 @@ public static class SupervisorDeployment
         Directory.CreateDirectory(target);
         var locked = DeployTo(source, target);
 
-        PruneOlderDeployments(target);
+        RemoveVersionedLeftovers();
 
         var deployed = Path.Combine(target, SupervisorExecutable);
         var path = File.Exists(deployed) ? deployed : localExecutable;
@@ -84,16 +83,17 @@ public static class SupervisorDeployment
     }
 
     /// <summary>
-    /// Removes the folders of older builds. Anything still in use simply stays: a registration made
-    /// by a previous version keeps working until it is installed again.
+    /// Clears the per-version folders a short-lived build of LiveClaude created here. Anything still
+    /// in use is left alone.
     /// </summary>
-    private static void PruneOlderDeployments(string current)
+    private static void RemoveVersionedLeftovers()
     {
         try
         {
             foreach (var folder in Directory.EnumerateDirectories(StableRoot))
             {
-                if (string.Equals(folder.TrimEnd('\\', '/'), current.TrimEnd('\\', '/'), StringComparison.OrdinalIgnoreCase))
+                // Only folders that look like a version number, never "Assets" and friends.
+                if (!Version.TryParse(Path.GetFileName(folder), out _))
                     continue;
 
                 try
@@ -102,7 +102,7 @@ public static class SupervisorDeployment
                 }
                 catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
                 {
-                    // In use by a supervisor that is still running: leave it alone.
+                    // still running from there
                 }
             }
         }

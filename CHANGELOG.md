@@ -4,6 +4,24 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project uses
 [semantic versioning](https://semver.org/).
 
+## [1.0.15] - 2026-09-15
+
+### Changed
+
+- **Back to a single deployment folder**, and a guard instead. 1.0.14 gave each build its own folder
+  to dodge the file locks; that also moved the path on every update, which is exactly what a
+  scheduled task or service registration must not do. The copy lives at
+  `%LOCALAPPDATA%\LiveClaude\supervisor` again, and **anything running from that folder is stopped
+  before it is refreshed** — the hosts first, then any process left over from an earlier attempt.
+  Per-version folders left behind by 1.0.14 are removed.
+
+### Fixed
+
+- The real holder of the lock has a name now: an installer from a build old enough to still have the
+  argument-parsing bug would turn itself into a supervisor and never exit, keeping `LiveClaude.exe`
+  open. Every refresh then skipped that file and every install ran — and re-created — the same old
+  build. The guard above breaks that loop.
+
 ## [1.0.14] - 2026-09-15
 
 ### Fixed
@@ -256,6 +274,7 @@ First release.
 - Rolling per-instance logs and a supervisor log under `%ProgramData%\LiveClaude\logs`.
 - Packaging: portable zips (x64, arm64, self-contained), ClickOnce, and winget manifests.
 
+[1.0.15]: https://github.com/LeandroCannizzaro/LiveClaude/releases/tag/v1.0.15
 [1.0.14]: https://github.com/LeandroCannizzaro/LiveClaude/releases/tag/v1.0.14
 [1.0.13]: https://github.com/LeandroCannizzaro/LiveClaude/releases/tag/v1.0.13
 [1.0.12]: https://github.com/LeandroCannizzaro/LiveClaude/releases/tag/v1.0.12

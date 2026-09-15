@@ -125,10 +125,11 @@ supervisor windowlessly. Only one supervisor runs at a time: a second one stops 
 
 **Installs that move.** ClickOnce and winget put the app in a folder that is replaced on every update,
 which would leave the task or service pointing at an executable that no longer exists. When LiveClaude
-detects such a location it first copies the supervisor to
-`%LOCALAPPDATA%\LiveClaude\supervisor\<version>` and registers that copy. The folder carries the
-version because the supervisor runs from it and holds its own files open: with a single folder an
-update could not replace them, and the registration went on running the previous build.
+detects such a location it first copies the supervisor to `%LOCALAPPDATA%\LiveClaude\supervisor` and
+registers that copy — one path, so the registration survives updates. Because the supervisor runs
+from there and holds its own files open, **everything running from that folder is stopped before the
+copy is refreshed**; without that, an update cannot replace the executable and the registration keeps
+running the previous build.
 
 The app talks to whichever supervisor is running over a named pipe (`LiveClaude.v1`), so you can close the window and the servers keep running — and reopen it later to find them.
 

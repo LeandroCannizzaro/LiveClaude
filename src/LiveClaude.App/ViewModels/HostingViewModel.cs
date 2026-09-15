@@ -82,26 +82,24 @@ public sealed class HostingViewModel : ObservableObject
     /// </summary>
     private async Task<(SupervisorCommand Command, string Note)> PrepareAsync(bool asService)
     {
+        // Nothing may be running from the deployment folder while it is refreshed: a process started
+        // from there holds its own executable, and the copy then keeps an old build that gets
+        // registered and run. Stop the hosts, then kill anything left over from earlier attempts.
+        await ScheduledTaskInstaller.EndAsync();
+        await WindowsServiceInstaller.StopAsync();
+
+        var stopped = SupervisorDeployment.StopProcessesIn(SupervisorDeployment.StableDirectory).ToList();
+        if (stopped.Count > 0)
+            await Task.Delay(TimeSpan.FromSeconds(1));
+
         var deployment = SupervisorDeployment.Deploy();
 
-        var stopped = new List<string>();
-
+        // One more round if something grabbed a file in the meantime.
         if (!deployment.UpToDate)
         {
-            // Stop whatever is holding the files, then try once more.
-            await ScheduledTaskInstaller.EndAsync();
-            await WindowsServiceInstaller.StopAsync();
-            await Task.Delay(TimeSpan.FromSeconds(2));
-
+            stopped.AddRange(SupervisorDeployment.StopProcessesIn(SupervisorDeployment.StableDirectory));
+            await Task.Delay(TimeSpan.FromSeconds(1));
             deployment = SupervisorDeployment.Deploy();
-
-            // Still locked: a supervisor orphaned by an earlier run is holding the files.
-            if (!deployment.UpToDate)
-            {
-                stopped.AddRange(SupervisorDeployment.StopProcessesIn(SupervisorDeployment.StableDirectory));
-                await Task.Delay(TimeSpan.FromSeconds(1));
-                deployment = SupervisorDeployment.Deploy();
-            }
         }
 
         _supervisorPath = deployment.ExecutablePath;

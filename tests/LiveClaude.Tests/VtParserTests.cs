@@ -393,16 +393,53 @@ public class ScheduledTaskXmlTests
     }
 
     /// <summary>
-    /// The deployment folder carries the build's version precisely so a running supervisor from an
-    /// earlier build cannot hold its files and leave an old executable behind to be registered.
+    /// One folder across updates: a scheduled task or service registration keeps pointing at the
+    /// same path. What made an old build survive there is handled by stopping its process, not by
+    /// moving the folder.
     /// </summary>
     [Fact]
-    public void EachBuildIsDeployedToItsOwnFolder()
+    public void TheDeploymentPathDoesNotChangeBetweenBuilds() =>
+        Assert.Equal(SupervisorDeployment.StableRoot, SupervisorDeployment.StableDirectory);
+
+    /// <summary>
+    /// The guard that made the difference: an installer of an older build stayed alive in the
+    /// deployment folder, holding LiveClaude.exe open, so every later refresh skipped it and every
+    /// install ran that same old build again.
+    /// </summary>
+    [Fact]
+    public void ProcessesRunningFromTheDeploymentFolderAreStopped()
     {
-        Assert.StartsWith(SupervisorDeployment.StableRoot, SupervisorDeployment.StableDirectory);
-        Assert.NotEqual(SupervisorDeployment.StableRoot.TrimEnd('\\'), SupervisorDeployment.StableDirectory.TrimEnd('\\'));
-        Assert.EndsWith(SupervisorDeployment.RunningVersion, SupervisorDeployment.StableDirectory);
-        Assert.DoesNotContain('+', SupervisorDeployment.RunningVersion);
+        var folder = Path.Combine(Path.GetTempPath(), $"liveclaude-guard-{Guid.NewGuid():n}");
+        Directory.CreateDirectory(folder);
+
+        var executable = Path.Combine(folder, "probe.exe");
+        File.Copy(Path.Combine(Environment.SystemDirectory, "cmd.exe"), executable);
+
+        var process = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(executable)
+        {
+            Arguments = "/c pause",
+            UseShellExecute = false,
+            RedirectStandardInput = true,
+            CreateNoWindow = true
+        })!;
+
+        try
+        {
+            Assert.False(process.HasExited);
+
+            var stopped = SupervisorDeployment.StopProcessesIn(folder);
+
+            Assert.Contains(stopped, entry => entry.Contains("probe"));
+            Assert.True(process.WaitForExit(5000), "the process should have been stopped");
+        }
+        finally
+        {
+            if (!process.HasExited)
+                process.Kill(entireProcessTree: true);
+
+            process.Dispose();
+            try { Directory.Delete(folder, recursive: true); } catch (IOException) { }
+        }
     }
 
     private static bool HasZoneIdentifier(string path)
