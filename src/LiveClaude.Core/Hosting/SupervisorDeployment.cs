@@ -23,10 +23,23 @@ public static class SupervisorDeployment
 {
     public const string SupervisorExecutable = "LiveClaude.Service.exe";
 
-    public static string StableDirectory => Path.Combine(
+    public static string StableRoot => Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
         "LiveClaude",
         "supervisor");
+
+    /// <summary>
+    /// Each build gets its own folder.
+    ///
+    /// With a single folder, the supervisor started from it held its own files open, so an update
+    /// could not replace them: the refresh skipped them and every install went on registering — and
+    /// running — the build that was there before. A folder named after the version is never in use
+    /// when it is created, so the copy is always complete.
+    /// </summary>
+    public static string StableDirectory => Path.Combine(StableRoot, RunningVersion);
+
+    public static string RunningVersion =>
+        ReadVersion(Environment.ProcessPath ?? "")?.Split('+')[0] ?? "current";
 
     /// <summary>True when the folder the app runs from is replaced on update.</summary>
     public static bool IsVolatileLocation(string directory) =>
@@ -60,12 +73,83 @@ public static class SupervisorDeployment
         Directory.CreateDirectory(target);
         var locked = DeployTo(source, target);
 
+        PruneOlderDeployments(target);
+
         var deployed = Path.Combine(target, SupervisorExecutable);
         var path = File.Exists(deployed) ? deployed : localExecutable;
 
         // The app executable is what gets registered on a ClickOnce install, so report its version.
         var appCopy = Path.Combine(target, "LiveClaude.exe");
         return new DeploymentResult(path, locked, ReadVersion(File.Exists(appCopy) ? appCopy : path));
+    }
+
+    /// <summary>
+    /// Removes the folders of older builds. Anything still in use simply stays: a registration made
+    /// by a previous version keeps working until it is installed again.
+    /// </summary>
+    private static void PruneOlderDeployments(string current)
+    {
+        try
+        {
+            foreach (var folder in Directory.EnumerateDirectories(StableRoot))
+            {
+                if (string.Equals(folder.TrimEnd('\\', '/'), current.TrimEnd('\\', '/'), StringComparison.OrdinalIgnoreCase))
+                    continue;
+
+                try
+                {
+                    Directory.Delete(folder, recursive: true);
+                }
+                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+                {
+                    // In use by a supervisor that is still running: leave it alone.
+                }
+            }
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or DirectoryNotFoundException)
+        {
+            // best effort
+        }
+    }
+
+    /// <summary>
+    /// Stops processes running from the deployed folder.
+    ///
+    /// A supervisor started from there holds its own files, so the copy cannot be refreshed while it
+    /// lives. Stopping the task is not always enough: a process orphaned by an earlier run keeps the
+    /// lock, and then every install silently registers an old build.
+    /// </summary>
+    public static IReadOnlyList<string> StopProcessesIn(string directory)
+    {
+        var stopped = new List<string>();
+        var folder = directory.TrimEnd('\\', '/');
+
+        foreach (var process in System.Diagnostics.Process.GetProcesses())
+        {
+            try
+            {
+                var path = process.MainModule?.FileName;
+                if (path is null || !path.StartsWith(folder, StringComparison.OrdinalIgnoreCase))
+                    continue;
+
+                if (process.Id == System.Environment.ProcessId)
+                    continue;
+
+                process.Kill(entireProcessTree: true);
+                process.WaitForExit(5000);
+                stopped.Add($"{process.ProcessName} ({process.Id})");
+            }
+            catch (Exception ex) when (ex is InvalidOperationException or System.ComponentModel.Win32Exception or NotSupportedException)
+            {
+                // Processes of other users, and ones that exited in the meantime, are not ours to mind.
+            }
+            finally
+            {
+                process.Dispose();
+            }
+        }
+
+        return stopped;
     }
 
     public static string? ReadVersion(string executablePath)

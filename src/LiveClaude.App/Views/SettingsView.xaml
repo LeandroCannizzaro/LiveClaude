@@ -5,6 +5,7 @@
   <ScrollViewer VerticalScrollBarVisibility="Auto">
     <StackPanel Margin="20">
       <TextBlock Text="Service &amp; startup" Style="{StaticResource Heading}" />
+      <TextBlock Text="{Binding Hosting.SupervisorBuild}" Style="{StaticResource Mono}" Margin="0,0,0,8" />
       <TextBlock Style="{StaticResource SubHeading}"
                  Text="Pick who keeps the servers alive when this window is closed. The scheduled task runs in your own session and is the safest default; the Windows service starts even before you sign in, but must run under your account to reach the Claude Code credentials." />
 

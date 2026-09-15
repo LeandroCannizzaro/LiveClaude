@@ -4,6 +4,27 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project uses
 [semantic versioning](https://semver.org/).
 
+## [1.0.14] - 2026-09-15
+
+### Fixed
+
+- **The registered copy could never be updated, so installs kept running an old build.** The
+  supervisor was deployed to one fixed folder and launched from there, which meant it held its own
+  executable open: an update replaced the files nothing was using and silently skipped
+  `LiveClaude.exe` and `LiveClaude.dll`. Every elevated install therefore ran the build from before
+  the update — on an old enough build, one that exits 0 without doing anything. Each build is now
+  deployed to a folder named after its version, which cannot be in use when it is created; folders of
+  builds nothing is running any more are removed.
+- Anything still holding files in the deployment folder is stopped before registering, and the result
+  says which processes were stopped.
+- Every install result — success or failure — now states the build that was registered, and failures
+  include the notes (locked files, chosen executable) that were previously dropped.
+- The card shows the running build and the deployed one side by side, so a stale copy is visible
+  before it causes trouble.
+- The app logs each elevation attempt (executable, build, exit code) to `install.log`, so an elevated
+  process that writes nothing itself still leaves evidence of what ran.
+- Choosing to install as LocalSystem no longer clears the account box behind your back.
+
 ## [1.0.13] - 2026-09-15
 
 ### Fixed
@@ -235,6 +256,7 @@ First release.
 - Rolling per-instance logs and a supervisor log under `%ProgramData%\LiveClaude\logs`.
 - Packaging: portable zips (x64, arm64, self-contained), ClickOnce, and winget manifests.
 
+[1.0.14]: https://github.com/LeandroCannizzaro/LiveClaude/releases/tag/v1.0.14
 [1.0.13]: https://github.com/LeandroCannizzaro/LiveClaude/releases/tag/v1.0.13
 [1.0.12]: https://github.com/LeandroCannizzaro/LiveClaude/releases/tag/v1.0.12
 [1.0.11]: https://github.com/LeandroCannizzaro/LiveClaude/releases/tag/v1.0.11

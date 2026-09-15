@@ -48,11 +48,15 @@ public partial class SettingsView : UserControl
             return;
 
         var password = ServicePassword.Password;
-        if (string.IsNullOrEmpty(password))
+        var asLocalSystem = false;
+
+        if (string.IsNullOrEmpty(password) && !string.IsNullOrWhiteSpace(Shell.Hosting.Account))
         {
             var proceed = MessageBox.Show(
-                "No password entered, so the service will be created as LocalSystem.\n\n" +
-                "LocalSystem uses a different profile and usually cannot reach the Claude Code sign-in. Continue anyway?",
+                $"No password entered for {Shell.Hosting.Account}.\n\n" +
+                "Windows never lets an account log on as a service without one, so the service would be created " +
+                "as LocalSystem instead — which uses a different profile and usually cannot reach the Claude Code " +
+                "sign-in.\n\nInstall as LocalSystem anyway?",
                 "Install service",
                 MessageBoxButton.YesNo,
                 MessageBoxImage.Warning);
@@ -60,10 +64,10 @@ public partial class SettingsView : UserControl
             if (proceed != MessageBoxResult.Yes)
                 return;
 
-            Shell.Hosting.Account = "";
+            asLocalSystem = true;
         }
 
-        await Shell.Hosting.InstallServiceAsync(password);
+        await Shell.Hosting.InstallServiceAsync(password, asLocalSystem);
         ServicePassword.Clear();
         await Shell.ConnectAsync(force: true);
     }

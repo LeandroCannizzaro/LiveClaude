@@ -392,6 +392,19 @@ public class ScheduledTaskXmlTests
         Directory.Delete(target, recursive: true);
     }
 
+    /// <summary>
+    /// The deployment folder carries the build's version precisely so a running supervisor from an
+    /// earlier build cannot hold its files and leave an old executable behind to be registered.
+    /// </summary>
+    [Fact]
+    public void EachBuildIsDeployedToItsOwnFolder()
+    {
+        Assert.StartsWith(SupervisorDeployment.StableRoot, SupervisorDeployment.StableDirectory);
+        Assert.NotEqual(SupervisorDeployment.StableRoot.TrimEnd('\\'), SupervisorDeployment.StableDirectory.TrimEnd('\\'));
+        Assert.EndsWith(SupervisorDeployment.RunningVersion, SupervisorDeployment.StableDirectory);
+        Assert.DoesNotContain('+', SupervisorDeployment.RunningVersion);
+    }
+
     private static bool HasZoneIdentifier(string path)
     {
         try
