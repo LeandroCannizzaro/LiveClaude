@@ -1,4 +1,5 @@
 using System.ComponentModel;
+using System.IO;
 using LiveClaude.Core.Hosting;
 
 namespace LiveClaude.App.ViewModels;
@@ -70,6 +71,14 @@ public sealed class HostingViewModel : ObservableObject
     /// </summary>
     public string SupervisorPath => _supervisorPath ??= SupervisorDeployment.EnsureDeployed();
 
+    /// <summary>
+    /// The executable and arguments to register. A ClickOnce install cannot start
+    /// LiveClaude.Service.exe (its runtime configuration is not deployed), so there the desktop
+    /// application hosts the supervisor itself.
+    /// </summary>
+    private SupervisorCommand ResolveCommand(bool asService) =>
+        SupervisorLauncher.Resolve(Path.GetDirectoryName(SupervisorPath)!, asService);
+
     public async Task RefreshAsync()
     {
         var service = WindowsServiceInstaller.Query();
@@ -86,12 +95,14 @@ public sealed class HostingViewModel : ObservableObject
     /// </summary>
     public Task InstallTaskAsync() => RunAsync(result => TaskResult = result, async () =>
     {
-        var exe = SupervisorPath;
-        var note = SupervisorDeployment.DescribeDeployment(exe);
+        var command = ResolveCommand(asService: false);
+        var note = Combine(SupervisorDeployment.DescribeDeployment(SupervisorPath) ?? "", command.Note ?? "").Trim();
 
         if (ProcessHelper.IsElevated)
         {
-            var elevatedInstall = await ScheduledTaskInstaller.InstallAsync(exe, runAtBoot: true, userName: ProcessHelper.CurrentUserName);
+            var elevatedInstall = await ScheduledTaskInstaller.InstallAsync(
+                command.ExecutablePath, runAtBoot: true, userName: ProcessHelper.CurrentUserName, arguments: command.Arguments);
+
             if (!elevatedInstall.Success)
                 return $"Could not install the task: {elevatedInstall.Combined}";
 
@@ -102,9 +113,17 @@ public sealed class HostingViewModel : ObservableObject
         var exitCode = -1;
         try
         {
-            // The supervisor executable does the install with administrator rights. The user is
-            // passed explicitly: UAC may be answered with a different administrator account.
-            exitCode = await ProcessHelper.RunElevatedAsync(exe, ["install-task", "--user", ProcessHelper.CurrentUserName]);
+            // The elevation goes through the supervisor executable when it can run; otherwise the
+            // app elevates itself. The user is passed explicitly because UAC may be answered with a
+            // different administrator account.
+            var elevator = SupervisorLauncher.CanRunStandalone(SupervisorPath) ? SupervisorPath : command.ExecutablePath;
+            exitCode = await ProcessHelper.RunElevatedAsync(elevator,
+            [
+                "install-task",
+                "--user", ProcessHelper.CurrentUserName,
+                "--exe", command.ExecutablePath,
+                "--args", command.Arguments
+            ]);
         }
         catch (Win32Exception)
         {
@@ -114,7 +133,8 @@ public sealed class HostingViewModel : ObservableObject
         if (exitCode == 0)
             return Combine("Installed with the logon and boot triggers, and started.", note);
 
-        var fallback = await ScheduledTaskInstaller.InstallAsync(exe, runAtBoot: false, userName: ProcessHelper.CurrentUserName);
+        var fallback = await ScheduledTaskInstaller.InstallAsync(
+            command.ExecutablePath, runAtBoot: false, userName: ProcessHelper.CurrentUserName, arguments: command.Arguments);
         if (!fallback.Success)
         {
             return ScheduledTaskInstaller.IsAccessDenied(fallback)
@@ -157,10 +177,16 @@ public sealed class HostingViewModel : ObservableObject
     /// <summary>Service management needs elevation, so it goes through the supervisor exe with UAC.</summary>
     public Task InstallServiceAsync(string? password) => RunAsync(result => ServiceResult = result, async () =>
     {
-        var exe = SupervisorPath;
-        var note = SupervisorDeployment.DescribeDeployment(exe);
+        var command = ResolveCommand(asService: true);
+        var note = Combine(SupervisorDeployment.DescribeDeployment(SupervisorPath) ?? "", command.Note ?? "").Trim();
 
-        var args = new List<string> { "install-service" };
+        var args = new List<string>
+        {
+            "install-service",
+            "--exe", command.ExecutablePath,
+            "--args", command.Arguments
+        };
+
         if (!string.IsNullOrWhiteSpace(Account))
         {
             args.Add("--account");
@@ -172,7 +198,8 @@ public sealed class HostingViewModel : ObservableObject
         int exitCode;
         try
         {
-            exitCode = await ProcessHelper.RunElevatedAsync(exe, args);
+            var elevator = SupervisorLauncher.CanRunStandalone(SupervisorPath) ? SupervisorPath : command.ExecutablePath;
+            exitCode = await ProcessHelper.RunElevatedAsync(elevator, args);
         }
         catch (Win32Exception)
         {
@@ -228,7 +255,7 @@ public sealed class HostingViewModel : ObservableObject
     }
 
     private static string Combine(string message, string? note) =>
-        note is null ? message : $"{message} {note}";
+        string.IsNullOrWhiteSpace(note) ? message : $"{message} {note}";
 
     private async Task RunAsync(Action<string> report, Func<Task<string>> action)
     {

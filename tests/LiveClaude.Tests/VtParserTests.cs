@@ -1,3 +1,4 @@
+using System.IO;
 using LiveClaude.Core.Hosting;
 using LiveClaude.Terminal.Vt;
 using Xunit;
@@ -193,6 +194,72 @@ public class ScheduledTaskXmlTests
     [InlineData("[SC] CreateService FAILED 1073:", "already exists")]
     public void ServiceFailuresAreExplained(string output, string expected) =>
         Assert.Contains(expected, WindowsServiceInstaller.Explain(new ProcessResult(1, output, "")));
+
+    /// <summary>
+    /// A ClickOnce install ships LiveClaude.Service.exe without its runtime configuration, and .NET
+    /// refuses to start such an executable. Registering it would leave a task that fails at every
+    /// logon, so the desktop application has to host the supervisor there instead.
+    /// </summary>
+    [Fact]
+    public void TheAppIsRegisteredWhenTheSupervisorCannotStart()
+    {
+        var directory = Path.Combine(Path.GetTempPath(), $"liveclaude-clickonce-{Guid.NewGuid():n}");
+        Directory.CreateDirectory(directory);
+
+        try
+        {
+            // What ClickOnce actually deploys: both executables, but only the app's runtimeconfig.
+            File.WriteAllText(Path.Combine(directory, "LiveClaude.Service.exe"), "");
+            File.WriteAllText(Path.Combine(directory, "LiveClaude.exe"), "");
+            File.WriteAllText(Path.Combine(directory, "LiveClaude.runtimeconfig.json"), "{}");
+
+            var command = SupervisorLauncher.Resolve(directory, asService: false);
+
+            Assert.Equal(Path.Combine(directory, "LiveClaude.exe"), command.ExecutablePath);
+            Assert.Equal("--supervise", command.Arguments);
+            Assert.Contains("ClickOnce", command.Note);
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void TheSupervisorIsRegisteredWhenItsRuntimeConfigurationIsThere()
+    {
+        var directory = Path.Combine(Path.GetTempPath(), $"liveclaude-zip-{Guid.NewGuid():n}");
+        Directory.CreateDirectory(directory);
+
+        try
+        {
+            File.WriteAllText(Path.Combine(directory, "LiveClaude.Service.exe"), "");
+            File.WriteAllText(Path.Combine(directory, "LiveClaude.Service.runtimeconfig.json"), "{}");
+            File.WriteAllText(Path.Combine(directory, "LiveClaude.exe"), "");
+            File.WriteAllText(Path.Combine(directory, "LiveClaude.runtimeconfig.json"), "{}");
+
+            var command = SupervisorLauncher.Resolve(directory, asService: true);
+
+            Assert.Equal(Path.Combine(directory, "LiveClaude.Service.exe"), command.ExecutablePath);
+            Assert.Equal("--service", command.Arguments);
+            Assert.Null(command.Note);
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void TheRegisteredArgumentsEndUpInTheTaskAndTheService()
+    {
+        var xml = ScheduledTaskInstaller.BuildXml(@"C:\app\LiveClaude.exe", runAtBoot: false, arguments: "--supervise");
+        Assert.Contains("<Arguments>--supervise</Arguments>", xml);
+        Assert.Contains(@"<Command>C:\app\LiveClaude.exe</Command>", xml);
+
+        var line = WindowsServiceInstaller.BuildCreateCommandLine(@"C:\app\LiveClaude.exe", arguments: "--service");
+        Assert.Contains(@"binPath= ""\""C:\app\LiveClaude.exe\"" --service""", line);
+    }
 
     [Theory]
     [InlineData(@"C:\Users\cl\AppData\Local\Apps\2.0\ABC123\LiveClaude", true)]

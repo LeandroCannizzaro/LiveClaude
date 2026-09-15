@@ -4,6 +4,24 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project uses
 [semantic versioning](https://semver.org/).
 
+## [1.0.7] - 2026-09-15
+
+### Fixed
+
+- **On a ClickOnce install the supervisor could not start at all.** ClickOnce deploys
+  `LiveClaude.Service.exe` but not its `runtimeconfig.json`, and .NET refuses to start such an
+  executable: "You must install .NET Desktop Runtime". A scheduled task registered against it failed
+  at every logon. The desktop application can now host the supervisor itself
+  (`LiveClaude.exe --supervise` / `--service`) and registers *that* whenever the supervisor
+  executable is not runnable. The zip and winget packages are unaffected and keep using the
+  supervisor executable.
+- **Two supervisors no longer run at once.** One starting while another is already up now stops with
+  an explanation instead of silently supervising the same directories twice.
+- A supervisor that cannot own the IPC endpoint says so once, instead of logging the same failure
+  every second.
+- The main window is created in code: clearing `StartupUri` throws, which crashed the headless modes
+  before this.
+
 ## [1.0.6] - 2026-09-15
 
 ### Fixed
@@ -137,6 +155,7 @@ First release.
 - Rolling per-instance logs and a supervisor log under `%ProgramData%\LiveClaude\logs`.
 - Packaging: portable zips (x64, arm64, self-contained), ClickOnce, and winget manifests.
 
+[1.0.7]: https://github.com/LeandroCannizzaro/LiveClaude/releases/tag/v1.0.7
 [1.0.6]: https://github.com/LeandroCannizzaro/LiveClaude/releases/tag/v1.0.6
 [1.0.5]: https://github.com/LeandroCannizzaro/LiveClaude/releases/tag/v1.0.5
 [1.0.4]: https://github.com/LeandroCannizzaro/LiveClaude/releases/tag/v1.0.4

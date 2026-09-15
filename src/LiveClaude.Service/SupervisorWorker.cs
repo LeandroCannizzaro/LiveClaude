@@ -15,22 +15,39 @@ public sealed class SupervisorWorker : BackgroundService
     private readonly ILogger<SupervisorWorker> _logger;
     private readonly ILoggerFactory _loggerFactory;
     private readonly string _host;
+    private readonly IHostApplicationLifetime? _lifetime;
 
     private Supervisor? _supervisor;
     private IpcServer? _ipc;
     private FileSystemWatcher? _watcher;
     private DateTime _lastConfigWrite = DateTime.MinValue;
 
-    public SupervisorWorker(ILogger<SupervisorWorker> logger, ILoggerFactory loggerFactory, string host)
+    public SupervisorWorker(
+        ILogger<SupervisorWorker> logger,
+        ILoggerFactory loggerFactory,
+        string host,
+        IHostApplicationLifetime? lifetime = null)
     {
         _logger = logger;
         _loggerFactory = loggerFactory;
         _host = host;
+        _lifetime = lifetime;
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         ConfigStore.EnsureDirectories();
+
+        // Two supervisors would run two servers per directory and fight over the same environments.
+        if (await AnotherSupervisorIsRunningAsync(stoppingToken).ConfigureAwait(false))
+        {
+            _logger.LogWarning(
+                "Another LiveClaude supervisor is already running on this machine, so this one is stopping. " +
+                "Close the app's own supervisor, or stop the scheduled task or service, to run just one.");
+
+            _lifetime?.StopApplication();
+            return;
+        }
 
         var store = new ConfigStore();
         _supervisor = new Supervisor(store, _loggerFactory.CreateLogger<Supervisor>(), _host);
@@ -74,6 +91,23 @@ public sealed class SupervisorWorker : BackgroundService
             await _supervisor.DisposeAsync().ConfigureAwait(false);
 
         await base.StopAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>Probes the IPC endpoint: an answer means a supervisor already owns this machine.</summary>
+    private static async Task<bool> AnotherSupervisorIsRunningAsync(CancellationToken ct)
+    {
+        try
+        {
+            using var client = new System.IO.Pipes.NamedPipeClientStream(
+                ".", LiveClaude.Core.Ipc.IpcProtocol.PipeName, System.IO.Pipes.PipeDirection.InOut);
+
+            await client.ConnectAsync(750, ct).ConfigureAwait(false);
+            return true;
+        }
+        catch (Exception ex) when (ex is TimeoutException or IOException or OperationCanceledException or UnauthorizedAccessException)
+        {
+            return false;
+        }
     }
 
     private void StartConfigWatcher(ConfigStore store)

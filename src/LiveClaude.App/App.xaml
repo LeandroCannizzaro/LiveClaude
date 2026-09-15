@@ -1,7 +1,8 @@
 <Application x:Class="LiveClaude.App.App"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-             StartupUri="MainWindow.xaml">
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"><!-- The main window is created in
+             code: StartupUri cannot be cleared later (it throws on null), and the headless
+             supervisor and CLI modes must not open a window. -->
   <Application.Resources>
     <ResourceDictionary>
       <ResourceDictionary.MergedDictionaries>

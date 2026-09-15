@@ -117,6 +117,12 @@ executable). Running it under your own account additionally needs the **Log on a
 with error 1069. LiveClaude grants it during the elevated install. The account also needs a real
 password: Windows never lets a user account log on as a service with a blank one.
 
+**Who actually runs.** The zip and winget packages register `LiveClaude.Service.exe`. A ClickOnce
+install ships that executable without its runtime configuration — .NET then refuses to start it — so
+there LiveClaude registers itself instead (`LiveClaude.exe --supervise`), which hosts the same
+supervisor windowlessly. Only one supervisor runs at a time: a second one stops with a note in
+`logs\supervisor.log` rather than supervising the same directories twice.
+
 **Installs that move.** ClickOnce and winget put the app in a folder that is replaced on every update,
 which would leave the task or service pointing at an executable that no longer exists. When LiveClaude
 detects such a location it first copies the supervisor to `%LOCALAPPDATA%\LiveClaude\supervisor` and

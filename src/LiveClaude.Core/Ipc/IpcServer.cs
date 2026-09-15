@@ -29,6 +29,9 @@ public sealed class IpcServer : IAsyncDisposable
         _logger = logger ?? NullLogger.Instance;
     }
 
+    /// <summary>True when another supervisor already owns the pipe, so this one serves no clients.</summary>
+    public bool EndpointUnavailable { get; private set; }
+
     public void Start()
     {
         _cts = new CancellationTokenSource();
@@ -61,6 +64,18 @@ public sealed class IpcServer : IAsyncDisposable
             catch (OperationCanceledException)
             {
                 pipe?.Dispose();
+                break;
+            }
+            catch (UnauthorizedAccessException)
+            {
+                // The pipe name is taken: another supervisor owns it. Retrying every second would
+                // only fill the log, and this one keeps supervising without an endpoint.
+                pipe?.Dispose();
+                _logger.LogWarning(
+                    "Another LiveClaude supervisor already owns the '{Pipe}' endpoint, so this one will not serve the app. " +
+                    "Two supervisors means two sets of servers: stop the scheduled task or the service if that is not intended.",
+                    IpcProtocol.PipeName);
+                EndpointUnavailable = true;
                 break;
             }
             catch (Exception ex)

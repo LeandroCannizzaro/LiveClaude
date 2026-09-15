@@ -36,9 +36,13 @@ public static class WindowsServiceInstaller
     /// line itself: every option is "key= value", the space after the equals sign is required, and
     /// the binPath value quotes the executable inside the quoted value so a path with spaces works.
     /// </summary>
-    public static string BuildCreateCommandLine(string executablePath, string? account = null, string? password = null)
+    public static string BuildCreateCommandLine(
+        string executablePath,
+        string? account = null,
+        string? password = null,
+        string arguments = SupervisorLauncher.ServiceArgument)
     {
-        var line = $"create {ServiceName} binPath= \"\\\"{executablePath}\\\" --service\" start= auto " +
+        var line = $"create {ServiceName} binPath= \"\\\"{executablePath}\\\" {arguments}\" start= auto " +
                    $"DisplayName= \"{DisplayName}\"";
 
         if (!string.IsNullOrWhiteSpace(account))
@@ -63,6 +67,7 @@ public static class WindowsServiceInstaller
         string executablePath,
         string? account = null,
         string? password = null,
+        string arguments = SupervisorLauncher.ServiceArgument,
         CancellationToken ct = default)
     {
         if (!ProcessHelper.IsElevated)
@@ -77,7 +82,8 @@ public static class WindowsServiceInstaller
             notes.Add(rightsMessage);
         }
 
-        var create = await ProcessHelper.RunRawAsync("sc.exe", BuildCreateCommandLine(executablePath, account, password), ct)
+        var create = await ProcessHelper
+            .RunRawAsync("sc.exe", BuildCreateCommandLine(executablePath, account, password, arguments), ct)
             .ConfigureAwait(false);
 
         if (!create.Success)

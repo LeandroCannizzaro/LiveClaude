@@ -57,9 +57,10 @@ public static class ScheduledTaskInstaller
         string executablePath,
         bool runAtBoot = true,
         string? userName = null,
+        string arguments = SupervisorLauncher.SuperviseArgument,
         CancellationToken ct = default)
     {
-        var xml = BuildXml(executablePath, runAtBoot, userName);
+        var xml = BuildXml(executablePath, runAtBoot, userName, arguments);
         var xmlPath = Path.Combine(Path.GetTempPath(), $"liveclaude-task-{Guid.NewGuid():n}.xml");
 
         // schtasks /XML expects UTF-16 with a BOM.
@@ -92,7 +93,11 @@ public static class ScheduledTaskInstaller
     /// with a different administrator account, and the task must still belong to the person whose
     /// session the servers run in.
     /// </summary>
-    public static string BuildXml(string executablePath, bool runAtBoot, string? userName = null)
+    public static string BuildXml(
+        string executablePath,
+        bool runAtBoot,
+        string? userName = null,
+        string arguments = SupervisorLauncher.SuperviseArgument)
     {
         var user = string.IsNullOrWhiteSpace(userName) ? WindowsIdentity.GetCurrent().Name : userName.Trim();
         var now = DateTime.Now.ToString("yyyy-MM-ddTHH:mm:ss");
@@ -157,7 +162,7 @@ public static class ScheduledTaskInstaller
               <Actions Context="Author">
                 <Exec>
                   <Command>{SecurityElementEscape(executablePath)}</Command>
-                  <Arguments>--supervise</Arguments>
+                  <Arguments>{SecurityElementEscape(arguments)}</Arguments>
                   <WorkingDirectory>{SecurityElementEscape(Path.GetDirectoryName(executablePath) ?? ".")}</WorkingDirectory>
                 </Exec>
               </Actions>
