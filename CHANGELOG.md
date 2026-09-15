@@ -4,6 +4,21 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project uses
 [semantic versioning](https://semver.org/).
 
+## [1.0.8] - 2026-09-15
+
+### Fixed
+
+- **The scheduled task card said "not installed" for a task that was running.** Any failure of
+  `schtasks /Query` was treated as "the task is not there", including *Access is denied* — which is
+  what Windows answers when the task was registered through the elevation prompt by a different
+  administrator account. The three outcomes are now told apart: installed, missing, and "installed
+  but not readable by this account", with an explanation instead of a wrong state. When a supervisor
+  launched by the task is connected, the card says it is running.
+- The task status is read in a locale-independent way. `schtasks /FO LIST` returns localised field
+  names, so on a non-English Windows the status was always empty.
+- Installing reports when Windows will not let the account read the task back, so a successful
+  install no longer looks like it did nothing.
+
 ## [1.0.7] - 2026-09-15
 
 ### Fixed
@@ -155,6 +170,7 @@ First release.
 - Rolling per-instance logs and a supervisor log under `%ProgramData%\LiveClaude\logs`.
 - Packaging: portable zips (x64, arm64, self-contained), ClickOnce, and winget manifests.
 
+[1.0.8]: https://github.com/LeandroCannizzaro/LiveClaude/releases/tag/v1.0.8
 [1.0.7]: https://github.com/LeandroCannizzaro/LiveClaude/releases/tag/v1.0.7
 [1.0.6]: https://github.com/LeandroCannizzaro/LiveClaude/releases/tag/v1.0.6
 [1.0.5]: https://github.com/LeandroCannizzaro/LiveClaude/releases/tag/v1.0.5

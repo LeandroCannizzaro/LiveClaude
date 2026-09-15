@@ -250,6 +250,32 @@ public class ScheduledTaskXmlTests
         }
     }
 
+    /// <summary>
+    /// A task registered through the elevation prompt by another administrator cannot be read back
+    /// by the standard account. Reporting that as "not installed" made the card contradict a task
+    /// that was demonstrably running.
+    /// </summary>
+    [Fact]
+    public void AnUnreadableTaskIsNotReportedAsMissing()
+    {
+        var state = ScheduledTaskInstaller.Classify(new ProcessResult(1, "", "ERROR: Access is denied."));
+
+        Assert.Null(state.Installed);
+        Assert.Contains("still runs", state.Detail);
+        Assert.Equal("installed, but this account cannot read it", state.Describe());
+    }
+
+    [Theory]
+    [InlineData("ERROR: The system cannot find the file specified.")]
+    [InlineData("ERROR: Impossibile trovare il file specificato.")]
+    public void AMissingTaskIsReportedAsMissing(string output)
+    {
+        var state = ScheduledTaskInstaller.Classify(new ProcessResult(1, output, ""));
+
+        Assert.False(state.Installed);
+        Assert.Equal("not installed", state.Describe());
+    }
+
     [Fact]
     public void TheRegisteredArgumentsEndUpInTheTaskAndTheService()
     {

@@ -146,7 +146,7 @@ public static class SupervisorCli
         Console.WriteLine($"Config        : {store.Path}");
         Console.WriteLine($"Sessions      : {config.Sessions.Count}");
         Console.WriteLine($"Service       : {(service.Installed ? service.Status : "not installed")}");
-        Console.WriteLine($"Scheduled task: {(task.Installed ? task.Status : "not installed")}");
+        Console.WriteLine($"Scheduled task: {task.Describe()}");
         Console.WriteLine($"Logs          : {ConfigStore.LogDirectory}");
         return 0;
     }

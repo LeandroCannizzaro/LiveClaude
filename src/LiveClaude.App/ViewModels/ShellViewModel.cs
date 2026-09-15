@@ -271,6 +271,9 @@ public sealed class ShellViewModel : ObservableObject, IAsyncDisposable
             _ => "Supervised by this app (no service or task running)"
         };
 
+        // Lets the hosting card say "running" even when Windows will not let us read the task back.
+        Hosting.ConnectedSupervisorHost = status.Host;
+
         ClaudeInfo = status.ClaudePath is null
             ? "Claude CLI not found — set the path in Settings"
             : $"{status.ClaudePath}  ({status.ClaudeVersion ?? "version unknown"})";

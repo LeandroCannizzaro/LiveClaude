@@ -3,7 +3,20 @@ using System.Text;
 
 namespace LiveClaude.Core.Hosting;
 
-public sealed record ScheduledTaskState(bool Installed, string? Status, string? RunAs);
+/// <summary>
+/// What could be learned about the task. <see cref="Installed"/> is null when Windows would not say:
+/// a task registered by another administrator is not readable by a standard account, and reporting
+/// that as "not installed" sent people installing it again and again.
+/// </summary>
+public sealed record ScheduledTaskState(bool? Installed, string? Status, string? RunAs, string? Detail = null)
+{
+    public string Describe() => Installed switch
+    {
+        true => Status ?? "installed",
+        false => "not installed",
+        _ => "installed, but this account cannot read it"
+    };
+}
 
 /// <summary>
 /// Registers the supervisor as a scheduled task in the interactive user session. This is the
@@ -16,31 +29,71 @@ public static class ScheduledTaskInstaller
 
     public static async Task<ScheduledTaskState> QueryAsync(CancellationToken ct = default)
     {
-        var result = await ProcessHelper.RunAsync("schtasks.exe", ["/Query", "/TN", TaskName, "/FO", "LIST"], ct: ct)
+        // CSV without headers: the columns are positional, so this reads the same on a localised
+        // Windows, where "Status:" in the LIST format becomes "Stato:" and the like.
+        var result = await ProcessHelper
+            .RunAsync("schtasks.exe", ["/Query", "/TN", TaskName, "/FO", "CSV", "/NH"], ct: ct)
+            .ConfigureAwait(false);
+
+        if (result.Success)
+            return new ScheduledTaskState(true, ParseCsvStatus(result.StandardOutput), await ReadRunAsAsync(ct).ConfigureAwait(false));
+
+        return Classify(result);
+    }
+
+    /// <summary>Turns a failed query into "missing" or "cannot tell", never guessing "missing".</summary>
+    public static ScheduledTaskState Classify(ProcessResult result)
+    {
+        var text = result.Combined;
+
+        // "The system cannot find the file specified" is how schtasks reports an unknown task name.
+        if (text.Contains("cannot find", StringComparison.OrdinalIgnoreCase) ||
+            text.Contains("does not exist", StringComparison.OrdinalIgnoreCase) ||
+            text.Contains("Impossibile trovare", StringComparison.OrdinalIgnoreCase) ||
+            text.Contains("non esiste", StringComparison.OrdinalIgnoreCase))
+        {
+            return new ScheduledTaskState(false, null, null, text.Trim());
+        }
+
+        if (IsAccessDenied(result))
+        {
+            return new ScheduledTaskState(
+                null, null, null,
+                "Windows will not let this account read the task. That happens when it was registered " +
+                "by a different administrator account through the elevation prompt; the task still runs.");
+        }
+
+        return new ScheduledTaskState(null, null, null, text.Trim());
+    }
+
+    private static string? ParseCsvStatus(string output)
+    {
+        // "\LiveClaude Supervisor","N/A","Ready"
+        var line = output.Split('\n').FirstOrDefault(l => l.Contains(','));
+        if (line is null)
+            return null;
+
+        var columns = line.Split("\",\"");
+        return columns.Length >= 3 ? columns[^1].Trim('"', '\r', '\n', ' ') : null;
+    }
+
+    /// <summary>Reads the principal from the task XML, which is not localised.</summary>
+    private static async Task<string?> ReadRunAsAsync(CancellationToken ct)
+    {
+        var result = await ProcessHelper.RunAsync("schtasks.exe", ["/Query", "/TN", TaskName, "/XML"], ct: ct)
             .ConfigureAwait(false);
 
         if (!result.Success)
-            return new ScheduledTaskState(false, null, null);
+            return null;
 
-        string? status = null;
-        string? runAs = null;
+        var xml = result.StandardOutput;
+        var start = xml.IndexOf("<UserId>", StringComparison.OrdinalIgnoreCase);
+        if (start < 0)
+            return null;
 
-        foreach (var line in result.StandardOutput.Split('\n'))
-        {
-            var parts = line.Split(':', 2);
-            if (parts.Length != 2)
-                continue;
-
-            var key = parts[0].Trim();
-            var value = parts[1].Trim();
-
-            if (key.Equals("Status", StringComparison.OrdinalIgnoreCase))
-                status = value;
-            else if (key.Equals("Run As User", StringComparison.OrdinalIgnoreCase))
-                runAs = value;
-        }
-
-        return new ScheduledTaskState(true, status, runAs);
+        start += "<UserId>".Length;
+        var end = xml.IndexOf("</UserId>", start, StringComparison.OrdinalIgnoreCase);
+        return end > start ? xml[start..end].Trim() : null;
     }
 
     /// <summary>

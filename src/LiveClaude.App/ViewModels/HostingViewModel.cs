@@ -79,13 +79,27 @@ public sealed class HostingViewModel : ObservableObject
     private SupervisorCommand ResolveCommand(bool asService) =>
         SupervisorLauncher.Resolve(Path.GetDirectoryName(SupervisorPath)!, asService);
 
+    /// <summary>Set by the shell so the card can say a supervisor is running even when the task is unreadable.</summary>
+    public string? ConnectedSupervisorHost { get; set; }
+
     public async Task RefreshAsync()
     {
         var service = WindowsServiceInstaller.Query();
         ServiceStatus = service.Installed ? service.Status ?? "installed" : "not installed";
 
         var task = await ScheduledTaskInstaller.QueryAsync();
-        TaskStatus = task.Installed ? task.Status ?? "installed" : "not installed";
+        TaskStatus = task.Installed switch
+        {
+            true => task.Status ?? "installed",
+            false when string.Equals(ConnectedSupervisorHost, "task", StringComparison.OrdinalIgnoreCase) =>
+                "running (not listed for this account)",
+            false => "not installed",
+            _ => "running, not readable here"
+        };
+
+        // Explain an unreadable task once, rather than leaving the card looking wrong.
+        if (task.Installed is null && task.Detail is not null && string.IsNullOrWhiteSpace(TaskResult))
+            TaskResult = task.Detail;
     }
 
     /// <summary>
@@ -131,7 +145,18 @@ public sealed class HostingViewModel : ObservableObject
         }
 
         if (exitCode == 0)
+        {
+            var verification = await ScheduledTaskInstaller.QueryAsync();
+            if (verification.Installed is null)
+            {
+                note = Combine(note,
+                    "Windows will not let this account read the task back — it was registered through the " +
+                    "elevation prompt by another administrator account — so the card above cannot show its state. " +
+                    "The task itself runs.");
+            }
+
             return Combine("Installed with the logon and boot triggers, and started.", note);
+        }
 
         var fallback = await ScheduledTaskInstaller.InstallAsync(
             command.ExecutablePath, runAtBoot: false, userName: ProcessHelper.CurrentUserName, arguments: command.Arguments);
