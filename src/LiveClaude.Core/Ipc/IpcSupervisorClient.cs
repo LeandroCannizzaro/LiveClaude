@@ -86,7 +86,10 @@ public sealed class IpcSupervisorClient : ISupervisorApi
         if (_pipe is null)
             return;
 
-        using var reader = new StreamReader(_pipe, new UTF8Encoding(false));
+        // leaveOpen: disposing this reader would close the pipe, and the writer would then throw
+        // "Cannot access a closed pipe" while flushing on shutdown.
+        using var reader = new StreamReader(_pipe, new UTF8Encoding(false), detectEncodingFromByteOrderMarks: false,
+            bufferSize: 1024, leaveOpen: true);
 
         try
         {
@@ -258,8 +261,25 @@ public sealed class IpcSupervisorClient : ISupervisorApi
             // shutting down
         }
 
-        _writer?.Dispose();
-        _pipe?.Dispose();
+        // The connection may already be gone; closing it is not worth an error dialog.
+        try
+        {
+            _writer?.Dispose();
+        }
+        catch (Exception ex) when (ex is ObjectDisposedException or IOException)
+        {
+            // the supervisor closed the pipe first
+        }
+
+        try
+        {
+            _pipe?.Dispose();
+        }
+        catch (Exception ex) when (ex is ObjectDisposedException or IOException)
+        {
+            // already closed
+        }
+
         _writeLock.Dispose();
         _cts.Dispose();
     }

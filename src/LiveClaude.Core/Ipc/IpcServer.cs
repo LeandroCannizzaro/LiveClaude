@@ -279,7 +279,9 @@ public sealed class IpcServer : IAsyncDisposable
 
         public async Task RunAsync(CancellationToken ct)
         {
-            using var reader = new StreamReader(_pipe, new UTF8Encoding(false));
+            // leaveOpen: the writer shares this pipe and must not find it closed underneath it.
+            using var reader = new StreamReader(_pipe, new UTF8Encoding(false),
+                detectEncodingFromByteOrderMarks: false, bufferSize: 1024, leaveOpen: true);
 
             // Push the current status straight away so the UI has something to show.
             TrySend(IpcProtocol.Events.Status, _server._supervisor.GetStatus());
@@ -381,9 +383,9 @@ public sealed class IpcServer : IAsyncDisposable
                 _writer.Dispose();
                 _pipe.Dispose();
             }
-            catch (IOException)
+            catch (Exception ex) when (ex is IOException or ObjectDisposedException)
             {
-                // ignored
+                // the client disconnected first
             }
 
             _writeLock.Dispose();

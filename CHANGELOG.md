@@ -4,6 +4,16 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project uses
 [semantic versioning](https://semver.org/).
 
+## [1.0.9] - 2026-09-15
+
+### Fixed
+
+- **"Cannot access a closed pipe" when closing the app.** The IPC read loop's `StreamReader` owned
+  the pipe, so ending it closed the connection under the writer, which then threw while flushing on
+  shutdown — straight into an error dialog on the way out. Both ends now keep the pipe open for their
+  own lifetime, closing it is tolerant of a connection that already went away, and the window's close
+  handler no longer lets a shutdown failure reach the dispatcher.
+
 ## [1.0.8] - 2026-09-15
 
 ### Fixed
@@ -170,6 +180,7 @@ First release.
 - Rolling per-instance logs and a supervisor log under `%ProgramData%\LiveClaude\logs`.
 - Packaging: portable zips (x64, arm64, self-contained), ClickOnce, and winget manifests.
 
+[1.0.9]: https://github.com/LeandroCannizzaro/LiveClaude/releases/tag/v1.0.9
 [1.0.8]: https://github.com/LeandroCannizzaro/LiveClaude/releases/tag/v1.0.8
 [1.0.7]: https://github.com/LeandroCannizzaro/LiveClaude/releases/tag/v1.0.7
 [1.0.6]: https://github.com/LeandroCannizzaro/LiveClaude/releases/tag/v1.0.6

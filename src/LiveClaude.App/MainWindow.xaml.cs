@@ -75,7 +75,17 @@ public partial class MainWindow : Window
     protected override async void OnClosing(CancelEventArgs e)
     {
         base.OnClosing(e);
-        TerminalTab.Shutdown();
-        await Shell.DisposeAsync();
+
+        // async void: anything thrown here reaches the dispatcher, and shutting down is not worth
+        // an error dialog in the user's face.
+        try
+        {
+            TerminalTab.Shutdown();
+            await Shell.DisposeAsync();
+        }
+        catch (Exception ex)
+        {
+            App.LogError(ex);
+        }
     }
 }
