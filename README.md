@@ -130,6 +130,24 @@ LiveClaude handles both ends of that:
     server behind them.
   - An environment in use is never selectable, and deletion always asks first.
 
+### When a delete is refused
+
+The API answers `409 Conflict` when an environment still has session records attached:
+
+```
+Environment has 1 active sessions. Use force=true to delete anyway.
+```
+
+Those sessions are themselves leftovers of servers that were killed rather than stopped. LiveClaude
+shows the reason on the row and in a panel above the list — with Anthropic's `request-id` — and offers
+a **Force delete** button that retries with `force=true`, deleting the environment together with its
+session records. Every call, successful or not, is appended to
+`%ProgramData%\LiveClaude\logs\environments.log`; *Open log* in the toolbar goes straight there.
+
+Not every entry in the picker is a bridge environment: the ones Claude Code on the web creates are
+`anthropic_cloud` environments and are perfectly alive. Tick *Show non-bridge environments* to see
+them.
+
 The tab uses your own Claude Code sign-in (`~/.claude/.credentials.json`) against
 `api.anthropic.com/v1/environments` with the `environments-2025-11-01` beta header. That API is in
 beta and undocumented: if Anthropic changes it, the tab reports the error and the rest of LiveClaude

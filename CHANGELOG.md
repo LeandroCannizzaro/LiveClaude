@@ -4,6 +4,20 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project uses
 [semantic versioning](https://semver.org/).
 
+## [1.0.3] - 2026-09-15
+
+### Added
+
+- **Force delete.** Some environments cannot be removed because the API still counts session records
+  against them (`409 Conflict — Environment has N active sessions. Use force=true to delete anyway.`),
+  which is what made a couple of entries impossible to clear. Failures now offer a **Force delete**
+  button that retries with `force=true`, removing the environment together with those records, behind
+  its own confirmation.
+- **Failures are visible instead of silent.** The reason a delete failed is shown on the row itself
+  and in a panel above the list, including Anthropic's `request-id`.
+- **An environments log.** Every list and delete — status, request id, API message — is appended to
+  `%ProgramData%\LiveClaude\logs\environments.log`, with an *Open log* button in the toolbar.
+
 ## [1.0.2] - 2026-09-15
 
 ### Added
@@ -63,6 +77,7 @@ First release.
 - Rolling per-instance logs and a supervisor log under `%ProgramData%\LiveClaude\logs`.
 - Packaging: portable zips (x64, arm64, self-contained), ClickOnce, and winget manifests.
 
+[1.0.3]: https://github.com/LeandroCannizzaro/LiveClaude/releases/tag/v1.0.3
 [1.0.2]: https://github.com/LeandroCannizzaro/LiveClaude/releases/tag/v1.0.2
 [1.0.1]: https://github.com/LeandroCannizzaro/LiveClaude/releases/tag/v1.0.1
 [1.0.0]: https://github.com/LeandroCannizzaro/LiveClaude/releases/tag/v1.0.0

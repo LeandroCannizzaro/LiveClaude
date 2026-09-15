@@ -1,7 +1,10 @@
 using System.Collections.ObjectModel;
+using System.IO;
 using System.Windows;
 using System.Windows.Media;
 using LiveClaude.Core.Claude;
+using LiveClaude.Core.Config;
+using LiveClaude.Core.Logging;
 using LiveClaude.Core.Model;
 
 namespace LiveClaude.App.ViewModels;
@@ -9,6 +12,7 @@ namespace LiveClaude.App.ViewModels;
 public sealed class EnvironmentViewModel : ObservableObject
 {
     private bool _isSelected;
+    private string? _lastError;
 
     public EnvironmentViewModel(RemoteEnvironment environment, EnvironmentUsage usage, string? instanceName)
     {
@@ -61,6 +65,19 @@ public sealed class EnvironmentViewModel : ObservableObject
                 SetProperty(ref _isSelected, value);
         }
     }
+
+    /// <summary>Why the last delete of this environment failed, shown on the row itself.</summary>
+    public string? LastError
+    {
+        get => _lastError;
+        set
+        {
+            if (SetProperty(ref _lastError, value))
+                OnPropertyChanged(nameof(HasError));
+        }
+    }
+
+    public bool HasError => !string.IsNullOrWhiteSpace(LastError);
 }
 
 /// <summary>
@@ -72,8 +89,12 @@ public sealed class EnvironmentsViewModel : ObservableObject
 {
     private readonly Func<IReadOnlyList<InstanceSnapshot>> _instances;
     private readonly Func<IReadOnlyList<SessionConfig>> _sessions;
+    private readonly RollingLogWriter _log;
+    private readonly Dictionary<string, string> _lastErrors = new(StringComparer.Ordinal);
+    private readonly HashSet<string> _forceCandidates = new(StringComparer.Ordinal);
 
     private string _statusMessage = "Not loaded yet.";
+    private string _failureSummary = "";
     private bool _busy;
     private bool _showUnrelated;
 
@@ -83,6 +104,9 @@ public sealed class EnvironmentsViewModel : ObservableObject
     {
         _instances = instances;
         _sessions = sessions;
+
+        ConfigStore.EnsureDirectories();
+        _log = new RollingLogWriter(Path.Combine(ConfigStore.LogDirectory, "environments.log"), maxSizeMb: 4);
 
         RefreshCommand = new RelayCommand(_ => RefreshAsync());
         SelectStaleCommand = new RelayCommand(_ =>
@@ -111,13 +135,17 @@ public sealed class EnvironmentsViewModel : ObservableObject
                 ? "No duplicates: every directory has a single environment."
                 : $"Selected {SelectedCount} duplicate(s); the newest (or live) one per directory is kept.";
         });
+
         ClearSelectionCommand = new RelayCommand(_ =>
         {
             foreach (var item in Items)
                 item.IsSelected = false;
             UpdateCounts();
         });
-        DeleteSelectedCommand = new RelayCommand(_ => DeleteSelectedAsync());
+
+        DeleteSelectedCommand = new RelayCommand(_ => DeleteSelectedAsync(force: false));
+        ForceDeleteCommand = new RelayCommand(_ => DeleteSelectedAsync(force: true), _ => CanForce);
+        OpenLogCommand = new RelayCommand(_ => ShellViewModel.OpenUrl(_log.Path));
     }
 
     public ObservableCollection<EnvironmentViewModel> Items { get; } = new();
@@ -127,6 +155,8 @@ public sealed class EnvironmentsViewModel : ObservableObject
     public RelayCommand SelectDuplicatesCommand { get; }
     public RelayCommand ClearSelectionCommand { get; }
     public RelayCommand DeleteSelectedCommand { get; }
+    public RelayCommand ForceDeleteCommand { get; }
+    public RelayCommand OpenLogCommand { get; }
 
     public string StatusMessage
     {
@@ -134,11 +164,29 @@ public sealed class EnvironmentsViewModel : ObservableObject
         private set => SetProperty(ref _statusMessage, value);
     }
 
+    /// <summary>What went wrong on the last delete, shown above the list rather than hidden in a log.</summary>
+    public string FailureSummary
+    {
+        get => _failureSummary;
+        private set
+        {
+            if (SetProperty(ref _failureSummary, value))
+                OnPropertyChanged(nameof(HasFailures));
+        }
+    }
+
+    public bool HasFailures => !string.IsNullOrWhiteSpace(FailureSummary);
+
     public bool Busy
     {
         get => _busy;
         private set => SetProperty(ref _busy, value);
     }
+
+    /// <summary>True when at least one failure said the environment still has session records.</summary>
+    public bool CanForce => _forceCandidates.Count > 0;
+
+    public int ForceCandidateCount => _forceCandidates.Count;
 
     /// <summary>
     /// Bridge environments are always listed — they are the ones that pile up. Cloud and default
@@ -159,7 +207,7 @@ public sealed class EnvironmentsViewModel : ObservableObject
         Busy = true;
         try
         {
-            using var client = new EnvironmentsClient();
+            using var client = new EnvironmentsClient(log: Log);
             var environments = await client.ListAsync();
 
             var instances = _instances();
@@ -183,6 +231,11 @@ public sealed class EnvironmentsViewModel : ObservableObject
                     .FirstOrDefault(i => string.Equals(i.EnvironmentId, environment.Id, StringComparison.Ordinal))?.Name;
 
                 var item = new EnvironmentViewModel(environment, usage, instanceName);
+
+                // Keep the explanation of a failed delete visible across a refresh.
+                if (_lastErrors.TryGetValue(environment.Id, out var error))
+                    item.LastError = error;
+
                 item.PropertyChanged += (_, args) =>
                 {
                     if (args.PropertyName == nameof(EnvironmentViewModel.IsSelected))
@@ -192,21 +245,30 @@ public sealed class EnvironmentsViewModel : ObservableObject
                 Items.Add(item);
             }
 
+            // Environments that are gone no longer need their error kept around.
+            foreach (var id in _lastErrors.Keys.Where(id => Items.All(i => i.Id != id)).ToList())
+                _lastErrors.Remove(id);
+            foreach (var id in _forceCandidates.Where(id => Items.All(i => i.Id != id)).ToList())
+                _forceCandidates.Remove(id);
+
             UpdateCounts();
             var hidden = ordered.Count - Items.Count;
             StatusMessage = hidden > 0
                 ? $"{Items.Count} Remote Control environment(s); {hidden} other environment(s) hidden."
                 : $"{Items.Count} environment(s).";
         }
-        catch (EnvironmentsClient.EnvironmentsException ex)
+        catch (EnvironmentsApiException ex)
         {
             Items.Clear();
             StatusMessage = ex.Message;
+            FailureSummary = Decorate(ex);
         }
         catch (Exception ex)
         {
             Items.Clear();
             StatusMessage = $"Could not reach the environments API: {ex.Message}";
+            FailureSummary = StatusMessage;
+            Log($"LIST failed: {ex}");
         }
         finally
         {
@@ -214,12 +276,15 @@ public sealed class EnvironmentsViewModel : ObservableObject
         }
     }
 
-    private async Task DeleteSelectedAsync()
+    private async Task DeleteSelectedAsync(bool force)
     {
-        var selected = Items.Where(i => i.IsSelected && i.CanSelect).ToList();
+        var selected = force
+            ? Items.Where(i => _forceCandidates.Contains(i.Id) && i.CanSelect).ToList()
+            : Items.Where(i => i.IsSelected && i.CanSelect).ToList();
+
         if (selected.Count == 0)
         {
-            StatusMessage = "Nothing selected.";
+            StatusMessage = force ? "Nothing to force." : "Nothing selected.";
             return;
         }
 
@@ -227,10 +292,16 @@ public sealed class EnvironmentsViewModel : ObservableObject
         if (selected.Count > 12)
             names += $"{Environment.NewLine}  … and {selected.Count - 12} more";
 
+        var question = force
+            ? $"Force-delete {selected.Count} environment(s)?{Environment.NewLine}{Environment.NewLine}{names}" +
+              $"{Environment.NewLine}{Environment.NewLine}They still have session records attached — servers that were killed rather than stopped. " +
+              "Forcing deletes those sessions together with the environment. This cannot be undone."
+            : $"Permanently delete {selected.Count} environment(s) from your Claude account?{Environment.NewLine}{Environment.NewLine}{names}" +
+              $"{Environment.NewLine}{Environment.NewLine}This cannot be undone. Servers running right now are never included.";
+
         var confirm = MessageBox.Show(
-            $"Permanently delete {selected.Count} environment(s) from your Claude account?{Environment.NewLine}{Environment.NewLine}{names}" +
-            $"{Environment.NewLine}{Environment.NewLine}This cannot be undone. Servers running right now are never included.",
-            "Delete environments",
+            question,
+            force ? "Force delete" : "Delete environments",
             MessageBoxButton.YesNo,
             MessageBoxImage.Warning);
 
@@ -241,19 +312,41 @@ public sealed class EnvironmentsViewModel : ObservableObject
         var deleted = 0;
         var failures = new List<string>();
 
+        Log($"--- delete run: {selected.Count} environment(s), force={force}");
+
         try
         {
-            using var client = new EnvironmentsClient();
+            using var client = new EnvironmentsClient(log: Log);
+
             foreach (var item in selected)
             {
                 try
                 {
-                    await client.DeleteAsync(item.Id);
+                    await client.DeleteAsync(item.Id, force);
                     deleted++;
+                    _lastErrors.Remove(item.Id);
+                    _forceCandidates.Remove(item.Id);
+                    item.LastError = null;
+                }
+                catch (EnvironmentsApiException ex)
+                {
+                    var detail = Decorate(ex);
+                    failures.Add($"{item.Name}: {detail}");
+                    _lastErrors[item.Id] = detail;
+                    item.LastError = detail;
+
+                    if (ex.RequiresForce)
+                        _forceCandidates.Add(item.Id);
+                    else
+                        _forceCandidates.Remove(item.Id);
                 }
                 catch (Exception ex)
                 {
-                    failures.Add($"{item.Name}: {ex.Message}");
+                    var detail = ex.Message;
+                    failures.Add($"{item.Name}: {detail}");
+                    _lastErrors[item.Id] = detail;
+                    item.LastError = detail;
+                    Log($"DELETE {item.Id} threw: {ex}");
                 }
             }
         }
@@ -262,12 +355,24 @@ public sealed class EnvironmentsViewModel : ObservableObject
             Busy = false;
         }
 
+        Log($"--- delete run finished: {deleted} deleted, {failures.Count} failed.");
+
+        FailureSummary = failures.Count == 0
+            ? ""
+            : string.Join(Environment.NewLine, failures);
+
         StatusMessage = failures.Count == 0
             ? $"Deleted {deleted} environment(s)."
-            : $"Deleted {deleted}, {failures.Count} failed — {failures[0]}";
+            : $"Deleted {deleted}, {failures.Count} failed — details below. Full log: {_log.Path}";
 
         await RefreshAsync();
+        UpdateCounts();
     }
+
+    private static string Decorate(EnvironmentsApiException ex) =>
+        ex.RequestId is null ? ex.Message : $"{ex.Message} (request-id {ex.RequestId})";
+
+    private void Log(string line) => _log.Write(line);
 
     public int StaleCount => Items.Count(i => i.Usage == EnvironmentUsage.Stale);
 
@@ -277,5 +382,7 @@ public sealed class EnvironmentsViewModel : ObservableObject
     {
         OnPropertyChanged(nameof(StaleCount));
         OnPropertyChanged(nameof(SelectedCount));
+        OnPropertyChanged(nameof(CanForce));
+        OnPropertyChanged(nameof(ForceCandidateCount));
     }
 }

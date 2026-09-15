@@ -1,4 +1,5 @@
 using System.IO;
+using System.Net;
 using LiveClaude.Core.Claude;
 using LiveClaude.Core.Model;
 using Xunit;
@@ -72,6 +73,62 @@ public class EnvironmentsParsingTests
 
     [Fact]
     public void AnEmptyPayloadIsNotAnError() => Assert.Empty(EnvironmentsClient.Parse("""{"data":[]}"""));
+}
+
+public class EnvironmentsFailureTests
+{
+    private const string ConflictBody = """
+        {"type":"error","error":{"type":"invalid_request_error",
+         "message":"Environment has 1 active sessions. Use force=true to delete anyway."},
+         "request_id":"req_011Cf56CwQWMJ3Y2iEPtSb6G"}
+        """;
+
+    [Fact]
+    public void AConflictAboutActiveSessionsAsksForForce()
+    {
+        var failure = EnvironmentsClient.Describe(HttpStatusCode.Conflict, ConflictBody, "req_abc");
+
+        Assert.True(failure.RequiresForce);
+        Assert.Equal(409, failure.StatusCode);
+        Assert.Equal("req_abc", failure.RequestId);
+        Assert.Contains("1 active sessions", failure.Message);
+        Assert.Contains("forcing removes them", failure.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void AConflictForAnotherReasonDoesNotOfferForce()
+    {
+        var body = """{"type":"error","error":{"message":"Environment is locked."}}""";
+
+        var failure = EnvironmentsClient.Describe(HttpStatusCode.Conflict, body, null);
+
+        Assert.False(failure.RequiresForce);
+        Assert.Contains("Environment is locked.", failure.Message);
+    }
+
+    [Fact]
+    public void AnAuthFailurePointsAtLogin()
+    {
+        var failure = EnvironmentsClient.Describe(HttpStatusCode.Unauthorized, """{"error":{"message":"bad token"}}""", null);
+
+        Assert.False(failure.RequiresForce);
+        Assert.Contains("/login", failure.Message);
+    }
+
+    [Fact]
+    public void ANonJsonBodyStillProducesAMessage()
+    {
+        var failure = EnvironmentsClient.Describe(HttpStatusCode.BadGateway, "<html>gateway</html>", null);
+
+        Assert.Equal(502, failure.StatusCode);
+        Assert.Contains("502", failure.Message);
+    }
+
+    [Theory]
+    [InlineData(false, "https://api.anthropic.com/v1/environments/env_123")]
+    [InlineData(true, "https://api.anthropic.com/v1/environments/env_123?force=true")]
+    public void TheForceFlagGoesOnTheQueryString(bool force, string expected) =>
+        Assert.Equal(expected, EnvironmentsClient.BuildDeleteUrl("env_123", force));
 }
 
 public class EnvironmentClassifierTests
