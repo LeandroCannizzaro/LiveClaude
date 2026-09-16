@@ -10,9 +10,9 @@ namespace LiveClaude.Platform.Posix.Ipc;
 /// Deliberately not .NET's named pipes. Those do work on Unix — they are mapped onto a socket at
 /// <c>/tmp/CoreFxPipe_&lt;name&gt;</c> — but two things make them the wrong choice here:
 /// <c>NamedPipeServerStreamAcl.Create</c>, which is how the Windows side restricts access, throws
-/// <see cref="PlatformNotSupportedException"/>; and <c>/tmp</c> is world-writable, so any local user
-/// could connect and drive the supervisor. The socket lives in the user's own runtime directory
-/// instead, created with mode 0700.
+/// <see cref="PlatformNotSupportedException"/>; and their socket sits directly in world-writable
+/// <c>/tmp</c>, where any local user could connect and drive the supervisor. This one lives in a
+/// private per-user directory created with mode 0700 (see <see cref="PosixRuntimeDirectory"/>).
 ///
 /// A consequence worth stating: the endpoint is per-user, not per-machine. On a shared Linux box two
 /// people each supervising their own projects is not a conflict, and the "another supervisor is
@@ -24,8 +24,11 @@ public sealed class UnixSocketEndpointFactory : IIpcEndpointFactory
 
     public UnixSocketEndpointFactory(IPathLayout paths, string name = IpcEndpointNames.Default)
     {
-        _socketPath = Path.Combine(paths.RuntimeDirectory, $"liveclaude-{name}.sock");
         RuntimeDirectory = paths.RuntimeDirectory;
+
+        // Just "<name>.sock": the directory is already called liveclaude-<uid>, and every character
+        // counts against a limit of 104.
+        _socketPath = Path.Combine(RuntimeDirectory, $"{name}.sock");
     }
 
     private string RuntimeDirectory { get; }
@@ -34,7 +37,8 @@ public sealed class UnixSocketEndpointFactory : IIpcEndpointFactory
 
     public IIpcListener Listen()
     {
-        PrepareRuntimeDirectory();
+        PosixRuntimeDirectory.ValidateSocketPath(_socketPath);
+        PosixRuntimeDirectory.Prepare(RuntimeDirectory);
 
         // A socket file outlives the process that made it. One left behind by a supervisor that was
         // killed would make bind fail with "address in use" forever, so a stale file is removed —
@@ -126,16 +130,6 @@ public sealed class UnixSocketEndpointFactory : IIpcEndpointFactory
         {
             return false;
         }
-    }
-
-    /// <summary>
-    /// $XDG_RUNTIME_DIR is normally 0700 already, but the layout falls back to other places when it
-    /// is unset — under a systemd system unit, for one — and there the mode has to be set here.
-    /// </summary>
-    private void PrepareRuntimeDirectory()
-    {
-        Directory.CreateDirectory(RuntimeDirectory);
-        Libc.chmod(RuntimeDirectory, Convert.ToUInt32("700", 8));
     }
 
     private static void TryDelete(string path)

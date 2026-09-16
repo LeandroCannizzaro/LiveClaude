@@ -125,6 +125,43 @@ public class PlatformContractTests
         }
     }
 
+    /// <summary>
+    /// A Unix domain socket path is limited to 104 bytes on macOS and 108 on Linux, terminator
+    /// included, and exceeding it fails at bind with an exception that names a parameter rather than
+    /// the problem. The first version of this put the socket under
+    /// ~/Library/Application Support/LiveClaude/run/, which fits for a short user name and does not
+    /// for a long one.
+    ///
+    /// POSIX-only, and it has to be: on Windows the endpoint is a pipe name, not a path, and has no
+    /// such limit. CI runs this on the Linux and macOS jobs, which is where it would have caught it.
+    /// </summary>
+    [PlatformFact("linux", "macos")]
+    public void TheSocketPathFitsWhatTheKernelAccepts()
+    {
+        var endpoint = PlatformLoader.Current.Ipc.EndpointDescription;
+
+        Assert.True(
+            endpoint.Length <= 104,
+            $"the supervisor socket path is {endpoint.Length} characters, over the 104-byte limit: {endpoint}");
+    }
+
+    /// <summary>
+    /// The same limit, but for the longest name anything actually asks for — the per-run endpoint the
+    /// IPC tests create, whose name carries a GUID. Production names are far shorter, so this is the
+    /// worst case rather than the typical one.
+    /// </summary>
+    [PlatformFact("linux", "macos")]
+    public void EvenATestScopedEndpointFits()
+    {
+        var endpoint = PlatformLoader.Current
+            .CreateIpcEndpoint($"test-{Guid.NewGuid():n}")
+            .EndpointDescription;
+
+        Assert.True(
+            endpoint.Length <= 104,
+            $"a test-scoped socket path is {endpoint.Length} characters, over the 104-byte limit: {endpoint}");
+    }
+
     private static IEnumerable<IAutostartProvider> Providers()
     {
         yield return PlatformLoader.Current.UserAutostart;

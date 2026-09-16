@@ -23,10 +23,17 @@ public sealed class MacPathLayout : IPathLayout
     public string StateDirectory => Path.Combine(RootDirectory, "state");
 
     /// <summary>
-    /// macOS has no XDG_RUNTIME_DIR. Application Support is per-user and not world-readable, and the
-    /// socket file is created 0600 on top of that.
+    /// Deliberately not under Application Support, unlike everything else here.
+    ///
+    /// A Unix domain socket path may be at most 104 characters on macOS, and
+    /// <c>/Users/&lt;name&gt;/Library/Application Support/LiveClaude/run/</c> spends more than half of
+    /// that before the file name. It fit for a short user name and broke for a long one — the kind of
+    /// bug that reaches a user rather than a test. A short per-user directory under /tmp, created
+    /// 0700, is what tmux does and what this does.
     /// </summary>
-    public string RuntimeDirectory => Path.Combine(RootDirectory, "run");
+    public string RuntimeDirectory => PathLayout.Override is { } root
+        ? Path.Combine(root, "run")
+        : PosixRuntimeDirectory.Shared;
 
     public void EnsureDirectories() => PathLayout.EnsureDirectories(this);
 
