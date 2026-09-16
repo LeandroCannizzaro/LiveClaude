@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using LiveClaude.Abstractions;
 using LiveClaude.Core.Claude;
 using LiveClaude.Core.Config;
 using LiveClaude.Core.Model;
@@ -7,7 +8,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 
 namespace LiveClaude.Core.Supervision;
 
-/// <summary>Describes who is currently supervising: the Windows service, a scheduled task, or the app.</summary>
+/// <summary>Describes who is currently supervising: a system service, a user-session host, or the app.</summary>
 public sealed class SupervisorStatus
 {
     public string Host { get; set; } = "";
@@ -16,10 +17,13 @@ public sealed class SupervisorStatus
     public string? ClaudeVersion { get; set; }
     public bool PseudoConsoleSupported { get; set; }
 
+    /// <summary>The operating system the supervisor runs on, as the platform assembly describes it.</summary>
+    public string Platform { get; set; } = "";
+
     /// <summary>
-    /// True when the supervisor process owns a console. Windows then gives that console to every
-    /// child, the pseudo console is ignored and no output can be captured — the host has to be a
-    /// windowless process.
+    /// True when the supervisor process owns a console and that breaks terminal capture. Only
+    /// Windows has this rule: it gives the console to every child, the pseudo console is then
+    /// ignored and no output can be captured, so the host has to be a windowless process.
     /// </summary>
     public bool HostOwnsConsole { get; set; }
     public DateTimeOffset StartedUtc { get; set; }
@@ -27,8 +31,8 @@ public sealed class SupervisorStatus
 }
 
 /// <summary>
-/// Owns every supervised instance and keeps them in sync with the configuration file. Hosted by the
-/// Windows service, by the scheduled task, or in-process by the desktop app.
+/// Owns every supervised instance and keeps them in sync with the configuration file. Hosted by
+/// whatever the platform registers for autostart, or in-process by the desktop app.
 /// </summary>
 public sealed class Supervisor : IAsyncDisposable
 {
@@ -67,8 +71,9 @@ public sealed class Supervisor : IAsyncDisposable
         Version = typeof(Supervisor).Assembly.GetName().Version?.ToString(3) ?? "1.0.0",
         ClaudePath = _claude?.Path,
         ClaudeVersion = _claude?.Version,
-        PseudoConsoleSupported = Pty.PtyProcess.IsSupported,
-        HostOwnsConsole = Pty.PtyProcess.HasOwnConsole,
+        Platform = PlatformLoader.Current.DisplayName,
+        PseudoConsoleSupported = PlatformLoader.Current.Pty.IsSupported,
+        HostOwnsConsole = PlatformLoader.Current.Pty.HostOwnsConsole,
         StartedUtc = StartedUtc,
         Instances = _instances.Values
             .Select(i => i.Snapshot())
@@ -107,7 +112,7 @@ public sealed class Supervisor : IAsyncDisposable
         {
             _config = config;
             _claude = ClaudeLocator.Locate(config.ClaudePath);
-            var claudePath = _claude?.Path ?? config.ClaudePath ?? "claude.exe";
+            var claudePath = _claude?.Path ?? config.ClaudePath ?? ClaudeLocator.FallbackExecutableName;
 
             foreach (var session in config.Sessions)
             {

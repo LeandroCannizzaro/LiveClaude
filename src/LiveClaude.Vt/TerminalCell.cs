@@ -1,4 +1,4 @@
-namespace LiveClaude.Terminal.Vt;
+namespace LiveClaude.Vt;
 
 [Flags]
 public enum CellFlags : byte

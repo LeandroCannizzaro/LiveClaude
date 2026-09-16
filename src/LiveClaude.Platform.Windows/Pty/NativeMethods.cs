@@ -1,7 +1,7 @@
 using System.Runtime.InteropServices;
 using Microsoft.Win32.SafeHandles;
 
-namespace LiveClaude.Core.Pty;
+namespace LiveClaude.Platform.Windows.Pty;
 
 internal static class NativeMethods
 {

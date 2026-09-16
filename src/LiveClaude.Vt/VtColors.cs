@@ -1,4 +1,4 @@
-namespace LiveClaude.Terminal.Vt;
+namespace LiveClaude.Vt;
 
 /// <summary>The xterm 256-colour palette, packed as 0xRRGGBB.</summary>
 public static class VtColors

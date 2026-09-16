@@ -1,24 +1,29 @@
-using System.Diagnostics;
+using LiveClaude.Abstractions;
 
 namespace LiveClaude.Core.Claude;
 
 public sealed record ClaudeInstall(string Path, string? Version, string Source);
 
 /// <summary>
-/// Finds the Claude Code CLI. Prefers a stable native install over the copy bundled with the
-/// desktop app, whose path carries the version number and therefore moves on every update.
+/// Finds the Claude Code CLI. The candidate list and the "can this actually be executed?" test come
+/// from the platform: Windows looks for <c>claude.exe</c> in the places its installers use, POSIX for
+/// an executable <c>claude</c> that is usually a symlink to a script.
 /// </summary>
 public static class ClaudeLocator
 {
+    private static IClaudeDiscovery Discovery => PlatformLoader.Current.Claude;
+
     public static ClaudeInstall? Locate(string? configuredPath = null)
     {
-        if (!string.IsNullOrWhiteSpace(configuredPath) && File.Exists(configuredPath))
-            return new ClaudeInstall(configuredPath, ReadVersion(configuredPath), "configured");
+        var discovery = Discovery;
 
-        foreach (var candidate in EnumerateCandidates())
+        if (!string.IsNullOrWhiteSpace(configuredPath) && discovery.IsExecutable(configuredPath))
+            return new ClaudeInstall(configuredPath, discovery.ReadVersion(configuredPath), "configured");
+
+        foreach (var candidate in discovery.EnumerateCandidates())
         {
-            if (File.Exists(candidate.Path))
-                return candidate with { Version = ReadVersion(candidate.Path) };
+            if (discovery.IsExecutable(candidate.Path))
+                return new ClaudeInstall(candidate.Path, discovery.ReadVersion(candidate.Path), candidate.Source);
         }
 
         return null;
@@ -26,92 +31,31 @@ public static class ClaudeLocator
 
     public static IReadOnlyList<ClaudeInstall> FindAll(string? configuredPath = null)
     {
+        var discovery = Discovery;
         var result = new List<ClaudeInstall>();
-        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var seen = new HashSet<string>(PathComparer);
 
-        if (!string.IsNullOrWhiteSpace(configuredPath) && File.Exists(configuredPath) && seen.Add(configuredPath))
-            result.Add(new ClaudeInstall(configuredPath, ReadVersion(configuredPath), "configured"));
+        if (!string.IsNullOrWhiteSpace(configuredPath) && discovery.IsExecutable(configuredPath) && seen.Add(configuredPath))
+            result.Add(new ClaudeInstall(configuredPath, discovery.ReadVersion(configuredPath), "configured"));
 
-        foreach (var candidate in EnumerateCandidates())
+        foreach (var candidate in discovery.EnumerateCandidates())
         {
-            if (File.Exists(candidate.Path) && seen.Add(candidate.Path))
-                result.Add(candidate with { Version = ReadVersion(candidate.Path) });
+            if (discovery.IsExecutable(candidate.Path) && seen.Add(candidate.Path))
+                result.Add(new ClaudeInstall(candidate.Path, discovery.ReadVersion(candidate.Path), candidate.Source));
         }
 
         return result;
     }
 
-    private static IEnumerable<ClaudeInstall> EnumerateCandidates()
-    {
-        var local = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
-        var roaming = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
-        var profile = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+    /// <summary>What to run when nothing was found and nothing is configured.</summary>
+    public static string FallbackExecutableName => Discovery.ExecutableName;
 
-        yield return new ClaudeInstall(Path.Combine(local, "Programs", "claude", "claude.exe"), null, "native install");
-        yield return new ClaudeInstall(Path.Combine(profile, ".local", "bin", "claude.exe"), null, "native install");
+    public static string? ReadVersion(string exePath) => Discovery.ReadVersion(exePath);
 
-        foreach (var onPath in FromPathVariable())
-            yield return new ClaudeInstall(onPath, null, "PATH");
-
-        // Copy managed by the Claude desktop app: %APPDATA%\Claude\claude-code\<version>\claude.exe
-        var bundledRoot = Path.Combine(roaming, "Claude", "claude-code");
-        if (Directory.Exists(bundledRoot))
-        {
-            var newest = Directory.EnumerateDirectories(bundledRoot)
-                .Select(dir => (dir, version: ParseVersion(Path.GetFileName(dir))))
-                .Where(x => x.version is not null)
-                .OrderByDescending(x => x.version)
-                .Select(x => Path.Combine(x.dir, "claude.exe"))
-                .FirstOrDefault();
-
-            if (newest is not null)
-                yield return new ClaudeInstall(newest, null, "desktop app (path changes on update)");
-        }
-    }
-
-    private static IEnumerable<string> FromPathVariable()
-    {
-        var pathVar = Environment.GetEnvironmentVariable("PATH") ?? "";
-        foreach (var dir in pathVar.Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
-        {
-            string candidate;
-            try
-            {
-                candidate = Path.Combine(dir, "claude.exe");
-            }
-            catch (ArgumentException)
-            {
-                continue;
-            }
-
-            yield return candidate;
-        }
-    }
-
-    private static Version? ParseVersion(string? text) => Version.TryParse(text, out var v) ? v : null;
-
-    public static string? ReadVersion(string exePath)
-    {
-        try
-        {
-            using var proc = Process.Start(new ProcessStartInfo(exePath, "--version")
-            {
-                RedirectStandardOutput = true,
-                RedirectStandardError = true,
-                UseShellExecute = false,
-                CreateNoWindow = true
-            });
-
-            if (proc is null)
-                return null;
-
-            var output = proc.StandardOutput.ReadToEnd();
-            proc.WaitForExit(5000);
-            return output.Trim().Split('\n').FirstOrDefault()?.Trim();
-        }
-        catch (Exception ex) when (ex is IOException or System.ComponentModel.Win32Exception)
-        {
-            return null;
-        }
-    }
+    /// <summary>
+    /// Paths are case-insensitive on Windows and macOS, case-sensitive on Linux. Deduplicating with
+    /// the wrong one either merges two real installs or lists the same one twice.
+    /// </summary>
+    private static StringComparer PathComparer =>
+        PlatformLoader.Current.Id == "linux" ? StringComparer.Ordinal : StringComparer.OrdinalIgnoreCase;
 }

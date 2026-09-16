@@ -18,76 +18,78 @@ public partial class SettingsView : UserControl
 
     private ShellViewModel? Shell => DataContext as ShellViewModel;
 
-    private async void OnInstallTask(object sender, RoutedEventArgs e)
+    private async void OnInstallUserHost(object sender, RoutedEventArgs e)
     {
         if (Shell is not null)
-            await Shell.Hosting.InstallTaskAsync();
+            await Shell.Hosting.UserHost.InstallAsync();
     }
 
-    private async void OnRemoveTask(object sender, RoutedEventArgs e)
+    private async void OnRemoveUserHost(object sender, RoutedEventArgs e)
     {
         if (Shell is not null)
-            await Shell.Hosting.UninstallTaskAsync();
+            await Shell.Hosting.UserHost.UninstallAsync();
     }
 
-    private async void OnStartTask(object sender, RoutedEventArgs e)
+    private async void OnStartUserHost(object sender, RoutedEventArgs e)
     {
         if (Shell is not null)
-            await Shell.Hosting.StartTaskAsync();
+            await Shell.Hosting.UserHost.StartAsync();
     }
 
-    private async void OnStopTask(object sender, RoutedEventArgs e)
+    private async void OnStopUserHost(object sender, RoutedEventArgs e)
     {
         if (Shell is not null)
-            await Shell.Hosting.StopTaskAsync();
+            await Shell.Hosting.UserHost.StopAsync();
     }
 
-    private async void OnInstallService(object sender, RoutedEventArgs e)
+    private async void OnInstallSystemHost(object sender, RoutedEventArgs e)
     {
-        if (Shell is null)
+        if (Shell?.Hosting.SystemHost is not { } host)
             return;
 
-        var password = ServicePassword.Password;
-        var asLocalSystem = false;
+        var password = host.RequiresPassword ? ServicePassword.Password : null;
+        var useSystemAccount = false;
 
-        if (string.IsNullOrEmpty(password) && !string.IsNullOrWhiteSpace(Shell.Hosting.Account))
+        // Asking here rather than letting the install fail: on Windows an account with no password is
+        // refused with error 1069 *after* the elevation prompt, which reads like a bug.
+        if (host.RequiresPassword && string.IsNullOrEmpty(password) && !string.IsNullOrWhiteSpace(Shell.Hosting.Account))
         {
             var proceed = MessageBox.Show(
                 $"No password entered for {Shell.Hosting.Account}.\n\n" +
-                "Windows never lets an account log on as a service without one, so the service would be created " +
-                "as LocalSystem instead — which uses a different profile and usually cannot reach the Claude Code " +
-                "sign-in.\n\nInstall as LocalSystem anyway?",
-                "Install service",
+                $"{host.DisplayName} cannot log on without one, so it would be installed under the system account " +
+                "instead — which uses a different profile and usually cannot reach the Claude Code sign-in.\n\n" +
+                "Install under the system account anyway?",
+                $"Install {host.DisplayName.ToLowerInvariant()}",
                 MessageBoxButton.YesNo,
                 MessageBoxImage.Warning);
 
             if (proceed != MessageBoxResult.Yes)
                 return;
 
-            asLocalSystem = true;
+            useSystemAccount = true;
         }
 
-        await Shell.Hosting.InstallServiceAsync(password, asLocalSystem);
+        await host.InstallAsync(password, useSystemAccount);
         ServicePassword.Clear();
         await Shell.ConnectAsync(force: true);
     }
 
-    private async void OnRemoveService(object sender, RoutedEventArgs e)
+    private async void OnRemoveSystemHost(object sender, RoutedEventArgs e)
     {
-        if (Shell is not null)
-            await Shell.Hosting.UninstallServiceAsync();
+        if (Shell?.Hosting.SystemHost is { } host)
+            await host.UninstallAsync();
     }
 
-    private async void OnStartService(object sender, RoutedEventArgs e)
+    private async void OnStartSystemHost(object sender, RoutedEventArgs e)
     {
-        if (Shell is not null)
-            await Shell.Hosting.StartServiceAsync();
+        if (Shell?.Hosting.SystemHost is { } host)
+            await host.StartAsync();
     }
 
-    private async void OnStopService(object sender, RoutedEventArgs e)
+    private async void OnStopSystemHost(object sender, RoutedEventArgs e)
     {
-        if (Shell is not null)
-            await Shell.Hosting.StopServiceAsync();
+        if (Shell?.Hosting.SystemHost is { } host)
+            await host.StopAsync();
     }
 
     private void OnUseInstall(object sender, RoutedEventArgs e)

@@ -4,6 +4,7 @@ using System.IO;
 using System.Windows;
 using System.Windows.Threading;
 using LiveClaude.Core.Claude;
+using LiveClaude.Abstractions;
 using LiveClaude.Core.Config;
 using LiveClaude.Core.Ipc;
 using LiveClaude.Core.Model;
@@ -354,16 +355,20 @@ public sealed class ShellViewModel : ObservableObject, IAsyncDisposable
         await RefreshAsync();
     }
 
+    /// <summary>
+    /// Opens a path in the file manager or a URL in the browser. Which program that is belongs to the
+    /// platform: Explorer, the desktop's own handler, or Finder.
+    /// </summary>
     public static void OpenUrl(string target)
     {
         try
         {
             if (Directory.Exists(target) || File.Exists(target))
-                Process.Start(new ProcessStartInfo("explorer.exe", $"\"{target}\"") { UseShellExecute = true });
+                PlatformLoader.Current.Shell.Reveal(target);
             else
-                Process.Start(new ProcessStartInfo(target) { UseShellExecute = true });
+                PlatformLoader.Current.Shell.OpenUrl(target);
         }
-        catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or InvalidOperationException)
+        catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or InvalidOperationException or IOException)
         {
             MessageBox.Show($"Could not open '{target}'.", "LiveClaude", MessageBoxButton.OK, MessageBoxImage.Warning);
         }

@@ -1,0 +1,28 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
+    <PackageReference Include="xunit" Version="2.9.3" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="3.1.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\LiveClaude.Abstractions\LiveClaude.Abstractions.csproj" />
+    <ProjectReference Include="..\..\src\LiveClaude.Core\LiveClaude.Core.csproj" />
+    <ProjectReference Include="..\..\src\LiveClaude.Vt\LiveClaude.Vt.csproj" />
+  </ItemGroup>
+
+  <!--
+    These exercise the platform assembly itself — the pseudo terminal, the IPC endpoint, the command
+    line quoting — so they need the one for the OS they run on. Each test states which platforms it
+    applies to and skips elsewhere, so the whole project runs everywhere without being green by
+    running nothing.
+  -->
+  <Import Project="..\..\build\PlatformAssemblies.props" />
+
+</Project>

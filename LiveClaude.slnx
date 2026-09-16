@@ -1,11 +1,18 @@
 <Solution>
   <Folder Name="/src/">
+    <Project Path="src/LiveClaude.Abstractions/LiveClaude.Abstractions.csproj" />
     <Project Path="src/LiveClaude.App/LiveClaude.App.csproj" />
     <Project Path="src/LiveClaude.Core/LiveClaude.Core.csproj" />
     <Project Path="src/LiveClaude.Service/LiveClaude.Service.csproj" />
     <Project Path="src/LiveClaude.Terminal/LiveClaude.Terminal.csproj" />
+    <Project Path="src/LiveClaude.Vt/LiveClaude.Vt.csproj" />
+  </Folder>
+  <Folder Name="/src/platform/">
+    <Project Path="src/LiveClaude.Platform.Windows/LiveClaude.Platform.Windows.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/LiveClaude.Tests/LiveClaude.Tests.csproj" />
+    <Project Path="tests/LiveClaude.Tests.Platform/LiveClaude.Tests.Platform.csproj" />
+    <Project Path="tests/LiveClaude.Tests.Windows/LiveClaude.Tests.Windows.csproj" />
   </Folder>
 </Solution>

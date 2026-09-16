@@ -1,7 +1,7 @@
 using System.IO;
 using System.Text;
 using System.Windows.Threading;
-using LiveClaude.Core.Pty;
+using LiveClaude.Abstractions;
 
 namespace LiveClaude.Terminal.Controls;
 
@@ -14,7 +14,7 @@ public sealed class LocalTerminalSession : IDisposable
 {
     private readonly TerminalView _view;
     private readonly Dispatcher _dispatcher;
-    private PtyProcess? _pty;
+    private IPtyProcess? _pty;
     private CancellationTokenSource? _cts;
 
     public LocalTerminalSession(TerminalView view)
@@ -33,7 +33,7 @@ public sealed class LocalTerminalSession : IDisposable
     {
         Stop();
 
-        _pty = PtyProcess.Start(new PtyOptions
+        _pty = PlatformLoader.Current.Pty.Start(new PtyOptions
         {
             ExecutablePath = executablePath,
             Arguments = arguments,
@@ -68,7 +68,7 @@ public sealed class LocalTerminalSession : IDisposable
         _pty = null;
     }
 
-    private async Task PumpAsync(PtyProcess pty, CancellationToken ct)
+    private async Task PumpAsync(IPtyProcess pty, CancellationToken ct)
     {
         var buffer = new byte[8192];
         var decoder = Encoding.UTF8.GetDecoder();

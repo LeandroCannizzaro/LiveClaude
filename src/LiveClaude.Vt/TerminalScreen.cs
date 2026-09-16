@@ -1,4 +1,4 @@
-namespace LiveClaude.Terminal.Vt;
+namespace LiveClaude.Vt;
 
 /// <summary>
 /// The character grid a VT terminal draws on: primary and alternate buffers, a cursor, a scroll

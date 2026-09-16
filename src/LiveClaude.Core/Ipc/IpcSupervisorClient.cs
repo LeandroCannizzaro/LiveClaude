@@ -1,31 +1,32 @@
 using System.Collections.Concurrent;
-using System.IO.Pipes;
 using System.Text;
 using System.Text.Json;
+using LiveClaude.Abstractions;
 using LiveClaude.Core.Model;
 using LiveClaude.Core.Supervision;
 
 namespace LiveClaude.Core.Ipc;
 
 /// <summary>
-/// Talks to a supervisor hosted elsewhere (Windows service or scheduled task) over the named pipe,
-/// reconnecting on its own so the desktop app survives a service restart.
+/// Talks to a supervisor hosted elsewhere — a service, a scheduled task, a systemd unit, a
+/// LaunchAgent — over the platform's IPC endpoint, reconnecting on its own so the desktop app
+/// survives a restart of that host.
 /// </summary>
 public sealed class IpcSupervisorClient : ISupervisorApi
 {
-    private readonly string _pipeName;
+    private readonly IIpcEndpointFactory _endpoint;
     private readonly ConcurrentDictionary<string, TaskCompletionSource<IpcEnvelope>> _pending = new();
     private readonly SemaphoreSlim _writeLock = new(1, 1);
     private readonly CancellationTokenSource _cts = new();
 
-    private NamedPipeClientStream? _pipe;
+    private Stream? _stream;
     private StreamWriter? _writer;
     private Task? _readLoop;
     private volatile bool _connected;
 
-    public IpcSupervisorClient(string? pipeName = null, string host = "service")
+    public IpcSupervisorClient(IIpcEndpointFactory? endpoint = null, string host = "service")
     {
-        _pipeName = pipeName ?? IpcProtocol.PipeName;
+        _endpoint = endpoint ?? PlatformLoader.Current.Ipc;
         HostDescription = host;
     }
 
@@ -42,17 +43,17 @@ public sealed class IpcSupervisorClient : ISupervisorApi
     {
         try
         {
-            var pipe = new NamedPipeClientStream(".", _pipeName, PipeDirection.InOut, PipeOptions.Asynchronous);
-            await pipe.ConnectAsync((int)timeout.TotalMilliseconds, ct).ConfigureAwait(false);
+            var stream = await _endpoint.ConnectAsync(timeout, ct).ConfigureAwait(false);
 
-            _pipe = pipe;
-            _writer = new StreamWriter(pipe, new UTF8Encoding(false)) { AutoFlush = false };
+            _stream = stream;
+            _writer = new StreamWriter(stream, new UTF8Encoding(false)) { AutoFlush = false };
             _connected = true;
             _readLoop = Task.Run(() => ReadLoopAsync(_cts.Token), CancellationToken.None);
             ConnectionChanged?.Invoke(true);
             return true;
         }
-        catch (Exception ex) when (ex is TimeoutException or IOException or OperationCanceledException or UnauthorizedAccessException)
+        catch (Exception ex) when (ex is TimeoutException or IOException or OperationCanceledException
+                                     or UnauthorizedAccessException or System.Net.Sockets.SocketException)
         {
             _connected = false;
             return false;
@@ -83,12 +84,12 @@ public sealed class IpcSupervisorClient : ISupervisorApi
 
     private async Task ReadLoopAsync(CancellationToken ct)
     {
-        if (_pipe is null)
+        if (_stream is null)
             return;
 
-        // leaveOpen: disposing this reader would close the pipe, and the writer would then throw
+        // leaveOpen: disposing this reader would close the stream, and the writer would then throw
         // "Cannot access a closed pipe" while flushing on shutdown.
-        using var reader = new StreamReader(_pipe, new UTF8Encoding(false), detectEncodingFromByteOrderMarks: false,
+        using var reader = new StreamReader(_stream, new UTF8Encoding(false), detectEncodingFromByteOrderMarks: false,
             bufferSize: 1024, leaveOpen: true);
 
         try
@@ -273,7 +274,7 @@ public sealed class IpcSupervisorClient : ISupervisorApi
 
         try
         {
-            _pipe?.Dispose();
+            _stream?.Dispose();
         }
         catch (Exception ex) when (ex is ObjectDisposedException or IOException)
         {

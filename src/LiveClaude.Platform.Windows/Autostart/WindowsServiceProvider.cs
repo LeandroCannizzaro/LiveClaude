@@ -1,33 +1,53 @@
 using System.ServiceProcess;
+using LiveClaude.Abstractions;
 
-namespace LiveClaude.Core.Hosting;
-
-public sealed record ServiceState(bool Installed, string? Status, string? Account, string? StartMode);
-
-public sealed record ServiceInstallResult(bool Success, string Message);
+namespace LiveClaude.Platform.Windows.Autostart;
 
 /// <summary>
 /// Installs the supervisor as a Windows service through sc.exe, including the failure actions that
 /// make Windows restart it on its own and the account right it needs to log on.
 /// </summary>
-public static class WindowsServiceInstaller
+public sealed class WindowsServiceProvider : IAutostartProvider
 {
     public const string ServiceName = "LiveClaude";
-    public const string DisplayName = "LiveClaude Supervisor";
+    public const string DisplayName_ = "LiveClaude Supervisor";
     public const string Description =
         "Keeps Claude Code Remote Control servers running for the configured project directories.";
 
-    public static ServiceState Query()
+    private readonly IProcessLauncher _processes = new WindowsProcessLauncher();
+
+    public string Kind => "service";
+
+    public string DisplayName => "Windows service";
+
+    public AutostartScope Scope => AutostartScope.System;
+
+    public string Summary =>
+        "Starts at boot, before anyone signs in. Run it under your own account: LocalSystem has a " +
+        "different profile and cannot read the Claude Code credentials.";
+
+    public bool RequiresElevation(AutostartOptions options) => true;
+
+    public bool SupportsAccount => true;
+
+    /// <summary>
+    /// Windows never lets a user account log on as a service with a blank password: without one the
+    /// service is created and then refuses to start with error 1069.
+    /// </summary>
+    public bool RequiresPassword => true;
+
+    public string? StartBeforeSignInRequirement => null;
+
+    public Task<AutostartState> QueryAsync(CancellationToken ct = default)
     {
         try
         {
             using var controller = new ServiceController(ServiceName);
-            var status = controller.Status.ToString();
-            return new ServiceState(true, status, null, null);
+            return Task.FromResult(new AutostartState(true, controller.Status.ToString(), null));
         }
         catch (InvalidOperationException)
         {
-            return new ServiceState(false, null, null, null);
+            return Task.FromResult(new AutostartState(false, null, null));
         }
     }
 
@@ -40,10 +60,10 @@ public static class WindowsServiceInstaller
         string executablePath,
         string? account = null,
         string? password = null,
-        string arguments = SupervisorLauncher.ServiceArgument)
+        string arguments = "--service")
     {
         var line = $"create {ServiceName} binPath= \"\\\"{executablePath}\\\" {arguments}\" start= auto " +
-                   $"DisplayName= \"{DisplayName}\"";
+                   $"DisplayName= \"{DisplayName_}\"";
 
         if (!string.IsNullOrWhiteSpace(account))
         {
@@ -59,21 +79,17 @@ public static class WindowsServiceInstaller
         $"failure {ServiceName} reset= 86400 actions= restart/5000/restart/10000/restart/30000";
 
     /// <summary>
-    /// Creates the service. <paramref name="account"/> should normally be the interactive user
-    /// (DOMAIN\user): LocalSystem cannot read the Claude Code credentials stored in the user profile.
+    /// Creates the service. The account should normally be the interactive user (DOMAIN\user):
+    /// LocalSystem cannot read the Claude Code credentials stored in the user profile.
     /// Must run elevated.
     /// </summary>
-    public static async Task<ServiceInstallResult> InstallAsync(
-        string executablePath,
-        string? account = null,
-        string? password = null,
-        string arguments = SupervisorLauncher.ServiceArgument,
-        CancellationToken ct = default)
+    public async Task<AutostartResult> InstallAsync(SupervisorCommand command, AutostartOptions options, CancellationToken ct = default)
     {
-        if (!ProcessHelper.IsElevated)
-            return new ServiceInstallResult(false, "Installing a Windows service needs administrator rights.");
+        if (!_processes.IsElevated)
+            return AutostartResult.Failed("Installing a Windows service needs administrator rights.");
 
         var notes = new List<string>();
+        var account = options.UserName;
 
         // Without this the service is created and then fails to start with error 1069.
         if (!string.IsNullOrWhiteSpace(account) && !IsBuiltInAccount(account))
@@ -82,29 +98,32 @@ public static class WindowsServiceInstaller
             notes.Add(rightsMessage);
         }
 
-        var create = await ProcessHelper
-            .RunRawAsync("sc.exe", BuildCreateCommandLine(executablePath, account, password, arguments), ct)
+        var create = await WindowsProcessLauncher
+            .RunRawAsync("sc.exe", BuildCreateCommandLine(command.ExecutablePath, account, options.Password, command.Arguments), ct)
             .ConfigureAwait(false);
 
         if (!create.Success)
-            return new ServiceInstallResult(false, Describe(create, notes));
+            return AutostartResult.Failed(string.Join(" ", notes.Append(Explain(create))).Trim());
 
-        await ProcessHelper.RunRawAsync("sc.exe", $"description {ServiceName} \"{Description}\"", ct).ConfigureAwait(false);
-        await ProcessHelper.RunRawAsync("sc.exe", BuildFailureCommandLine(), ct).ConfigureAwait(false);
-        await ProcessHelper.RunRawAsync("sc.exe", $"failureflag {ServiceName} 1", ct).ConfigureAwait(false);
+        await WindowsProcessLauncher.RunRawAsync("sc.exe", $"description {ServiceName} \"{Description}\"", ct).ConfigureAwait(false);
+        await WindowsProcessLauncher.RunRawAsync("sc.exe", BuildFailureCommandLine(), ct).ConfigureAwait(false);
+        await WindowsProcessLauncher.RunRawAsync("sc.exe", $"failureflag {ServiceName} 1", ct).ConfigureAwait(false);
 
         notes.Add("Service created.");
-        return new ServiceInstallResult(true, string.Join(" ", notes));
+        return AutostartResult.Ok(string.Join(" ", notes));
     }
 
-    public static Task<ProcessResult> UninstallAsync(CancellationToken ct = default) =>
-        ProcessHelper.RunRawAsync("sc.exe", $"delete {ServiceName}", ct);
+    public async Task<AutostartResult> UninstallAsync(CancellationToken ct = default) =>
+        ToResult(await WindowsProcessLauncher.RunRawAsync("sc.exe", $"delete {ServiceName}", ct).ConfigureAwait(false));
 
-    public static Task<ProcessResult> StartAsync(CancellationToken ct = default) =>
-        ProcessHelper.RunRawAsync("sc.exe", $"start {ServiceName}", ct);
+    public async Task<AutostartResult> StartAsync(CancellationToken ct = default) =>
+        ToResult(await WindowsProcessLauncher.RunRawAsync("sc.exe", $"start {ServiceName}", ct).ConfigureAwait(false));
 
-    public static Task<ProcessResult> StopAsync(CancellationToken ct = default) =>
-        ProcessHelper.RunRawAsync("sc.exe", $"stop {ServiceName}", ct);
+    public async Task<AutostartResult> StopAsync(CancellationToken ct = default) =>
+        ToResult(await WindowsProcessLauncher.RunRawAsync("sc.exe", $"stop {ServiceName}", ct).ConfigureAwait(false));
+
+    private static AutostartResult ToResult(ProcessResult result) =>
+        result.Success ? AutostartResult.Ok(result.Combined) : AutostartResult.Failed(Explain(result));
 
     /// <summary>Turns the usual sc.exe and service-control failures into something actionable.</summary>
     public static string Explain(ProcessResult result)
@@ -138,7 +157,4 @@ public static class WindowsServiceInstaller
                name.Equals("NT AUTHORITY\\LocalService", StringComparison.OrdinalIgnoreCase) ||
                name.Equals("NT AUTHORITY\\NetworkService", StringComparison.OrdinalIgnoreCase);
     }
-
-    private static string Describe(ProcessResult result, IEnumerable<string> notes) =>
-        string.Join(" ", notes.Append(Explain(result))).Trim();
 }

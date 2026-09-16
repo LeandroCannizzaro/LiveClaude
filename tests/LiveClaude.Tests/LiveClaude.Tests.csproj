@@ -1,10 +1,8 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFramework>net10.0-windows</TargetFramework>
+    <TargetFramework>net10.0</TargetFramework>
     <IsPackable>false</IsPackable>
-    <UseWPF>true</UseWPF>
-    <EnableWindowsTargeting>true</EnableWindowsTargeting>
   </PropertyGroup>
 
   <ItemGroup>
@@ -14,9 +12,16 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\..\src\LiveClaude.Abstractions\LiveClaude.Abstractions.csproj" />
     <ProjectReference Include="..\..\src\LiveClaude.Core\LiveClaude.Core.csproj" />
-    <ProjectReference Include="..\..\src\LiveClaude.Terminal\LiveClaude.Terminal.csproj" />
-    <ProjectReference Include="..\..\src\LiveClaude.Service\LiveClaude.Service.csproj" />
+    <ProjectReference Include="..\..\src\LiveClaude.Vt\LiveClaude.Vt.csproj" />
   </ItemGroup>
+
+  <!--
+    Everything here runs on Windows, Linux and macOS alike. The platform assembly is still copied in:
+    a few of these touch ConfigStore's paths, which come from the platform, and a test project that
+    cannot load one would fail for a reason that has nothing to do with what it is testing.
+  -->
+  <Import Project="..\..\build\PlatformAssemblies.props" />
 
 </Project>

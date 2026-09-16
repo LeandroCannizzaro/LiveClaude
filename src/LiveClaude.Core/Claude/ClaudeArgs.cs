@@ -98,49 +98,6 @@ public static class ClaudeArgs
         return now - lastStopUtc.Value < ReattachWindow;
     }
 
-    /// <summary>Quotes an argument list into a single Windows command line.</summary>
-    public static string ToCommandLine(string exePath, IEnumerable<string> args)
-    {
-        var sb = new StringBuilder();
-        sb.Append(Quote(exePath));
-        foreach (var arg in args)
-        {
-            sb.Append(' ');
-            sb.Append(Quote(arg));
-        }
-
-        return sb.ToString();
-    }
-
-    public static string Quote(string value)
-    {
-        if (value.Length > 0 && value.IndexOfAny([' ', '\t', '"']) < 0)
-            return value;
-
-        var sb = new StringBuilder("\"");
-        var backslashes = 0;
-        foreach (var c in value)
-        {
-            switch (c)
-            {
-                case '\\':
-                    backslashes++;
-                    break;
-                case '"':
-                    sb.Append('\\', backslashes * 2 + 1).Append('"');
-                    backslashes = 0;
-                    break;
-                default:
-                    sb.Append('\\', backslashes).Append(c);
-                    backslashes = 0;
-                    break;
-            }
-        }
-
-        sb.Append('\\', backslashes * 2).Append('"');
-        return sb.ToString();
-    }
-
     /// <summary>Splits a raw extra-arguments string, honouring double quotes.</summary>
     public static IReadOnlyList<string> SplitArguments(string input)
     {

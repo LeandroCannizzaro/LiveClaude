@@ -89,12 +89,6 @@ public class ClaudeArgsTests
         Assert.False(ClaudeArgs.CanReattach(session, DateTimeOffset.UtcNow.AddMinutes(-1)));
     }
 
-    [Theory]
-    [InlineData("plain", "plain")]
-    [InlineData("with space", "\"with space\"")]
-    [InlineData("quote\"inside", "\"quote\\\"inside\"")]
-    public void ArgumentsAreQuotedForWindows(string input, string expected) =>
-        Assert.Equal(expected, ClaudeArgs.Quote(input));
 
     [Fact]
     public void ExtraArgumentsKeepQuotedGroupsTogether()

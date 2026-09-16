@@ -1,9 +1,9 @@
 using System.Text;
+using LiveClaude.Abstractions;
 using LiveClaude.Core.Claude;
 using LiveClaude.Core.Config;
 using LiveClaude.Core.Logging;
 using LiveClaude.Core.Model;
-using LiveClaude.Core.Pty;
 using Microsoft.Extensions.Logging;
 
 namespace LiveClaude.Core.Supervision;
@@ -29,7 +29,7 @@ public sealed class SupervisedInstance : IAsyncDisposable
 
     private CancellationTokenSource? _loopCts;
     private Task? _loop;
-    private PtyProcess? _pty;
+    private IPtyProcess? _pty;
     private short _columns = 140;
     private short _rows = 40;
 
@@ -224,7 +224,7 @@ public sealed class SupervisedInstance : IAsyncDisposable
 
     public void WriteInput(string text)
     {
-        PtyProcess? pty;
+        IPtyProcess? pty;
         lock (_gate)
             pty = _pty;
 
@@ -259,7 +259,9 @@ public sealed class SupervisedInstance : IAsyncDisposable
                 return;
             }
 
-            if (!File.Exists(_claudePath))
+            // Executable, not merely present: on POSIX ~/.local/bin/claude is often a dangling
+            // symlink left behind by an uninstall, and File.Exists is happy with that.
+            if (!PlatformLoader.Current.Claude.IsExecutable(_claudePath))
             {
                 SetFailed($"Claude CLI not found at '{_claudePath}'. Set the path in Settings.");
                 return;
@@ -344,7 +346,7 @@ public sealed class SupervisedInstance : IAsyncDisposable
     {
         var config = Config;
         var args = ClaudeArgs.BuildRemoteControl(config, _state.LastStopUtc);
-        var commandLine = ClaudeArgs.ToCommandLine(_claudePath, args);
+        var commandLine = PlatformLoader.Current.Processes.FormatCommandLine(_claudePath, args);
 
         _log.Write($"[supervisor] starting: {commandLine} (cwd: {config.Directory})");
 
@@ -352,7 +354,7 @@ public sealed class SupervisedInstance : IAsyncDisposable
         if (!string.IsNullOrWhiteSpace(config.Model))
             environment["ANTHROPIC_MODEL"] = config.Model!;
 
-        var pty = PtyProcess.Start(new PtyOptions
+        var pty = PlatformLoader.Current.Pty.Start(new PtyOptions
         {
             ExecutablePath = _claudePath,
             Arguments = args,
@@ -418,7 +420,7 @@ public sealed class SupervisedInstance : IAsyncDisposable
     /// that window to deregister its bridge environment; a hard kill leaves it behind, which is what
     /// fills the session picker with dead entries for the same directory.
     /// </summary>
-    private async Task ShutdownAsync(PtyProcess pty)
+    private async Task ShutdownAsync(IPtyProcess pty)
     {
         if (pty.HasExited)
             return;
@@ -426,7 +428,7 @@ public sealed class SupervisedInstance : IAsyncDisposable
         var budget = TimeSpan.FromSeconds(Math.Max(1, _appConfig.GracefulStopSeconds));
         _log.Write($"[supervisor] stopping: Ctrl+C, then up to {budget.TotalSeconds:F0}s to shut down cleanly.");
 
-        pty.SendCtrlC();
+        pty.SendInterrupt();
 
         try
         {
@@ -515,7 +517,7 @@ public sealed class SupervisedInstance : IAsyncDisposable
         }
     }
 
-    private async Task PumpOutputAsync(PtyProcess pty)
+    private async Task PumpOutputAsync(IPtyProcess pty)
     {
         var buffer = new byte[8192];
         var decoder = Encoding.UTF8.GetDecoder();

@@ -1,12 +1,14 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using LiveClaude.Abstractions;
 using LiveClaude.Core.Model;
 
 namespace LiveClaude.Core.Config;
 
 /// <summary>
-/// Reads and writes the shared configuration file. The service and the desktop app both point at
-/// %ProgramData%\LiveClaude\config.json so a change made in the UI is picked up by the supervisor.
+/// Reads and writes the shared configuration file. The supervisor and the desktop app both point at
+/// the same path so a change made in the UI is picked up by the supervisor; where that path is comes
+/// from the platform (%ProgramData% on Windows, XDG on Linux, ~/Library on macOS).
 /// </summary>
 public sealed class ConfigStore
 {
@@ -26,16 +28,15 @@ public sealed class ConfigStore
 
     public string Path { get; }
 
-    public static string RootDirectory =>
-        System.IO.Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData),
-            "LiveClaude");
+    private static IPathLayout Layout => PlatformLoader.Current.Paths;
 
-    public static string DefaultPath => System.IO.Path.Combine(RootDirectory, "config.json");
+    public static string RootDirectory => Layout.RootDirectory;
 
-    public static string LogDirectory => System.IO.Path.Combine(RootDirectory, "logs");
+    public static string DefaultPath => Layout.ConfigFilePath;
 
-    public static string StateDirectory => System.IO.Path.Combine(RootDirectory, "state");
+    public static string LogDirectory => Layout.LogDirectory;
+
+    public static string StateDirectory => Layout.StateDirectory;
 
     /// <summary>Raised after a successful <see cref="Save"/> or an external file change.</summary>
     public event Action<AppConfig>? Changed;
@@ -77,12 +78,7 @@ public sealed class ConfigStore
         Changed?.Invoke(config);
     }
 
-    public static void EnsureDirectories()
-    {
-        Directory.CreateDirectory(RootDirectory);
-        Directory.CreateDirectory(LogDirectory);
-        Directory.CreateDirectory(StateDirectory);
-    }
+    public static void EnsureDirectories() => Layout.EnsureDirectories();
 
     private void TryBackupCorruptFile()
     {

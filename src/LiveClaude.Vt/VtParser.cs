@@ -1,6 +1,6 @@
 using System.Text;
 
-namespace LiveClaude.Terminal.Vt;
+namespace LiveClaude.Vt;
 
 /// <summary>
 /// Feeds terminal output into a <see cref="TerminalScreen"/>. Covers the sequences a modern CLI

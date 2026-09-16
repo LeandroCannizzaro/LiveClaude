@@ -9,7 +9,8 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\LiveClaude.Core\LiveClaude.Core.csproj" />
+    <ProjectReference Include="..\LiveClaude.Abstractions\LiveClaude.Abstractions.csproj" />
+    <ProjectReference Include="..\LiveClaude.Vt\LiveClaude.Vt.csproj" />
   </ItemGroup>
 
 </Project>

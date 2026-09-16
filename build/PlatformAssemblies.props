@@ -1,0 +1,80 @@
+<Project>
+
+  <!--
+    Puts the platform assembly for the OS being built next to the output, without referencing it.
+
+    Two separate things are going on here, and both matter:
+
+    * ProjectReference with ReferenceOutputAssembly="false" gives build ordering only — the platform
+      assembly is compiled before whatever imports this file. SkipGetTargetFrameworkProperties is
+      required on top: LiveClaude.Platform.Windows targets net10.0-windows, and without it MSBuild
+      refuses the reference outright ("cannot be referenced by a project that targets net10.0"),
+      which is precisely the coupling this rework exists to remove.
+
+    * The copy target asks the project where its output actually is (GetTargetPath) rather than
+      guessing bin/$(Configuration)/<tfm>/, so a custom OutputPath does not silently produce a
+      package with no platform assembly in it.
+
+    A published package ships exactly one platform assembly. Building on Windows produces the Windows
+    one; the CI matrix builds the others on their own runners.
+  -->
+
+  <PropertyGroup>
+    <_LiveClaudeOnWindows>$([System.Runtime.InteropServices.RuntimeInformation]::IsOSPlatform($([System.Runtime.InteropServices.OSPlatform]::Windows)))</_LiveClaudeOnWindows>
+    <_LiveClaudeOnLinux>$([System.Runtime.InteropServices.RuntimeInformation]::IsOSPlatform($([System.Runtime.InteropServices.OSPlatform]::Linux)))</_LiveClaudeOnLinux>
+    <_LiveClaudeOnMacOS>$([System.Runtime.InteropServices.RuntimeInformation]::IsOSPlatform($([System.Runtime.InteropServices.OSPlatform]::OSX)))</_LiveClaudeOnMacOS>
+    <_LiveClaudeSrc>$(MSBuildThisFileDirectory)..\src\</_LiveClaudeSrc>
+  </PropertyGroup>
+
+  <ItemGroup Condition="'$(_LiveClaudeOnWindows)' == 'true'">
+    <LiveClaudePlatformProject Include="$(_LiveClaudeSrc)LiveClaude.Platform.Windows\LiveClaude.Platform.Windows.csproj" />
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(_LiveClaudeOnLinux)' == 'true' or '$(_LiveClaudeOnMacOS)' == 'true'">
+    <LiveClaudePlatformProject Include="$(_LiveClaudeSrc)LiveClaude.Platform.Posix\LiveClaude.Platform.Posix.csproj" />
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(_LiveClaudeOnLinux)' == 'true'">
+    <LiveClaudePlatformProject Include="$(_LiveClaudeSrc)LiveClaude.Platform.Linux\LiveClaude.Platform.Linux.csproj" />
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(_LiveClaudeOnMacOS)' == 'true'">
+    <LiveClaudePlatformProject Include="$(_LiveClaudeSrc)LiveClaude.Platform.MacOS\LiveClaude.Platform.MacOS.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="@(LiveClaudePlatformProject)"
+                      ReferenceOutputAssembly="false"
+                      SkipGetTargetFrameworkProperties="true"
+                      Private="false" />
+  </ItemGroup>
+
+  <Target Name="ResolveLiveClaudePlatformAssemblies"
+          Condition="'@(LiveClaudePlatformProject)' != ''">
+    <MSBuild Projects="@(LiveClaudePlatformProject)"
+             Targets="GetTargetPath"
+             Properties="Configuration=$(Configuration)"
+             RemoveProperties="TargetFramework;RuntimeIdentifier;SelfContained;PublishDir">
+      <Output TaskParameter="TargetOutputs" ItemName="LiveClaudePlatformAssembly" />
+    </MSBuild>
+  </Target>
+
+  <Target Name="CopyLiveClaudePlatformAssemblies"
+          AfterTargets="Build"
+          DependsOnTargets="ResolveLiveClaudePlatformAssemblies"
+          Condition="'@(LiveClaudePlatformProject)' != ''">
+    <Copy SourceFiles="@(LiveClaudePlatformAssembly)"
+          DestinationFolder="$(OutDir)"
+          SkipUnchangedFiles="true" />
+  </Target>
+
+  <Target Name="PublishLiveClaudePlatformAssemblies"
+          AfterTargets="Publish"
+          DependsOnTargets="ResolveLiveClaudePlatformAssemblies"
+          Condition="'@(LiveClaudePlatformProject)' != ''">
+    <Copy SourceFiles="@(LiveClaudePlatformAssembly)"
+          DestinationFolder="$(PublishDir)"
+          SkipUnchangedFiles="true" />
+  </Target>
+
+</Project>

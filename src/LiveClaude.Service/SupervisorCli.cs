@@ -1,6 +1,6 @@
 using System.Diagnostics;
+using LiveClaude.Abstractions;
 using LiveClaude.Core.Config;
-using LiveClaude.Core.Hosting;
 using LiveClaude.Core.Logging;
 
 namespace LiveClaude.Service;
@@ -9,13 +9,19 @@ namespace LiveClaude.Service;
 /// The install/uninstall/status commands. Shared, because on a ClickOnce install the desktop
 /// application is the only executable that can run: it re-launches itself elevated with these same
 /// verbs instead of the supervisor executable.
+///
+/// The verbs are platform-neutral — <c>install-autostart --scope user|system</c> — because what they
+/// register differs per OS. <c>install-task</c> and <c>install-service</c> survive as aliases so the
+/// Windows documentation, the winget package and anyone's scripts keep working.
 /// </summary>
 public static class SupervisorCli
 {
     public static readonly string[] Verbs =
     [
+        "install-autostart", "uninstall-autostart", "start-autostart", "stop-autostart", "status",
+        // Windows-era aliases, kept deliberately.
         "install-service", "uninstall-service", "start-service", "stop-service",
-        "install-task", "uninstall-task", "status"
+        "install-task", "uninstall-task"
     ];
 
     public static bool IsVerb(string? candidate) =>
@@ -23,6 +29,8 @@ public static class SupervisorCli
 
     /// <summary>Where the output of an install run is kept, since it usually happens out of sight.</summary>
     public static string LogPath => Path.Combine(ConfigStore.LogDirectory, "install.log");
+
+    private static IPlatform Platform => PlatformLoader.Current;
 
     /// <summary>
     /// Runs a command and records everything it printed. These commands normally run elevated, in a
@@ -38,7 +46,7 @@ public static class SupervisorCli
         Console.SetOut(tee);
         Console.SetError(tee);
 
-        log.Write($"--- {string.Join(' ', Redact(args))} (elevated: {ProcessHelper.IsElevated}, user: {ProcessHelper.CurrentUserName})");
+        log.Write($"--- {string.Join(' ', Redact(args))} (platform: {Platform.Id}, elevated: {Platform.Processes.IsElevated}, user: {Platform.Processes.CurrentUserName})");
 
         try
         {
@@ -79,134 +87,178 @@ public static class SupervisorCli
         }
     }
 
-    private static async Task<int> ExecuteAsync(string[] args) => args.FirstOrDefault()?.ToLowerInvariant() switch
+    private static async Task<int> ExecuteAsync(string[] args)
     {
-        "install-service" => await InstallServiceAsync(args),
-        "uninstall-service" => await UninstallServiceAsync(),
-        "start-service" => await ControlServiceAsync(start: true),
-        "stop-service" => await ControlServiceAsync(start: false),
-        "install-task" => await InstallTaskAsync(args),
-        "uninstall-task" => await UninstallTaskAsync(),
-        "status" => await ShowStatusAsync(),
-        _ => 64
-    };
+        var verb = args.FirstOrDefault()?.ToLowerInvariant();
 
-    private static async Task<int> InstallServiceAsync(string[] args)
-    {
-        if (!ProcessHelper.IsElevated)
+        return verb switch
         {
-            Console.Error.WriteLine("install-service requires an elevated prompt (Run as administrator).");
+            "install-autostart" => await InstallAsync(args, ScopeFrom(args, AutostartScope.User)),
+            "uninstall-autostart" => await UninstallAsync(ScopeFrom(args, AutostartScope.User)),
+            "start-autostart" => await ControlAsync(ScopeFrom(args, AutostartScope.User), start: true),
+            "stop-autostart" => await ControlAsync(ScopeFrom(args, AutostartScope.User), start: false),
+
+            "install-service" => await InstallAsync(args, AutostartScope.System),
+            "uninstall-service" => await UninstallAsync(AutostartScope.System),
+            "start-service" => await ControlAsync(AutostartScope.System, start: true),
+            "stop-service" => await ControlAsync(AutostartScope.System, start: false),
+            "install-task" => await InstallAsync(args, AutostartScope.User),
+            "uninstall-task" => await UninstallAsync(AutostartScope.User),
+
+            "status" => await ShowStatusAsync(),
+            _ => 64
+        };
+    }
+
+    private static AutostartScope ScopeFrom(string[] args, AutostartScope fallback) =>
+        GetOption(args, "--scope")?.ToLowerInvariant() switch
+        {
+            "system" => AutostartScope.System,
+            "user" => AutostartScope.User,
+            _ => fallback
+        };
+
+    /// <summary>Returns the provider for a scope, or null with a message when the platform has none.</summary>
+    private static IAutostartProvider? Provider(AutostartScope scope)
+    {
+        if (scope == AutostartScope.User)
+            return Platform.UserAutostart;
+
+        var system = Platform.SystemAutostart;
+        if (system is null)
+            Console.Error.WriteLine($"{Platform.DisplayName} has no system-wide autostart host. Use --scope user.");
+
+        return system;
+    }
+
+    private static async Task<int> InstallAsync(string[] args, AutostartScope scope)
+    {
+        var provider = Provider(scope);
+        if (provider is null)
+            return 64;
+
+        var options = new AutostartOptions
+        {
+            // --no-boot is the Windows spelling and stays; --no-start-before-sign-in reads better
+            // everywhere else and means the same thing.
+            StartBeforeSignIn = !args.Contains("--no-boot", StringComparer.OrdinalIgnoreCase) &&
+                                !args.Contains("--no-start-before-sign-in", StringComparer.OrdinalIgnoreCase),
+
+            // When this runs elevated, the elevation prompt may have been answered with a different
+            // administrator account; --user keeps the registration owned by the person whose session
+            // the servers actually run in. --account is the Windows-service spelling of the same thing.
+            UserName = GetOption(args, "--user") ?? GetOption(args, "--account"),
+            Password = GetOption(args, "--password")
+        };
+
+        if (provider.RequiresElevation(options) && !Platform.Processes.IsElevated)
+        {
+            Console.Error.WriteLine(
+                $"Installing {provider.DisplayName} with these options needs administrator rights " +
+                $"({Platform.Elevation.Mechanism}).");
             return 5;
         }
 
-        var account = GetOption(args, "--account");
-        var password = GetOption(args, "--password");
+        WarnAboutAccount(scope, options);
 
-        if (string.IsNullOrWhiteSpace(account))
-        {
-            Console.WriteLine("No --account given; the service will run as LocalSystem.");
-            Console.WriteLine("Claude Code credentials live in the user profile, so LocalSystem usually cannot sign in.");
-            Console.WriteLine($"Recommended: install-service --account \"{ProcessHelper.CurrentUserName}\" --password \"<windows password>\"");
-        }
-        else if (string.IsNullOrEmpty(password))
-        {
-            Console.Error.WriteLine("Warning: a user account with a blank password cannot log on as a service (error 1069).");
-        }
+        var command = ResolveTarget(args, scope);
+        var result = await provider.InstallAsync(command, options, CancellationToken.None);
+        Console.WriteLine(result.Message);
 
-        var (exe, arguments) = ResolveTarget(args, asService: true);
-        var install = await WindowsServiceInstaller.InstallAsync(exe, account, password, arguments);
-
-        Console.WriteLine(install.Message);
-        if (!install.Success)
+        if (!result.Success)
             return 1;
 
-        var start = await WindowsServiceInstaller.StartAsync();
-        if (!start.Success)
-        {
-            Console.Error.WriteLine(WindowsServiceInstaller.Explain(start));
-            return start.ExitCode;
-        }
+        if (command.Note is { Length: > 0 } note)
+            Console.WriteLine(note);
 
-        Console.WriteLine($"Service '{WindowsServiceInstaller.ServiceName}' installed and started.");
-        return 0;
+        var start = await provider.StartAsync(CancellationToken.None);
+        Console.WriteLine(start.Message);
+
+        Console.WriteLine(start.Success
+            ? $"{provider.DisplayName} installed and started."
+            : $"{provider.DisplayName} installed, but it did not start.");
+
+        return start.Success ? 0 : 1;
     }
 
-    private static async Task<int> UninstallServiceAsync()
+    /// <summary>
+    /// The one thing that goes wrong on every platform: running the supervisor as an account that is
+    /// not the user Claude Code signed in as. Its credentials live in that user's profile.
+    /// </summary>
+    private static void WarnAboutAccount(AutostartScope scope, AutostartOptions options)
     {
-        if (!ProcessHelper.IsElevated)
+        if (scope != AutostartScope.System || !string.IsNullOrWhiteSpace(options.UserName))
+            return;
+
+        Console.WriteLine("No account given, so the supervisor will run as the system account.");
+        Console.WriteLine($"Claude Code credentials live in the user profile ({Platform.Claude.CredentialSourceDescription}),");
+        Console.WriteLine($"so that account usually cannot sign in. Recommended: --user \"{Platform.Processes.CurrentUserName}\".");
+    }
+
+    private static async Task<int> UninstallAsync(AutostartScope scope)
+    {
+        var provider = Provider(scope);
+        if (provider is null)
+            return 64;
+
+        if (provider.RequiresElevation(new AutostartOptions()) && !Platform.Processes.IsElevated)
         {
-            Console.Error.WriteLine("uninstall-service requires an elevated prompt (Run as administrator).");
+            Console.Error.WriteLine($"Removing {provider.DisplayName} needs administrator rights.");
             return 5;
         }
 
-        await WindowsServiceInstaller.StopAsync();
-        var result = await WindowsServiceInstaller.UninstallAsync();
-        Console.WriteLine(result.Success ? "Service removed." : WindowsServiceInstaller.Explain(result));
-        return result.Success ? 0 : result.ExitCode;
+        await provider.StopAsync(CancellationToken.None);
+        var result = await provider.UninstallAsync(CancellationToken.None);
+        Console.WriteLine(result.Success ? $"{provider.DisplayName} removed. {result.Message}".Trim() : result.Message);
+        return result.Success ? 0 : 1;
     }
 
-    private static async Task<int> ControlServiceAsync(bool start)
+    private static async Task<int> ControlAsync(AutostartScope scope, bool start)
     {
+        var provider = Provider(scope);
+        if (provider is null)
+            return 64;
+
         var result = start
-            ? await WindowsServiceInstaller.StartAsync()
-            : await WindowsServiceInstaller.StopAsync();
+            ? await provider.StartAsync(CancellationToken.None)
+            : await provider.StopAsync(CancellationToken.None);
 
         if (result.Success)
         {
-            Console.WriteLine(start ? "Service started." : "Service stopped.");
+            Console.WriteLine(start ? $"{provider.DisplayName} started." : $"{provider.DisplayName} stopped.");
             return 0;
         }
 
-        Console.Error.WriteLine(WindowsServiceInstaller.Explain(result));
-        return result.ExitCode;
-    }
-
-    private static async Task<int> InstallTaskAsync(string[] args)
-    {
-        var noBoot = args.Contains("--no-boot", StringComparer.OrdinalIgnoreCase);
-
-        // When this runs elevated, UAC may have been answered with a different administrator account;
-        // --user keeps the task registered for the person whose session the servers run in.
-        var user = GetOption(args, "--user");
-        var (exe, arguments) = ResolveTarget(args, asService: false);
-
-        var result = await ScheduledTaskInstaller.InstallAsync(exe, runAtBoot: !noBoot, userName: user, arguments: arguments);
-        Console.WriteLine(result.Combined);
-
-        if (!result.Success)
-        {
-            if (ScheduledTaskInstaller.IsAccessDenied(result) && !noBoot)
-                Console.Error.WriteLine("Registering the boot trigger needs administrator rights. Retry with --no-boot for a logon-only task.");
-
-            return result.ExitCode;
-        }
-
-        var run = await ScheduledTaskInstaller.RunAsync();
-        Console.WriteLine(run.Combined);
-        Console.WriteLine($"Scheduled task '{ScheduledTaskInstaller.TaskName}' installed and started.");
-        return 0;
-    }
-
-    private static async Task<int> UninstallTaskAsync()
-    {
-        await ScheduledTaskInstaller.EndAsync();
-        var result = await ScheduledTaskInstaller.UninstallAsync();
-        Console.WriteLine(result.Combined);
-        return result.Success ? 0 : result.ExitCode;
+        Console.Error.WriteLine(result.Message);
+        return 1;
     }
 
     private static async Task<int> ShowStatusAsync()
     {
-        var service = WindowsServiceInstaller.Query();
-        var task = await ScheduledTaskInstaller.QueryAsync();
         var store = new ConfigStore();
         var config = store.Load();
+        var user = await Platform.UserAutostart.QueryAsync();
 
-        Console.WriteLine($"Config        : {store.Path}");
-        Console.WriteLine($"Sessions      : {config.Sessions.Count}");
-        Console.WriteLine($"Service       : {(service.Installed ? service.Status : "not installed")}");
-        Console.WriteLine($"Scheduled task: {task.Describe()}");
-        Console.WriteLine($"Logs          : {ConfigStore.LogDirectory}");
+        var rows = new List<(string Label, string Value)>
+        {
+            ("Platform", Platform.DisplayName),
+            ("Config", store.Path),
+            ("Sessions", config.Sessions.Count.ToString()),
+            ("Endpoint", Platform.Ipc.EndpointDescription),
+            (Platform.UserAutostart.DisplayName, user.Describe())
+        };
+
+        if (Platform.SystemAutostart is { } system)
+            rows.Add((system.DisplayName, (await system.QueryAsync()).Describe()));
+
+        rows.Add(("Logs", ConfigStore.LogDirectory));
+
+        // The labels are platform names ("Scheduled task", "systemd user unit", "LaunchAgent"), so
+        // the column width cannot be a constant.
+        var width = rows.Max(r => r.Label.Length);
+        foreach (var (label, value) in rows)
+            Console.WriteLine($"{label.PadRight(width)} : {value}");
+
         return 0;
     }
 
@@ -214,20 +266,19 @@ public static class SupervisorCli
     /// What to register. Defaults to this executable, and <c>--exe</c> / <c>--args</c> let the caller
     /// register the desktop application instead, which is what a ClickOnce install needs.
     /// </summary>
-    private static (string Exe, string Arguments) ResolveTarget(string[] args, bool asService)
+    private static SupervisorCommand ResolveTarget(string[] args, AutostartScope scope)
     {
         var exe = GetOption(args, "--exe");
         var arguments = GetOption(args, "--args");
 
         if (!string.IsNullOrWhiteSpace(exe))
         {
-            return (exe, string.IsNullOrWhiteSpace(arguments)
-                ? asService ? SupervisorLauncher.ServiceArgument : SupervisorLauncher.SuperviseArgument
+            return new SupervisorCommand(exe, string.IsNullOrWhiteSpace(arguments)
+                ? scope == AutostartScope.System ? ServiceIdentity.ServiceArgument : ServiceIdentity.SuperviseArgument
                 : arguments);
         }
 
-        var command = SupervisorLauncher.Resolve(AppContext.BaseDirectory, asService);
-        return (command.ExecutablePath, command.Arguments);
+        return Platform.Deployment.ResolveCommand(AppContext.BaseDirectory, scope);
     }
 
     public static string? GetOption(string[] args, string name)
@@ -239,10 +290,16 @@ public static class SupervisorCli
     public static string CurrentExecutablePath()
     {
         var path = Environment.ProcessPath;
-        if (!string.IsNullOrWhiteSpace(path) && path.EndsWith(".exe", StringComparison.OrdinalIgnoreCase))
+
+        // Environment.ProcessPath is the host (dotnet) when the app is run through it; on Windows the
+        // ".exe" test caught that, and a generic "is it our own executable?" test does elsewhere.
+        if (!string.IsNullOrWhiteSpace(path) &&
+            !Path.GetFileNameWithoutExtension(path).Equals("dotnet", StringComparison.OrdinalIgnoreCase))
+        {
             return path;
+        }
 
         return Process.GetCurrentProcess().MainModule?.FileName
-               ?? Path.Combine(AppContext.BaseDirectory, SupervisorDeployment.SupervisorExecutable);
+               ?? Path.Combine(AppContext.BaseDirectory, PlatformLoader.Current.Deployment.SupervisorExecutable);
     }
 }

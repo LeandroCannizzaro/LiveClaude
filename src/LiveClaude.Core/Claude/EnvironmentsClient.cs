@@ -2,6 +2,7 @@ using System.Net;
 using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Text.Json;
+using LiveClaude.Abstractions;
 using LiveClaude.Core.Model;
 
 namespace LiveClaude.Core.Claude;
@@ -54,7 +55,7 @@ public sealed class EnvironmentsClient : IDisposable
         Action<string>? log = null)
     {
         _http = http ?? new HttpClient { Timeout = TimeSpan.FromSeconds(30) };
-        _credentialsFactory = credentialsFactory ?? (() => ClaudeCredentials.Load());
+        _credentialsFactory = credentialsFactory ?? (() => PlatformLoader.Current.Claude.LoadCredentials());
         _log = log;
     }
 

@@ -1,22 +1,26 @@
 using System.Text.Json;
 
-namespace LiveClaude.Core.Claude;
+namespace LiveClaude.Abstractions;
 
 /// <summary>
-/// Reads the OAuth token Claude Code stores for the signed-in user. It is only ever sent to
-/// api.anthropic.com, which is the account that issued it.
+/// Reads the OAuth token Claude Code writes to <c>~/.claude/.credentials.json</c>.
+///
+/// Windows and Linux both use that file, so the parser is shared. macOS is the exception: the CLI
+/// keeps the token in the Keychain there, and its platform assembly reads it from the Keychain and
+/// only falls back to this file.
+///
+/// The token is only ever sent to api.anthropic.com, which is the account that issued it.
 /// </summary>
-public sealed record ClaudeCredentials(string AccessToken, DateTimeOffset? ExpiresAt, string? SubscriptionType)
+public static class ClaudeCredentialsFile
 {
-    public bool IsExpired => ExpiresAt is { } expiry && expiry <= DateTimeOffset.UtcNow;
-
+    /// <summary>The usual location on any platform that stores credentials in a file.</summary>
     public static string DefaultPath => Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
         ".claude",
         ".credentials.json");
 
-    /// <summary>Returns the stored credentials, or null when the user has not signed in on this machine.</summary>
-    public static ClaudeCredentials? Load(string? path = null)
+    /// <summary>Returns the stored credentials, or null when there are none to read.</summary>
+    public static ClaudeCredentials? Read(string? path = null)
     {
         path ??= DefaultPath;
 

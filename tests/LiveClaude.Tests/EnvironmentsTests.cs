@@ -1,6 +1,7 @@
 using System.IO;
 using System.Net;
 using LiveClaude.Core.Claude;
+using LiveClaude.Abstractions;
 using LiveClaude.Core.Model;
 using Xunit;
 
@@ -387,7 +388,7 @@ public class ClaudeCredentialsTests
 
         try
         {
-            var credentials = ClaudeCredentials.Load(path);
+            var credentials = ClaudeCredentialsFile.Read(path);
 
             Assert.NotNull(credentials);
             Assert.Equal("sk-ant-oat01-test", credentials!.AccessToken);
@@ -411,7 +412,7 @@ public class ClaudeCredentialsTests
 
         try
         {
-            Assert.True(ClaudeCredentials.Load(path)!.IsExpired);
+            Assert.True(ClaudeCredentialsFile.Read(path)!.IsExpired);
         }
         finally
         {
@@ -421,5 +422,5 @@ public class ClaudeCredentialsTests
 
     [Fact]
     public void AMissingFileIsNotAnError() =>
-        Assert.Null(ClaudeCredentials.Load(Path.Combine(Path.GetTempPath(), "liveclaude-missing.json")));
+        Assert.Null(ClaudeCredentialsFile.Read(Path.Combine(Path.GetTempPath(), "liveclaude-missing.json")));
 }

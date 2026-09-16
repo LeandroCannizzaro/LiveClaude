@@ -1,15 +1,7 @@
 using System.Runtime.InteropServices;
+using LiveClaude.Abstractions;
 
-namespace LiveClaude.Core.Hosting;
-
-/// <summary>
-/// Outcome of refreshing the stable copy: which files could not be replaced, and the version that
-/// ended up there.
-/// </summary>
-public sealed record DeploymentResult(string ExecutablePath, IReadOnlyList<string> Locked, string? Version)
-{
-    public bool UpToDate => Locked.Count == 0;
-}
+namespace LiveClaude.Platform.Windows.Deployment;
 
 /// <summary>
 /// Gives the supervisor a path that does not move.
@@ -19,9 +11,11 @@ public sealed record DeploymentResult(string ExecutablePath, IReadOnlyList<strin
 /// or a service pointing at an executable that no longer exists. When the app is running from such a
 /// place, the supervisor is copied next to the configuration instead and registered from there.
 /// </summary>
-public static class SupervisorDeployment
+public sealed class WindowsSupervisorDeployment : ISupervisorDeployment
 {
-    public const string SupervisorExecutable = "LiveClaude.Service.exe";
+    public string SupervisorExecutable => "LiveClaude.Service.exe";
+
+    public string AppExecutable => "LiveClaude.exe";
 
     public static string StableRoot => Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
@@ -35,13 +29,13 @@ public static class SupervisorDeployment
     /// place. That is handled by stopping whatever runs from this folder before refreshing it — not
     /// by moving the folder, which would make every update invalidate the registration.
     /// </summary>
-    public static string StableDirectory => StableRoot;
+    public string StableDirectory => StableRoot;
 
-    public static string RunningVersion =>
+    public string RunningVersion =>
         ReadVersion(Environment.ProcessPath ?? "")?.Split('+')[0] ?? "current";
 
     /// <summary>True when the folder the app runs from is replaced on update.</summary>
-    public static bool IsVolatileLocation(string directory) =>
+    public bool IsVolatileLocation(string directory) =>
         directory.Contains(@"\Apps\2.0\", StringComparison.OrdinalIgnoreCase) ||
         directory.Contains(@"\WinGet\Packages\", StringComparison.OrdinalIgnoreCase) ||
         directory.Contains(@"\Temp\", StringComparison.OrdinalIgnoreCase);
@@ -50,7 +44,7 @@ public static class SupervisorDeployment
     /// Returns the supervisor path to register. Copies the application files to
     /// <see cref="StableDirectory"/> first when the current location is a volatile one.
     /// </summary>
-    public static string EnsureDeployed(string? sourceDirectory = null) => Deploy(sourceDirectory).ExecutablePath;
+    public string EnsureDeployed(string? sourceDirectory = null) => Deploy(sourceDirectory).ExecutablePath;
 
     /// <summary>
     /// Refreshes the stable copy and reports what it could not replace.
@@ -59,7 +53,7 @@ public static class SupervisorDeployment
     /// refresh silently kept an old build around — which is how an install could run yesterday's
     /// code and do nothing at all. The caller is expected to stop the supervisor and try again.
     /// </summary>
-    public static DeploymentResult Deploy(string? sourceDirectory = null)
+    public DeploymentResult Deploy(string? sourceDirectory = null)
     {
         sourceDirectory ??= AppContext.BaseDirectory;
         var source = sourceDirectory.TrimEnd('\\', '/');
@@ -78,7 +72,7 @@ public static class SupervisorDeployment
         var path = File.Exists(deployed) ? deployed : localExecutable;
 
         // The app executable is what gets registered on a ClickOnce install, so report its version.
-        var appCopy = Path.Combine(target, "LiveClaude.exe");
+        var appCopy = Path.Combine(target, AppExecutable);
         return new DeploymentResult(path, locked, ReadVersion(File.Exists(appCopy) ? appCopy : path));
     }
 
@@ -119,7 +113,7 @@ public static class SupervisorDeployment
     /// lives. Stopping the task is not always enough: a process orphaned by an earlier run keeps the
     /// lock, and then every install silently registers an old build.
     /// </summary>
-    public static IReadOnlyList<string> StopProcessesIn(string directory)
+    public IReadOnlyList<string> StopProcessesIn(string directory)
     {
         var stopped = new List<string>();
         var folder = directory.TrimEnd('\\', '/');
@@ -152,7 +146,7 @@ public static class SupervisorDeployment
         return stopped;
     }
 
-    public static string? ReadVersion(string executablePath)
+    public string? ReadVersion(string executablePath)
     {
         try
         {
@@ -167,7 +161,53 @@ public static class SupervisorDeployment
     }
 
     /// <summary>Describes what the app did, for the message shown after installing.</summary>
-    public static string? DescribeDeployment(string supervisorPath) =>
+    /// <summary>
+    /// Decides which executable actually hosts the supervisor.
+    ///
+    /// A ClickOnce install ships LiveClaude.Service.exe but not its runtime configuration — .NET
+    /// refuses to start such an executable ("You must install .NET Desktop Runtime"), so registering
+    /// it would leave a task that fails every time. When that file is missing the desktop application
+    /// hosts the supervisor itself: its own runtime configuration is always deployed.
+    /// </summary>
+    public SupervisorCommand ResolveCommand(string directory, AutostartScope scope)
+    {
+        var argument = scope == AutostartScope.System ? ServiceArgument : SuperviseArgument;
+        var supervisor = Path.Combine(directory, SupervisorExecutable);
+
+        if (CanRunStandalone(supervisor))
+            return new SupervisorCommand(supervisor, argument);
+
+        var app = Path.Combine(directory, AppExecutable);
+        if (CanRunStandalone(app))
+        {
+            return new SupervisorCommand(
+                app,
+                argument,
+                "This install does not ship the supervisor's runtime configuration (ClickOnce strips it), " +
+                "so LiveClaude itself hosts the supervisor.");
+        }
+
+        // Nothing verifiable: fall back to the supervisor and let the caller report what happens.
+        return new SupervisorCommand(supervisor, argument);
+    }
+
+    public const string SuperviseArgument = "--supervise";
+    public const string ServiceArgument = "--service";
+
+    /// <summary>
+    /// True when the executable can actually start: .NET needs the matching
+    /// <c>.runtimeconfig.json</c> beside it.
+    /// </summary>
+    public static bool CanRunStandalone(string executablePath)
+    {
+        if (!File.Exists(executablePath))
+            return false;
+
+        var runtimeConfig = Path.ChangeExtension(executablePath, null) + ".runtimeconfig.json";
+        return File.Exists(runtimeConfig);
+    }
+
+    public string? DescribeDeployment(string supervisorPath) =>
         supervisorPath.StartsWith(StableDirectory, StringComparison.OrdinalIgnoreCase)
             ? $"The supervisor was copied to {StableDirectory} so the registration survives app updates."
             : null;
@@ -176,7 +216,7 @@ public static class SupervisorDeployment
     /// Copies what changed and clears the Mark of the Web from every copy. Returns the files that
     /// could not be replaced — normally because a supervisor started from this folder is running.
     /// </summary>
-    public static IReadOnlyList<string> DeployTo(string source, string target)
+    public IReadOnlyList<string> DeployTo(string source, string target)
     {
         var locked = new List<string>();
 

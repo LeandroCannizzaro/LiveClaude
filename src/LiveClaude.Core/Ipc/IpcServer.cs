@@ -1,8 +1,6 @@
-using System.IO.Pipes;
-using System.Security.AccessControl;
-using System.Security.Principal;
 using System.Text;
 using System.Text.Json;
+using LiveClaude.Abstractions;
 using LiveClaude.Core.Model;
 using LiveClaude.Core.Supervision;
 using Microsoft.Extensions.Logging;
@@ -11,8 +9,9 @@ using Microsoft.Extensions.Logging.Abstractions;
 namespace LiveClaude.Core.Ipc;
 
 /// <summary>
-/// Exposes a <see cref="Supervisor"/> over a named pipe so the desktop app can drive a supervisor
-/// that lives in the Windows service (or in the scheduled task) and stream its terminals.
+/// Exposes a <see cref="Supervisor"/> over the platform's IPC endpoint so the desktop app can drive
+/// a supervisor that lives in a service, a scheduled task, a systemd unit or a LaunchAgent, and
+/// stream its terminals.
 /// </summary>
 public sealed class IpcServer : IAsyncDisposable
 {
@@ -20,21 +19,41 @@ public sealed class IpcServer : IAsyncDisposable
     private readonly ILogger _logger;
     private readonly List<ClientConnection> _clients = new();
     private readonly object _clientsGate = new();
+    private readonly IIpcEndpointFactory _endpoint;
     private CancellationTokenSource? _cts;
     private Task? _acceptLoop;
+    private IIpcListener? _listener;
 
-    public IpcServer(Supervisor supervisor, ILogger? logger = null)
+    public IpcServer(Supervisor supervisor, ILogger? logger = null, IIpcEndpointFactory? endpoint = null)
     {
         _supervisor = supervisor;
         _logger = logger ?? NullLogger.Instance;
+        _endpoint = endpoint ?? PlatformLoader.Current.Ipc;
     }
 
-    /// <summary>True when another supervisor already owns the pipe, so this one serves no clients.</summary>
+    /// <summary>True when another supervisor already owns the endpoint, so this one serves no clients.</summary>
     public bool EndpointUnavailable { get; private set; }
 
     public void Start()
     {
         _cts = new CancellationTokenSource();
+
+        try
+        {
+            _listener = _endpoint.Listen();
+        }
+        catch (IpcEndpointBusyException ex)
+        {
+            // Retrying would only fill the log, and this supervisor keeps working without an endpoint.
+            _logger.LogWarning(
+                ex,
+                "Another LiveClaude supervisor already owns {Endpoint}, so this one will not serve the app. " +
+                "Two supervisors means two sets of servers: stop the other host if that is not intended.",
+                _endpoint.EndpointDescription);
+            EndpointUnavailable = true;
+            return;
+        }
+
         _supervisor.StatusChanged += OnStatusChanged;
         _supervisor.TerminalOutput += OnTerminalOutput;
         _acceptLoop = Task.Run(() => AcceptLoopAsync(_cts.Token));
@@ -42,15 +61,17 @@ public sealed class IpcServer : IAsyncDisposable
 
     private async Task AcceptLoopAsync(CancellationToken ct)
     {
+        var listener = _listener;
+        if (listener is null)
+            return;
+
         while (!ct.IsCancellationRequested)
         {
-            NamedPipeServerStream? pipe = null;
             try
             {
-                pipe = CreatePipe();
-                await pipe.WaitForConnectionAsync(ct).ConfigureAwait(false);
+                var connection = await listener.AcceptAsync(ct).ConfigureAwait(false);
 
-                var client = new ClientConnection(pipe, this, _logger);
+                var client = new ClientConnection(connection, this, _logger);
                 lock (_clientsGate)
                     _clients.Add(client);
 
@@ -63,53 +84,20 @@ public sealed class IpcServer : IAsyncDisposable
             }
             catch (OperationCanceledException)
             {
-                pipe?.Dispose();
                 break;
             }
-            catch (UnauthorizedAccessException)
+            catch (IpcEndpointBusyException ex)
             {
-                // The pipe name is taken: another supervisor owns it. Retrying every second would
-                // only fill the log, and this one keeps supervising without an endpoint.
-                pipe?.Dispose();
-                _logger.LogWarning(
-                    "Another LiveClaude supervisor already owns the '{Pipe}' endpoint, so this one will not serve the app. " +
-                    "Two supervisors means two sets of servers: stop the scheduled task or the service if that is not intended.",
-                    IpcProtocol.PipeName);
+                _logger.LogWarning(ex, "The IPC endpoint {Endpoint} was taken over.", _endpoint.EndpointDescription);
                 EndpointUnavailable = true;
                 break;
             }
             catch (Exception ex)
             {
-                pipe?.Dispose();
                 _logger.LogError(ex, "IPC accept loop error.");
                 await Task.Delay(TimeSpan.FromSeconds(1), CancellationToken.None).ConfigureAwait(false);
             }
         }
-    }
-
-    private static NamedPipeServerStream CreatePipe()
-    {
-        // The service may run under a different account than the desktop app, so authenticated
-        // users get read/write access explicitly instead of relying on the default owner-only ACL.
-        var security = new PipeSecurity();
-        security.AddAccessRule(new PipeAccessRule(
-            new SecurityIdentifier(WellKnownSidType.AuthenticatedUserSid, null),
-            PipeAccessRights.ReadWrite,
-            AccessControlType.Allow));
-        security.AddAccessRule(new PipeAccessRule(
-            new SecurityIdentifier(WellKnownSidType.BuiltinAdministratorsSid, null),
-            PipeAccessRights.FullControl,
-            AccessControlType.Allow));
-
-        return NamedPipeServerStreamAcl.Create(
-            IpcProtocol.PipeName,
-            PipeDirection.InOut,
-            NamedPipeServerStream.MaxAllowedServerInstances,
-            PipeTransmissionMode.Byte,
-            PipeOptions.Asynchronous,
-            inBufferSize: 64 * 1024,
-            outBufferSize: 64 * 1024,
-            pipeSecurity: security);
     }
 
     private void OnStatusChanged(SupervisorStatus status) =>
@@ -239,24 +227,25 @@ public sealed class IpcServer : IAsyncDisposable
             _clients.Clear();
         }
 
+        _listener?.Dispose();
         _cts?.Dispose();
     }
 
     private sealed class ClientConnection : IDisposable
     {
-        private readonly NamedPipeServerStream _pipe;
+        private readonly IIpcConnection _connection;
         private readonly IpcServer _server;
         private readonly ILogger _logger;
         private readonly StreamWriter _writer;
         private readonly SemaphoreSlim _writeLock = new(1, 1);
         private readonly HashSet<string> _attached = new(StringComparer.OrdinalIgnoreCase);
 
-        public ClientConnection(NamedPipeServerStream pipe, IpcServer server, ILogger logger)
+        public ClientConnection(IIpcConnection connection, IpcServer server, ILogger logger)
         {
-            _pipe = pipe;
+            _connection = connection;
             _server = server;
             _logger = logger;
-            _writer = new StreamWriter(pipe, new UTF8Encoding(false)) { AutoFlush = false };
+            _writer = new StreamWriter(connection.Stream, new UTF8Encoding(false)) { AutoFlush = false };
         }
 
         public bool IsAttachedTo(string id)
@@ -279,14 +268,14 @@ public sealed class IpcServer : IAsyncDisposable
 
         public async Task RunAsync(CancellationToken ct)
         {
-            // leaveOpen: the writer shares this pipe and must not find it closed underneath it.
-            using var reader = new StreamReader(_pipe, new UTF8Encoding(false),
+            // leaveOpen: the writer shares this stream and must not find it closed underneath it.
+            using var reader = new StreamReader(_connection.Stream, new UTF8Encoding(false),
                 detectEncodingFromByteOrderMarks: false, bufferSize: 1024, leaveOpen: true);
 
             // Push the current status straight away so the UI has something to show.
             TrySend(IpcProtocol.Events.Status, _server._supervisor.GetStatus());
 
-            while (!ct.IsCancellationRequested && _pipe.IsConnected)
+            while (!ct.IsCancellationRequested && _connection.IsConnected)
             {
                 string? line;
                 try
@@ -354,7 +343,7 @@ public sealed class IpcServer : IAsyncDisposable
 
         private async Task SendAsync(IpcEnvelope envelope)
         {
-            if (!_pipe.IsConnected)
+            if (!_connection.IsConnected)
                 return;
 
             await _writeLock.WaitAsync().ConfigureAwait(false);
@@ -381,7 +370,7 @@ public sealed class IpcServer : IAsyncDisposable
             try
             {
                 _writer.Dispose();
-                _pipe.Dispose();
+                _connection.Dispose();
             }
             catch (Exception ex) when (ex is IOException or ObjectDisposedException)
             {

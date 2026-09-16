@@ -3,7 +3,8 @@ using System.Text.Json.Serialization;
 
 namespace LiveClaude.Core.Ipc;
 
-/// <summary>Wire format: one JSON object per line over a named pipe.</summary>
+/// <summary>Wire format: one JSON object per line. The transport underneath it is the platform's
+/// (a named pipe on Windows, a Unix domain socket elsewhere); this shape never changes.</summary>
 public sealed class IpcEnvelope
 {
     /// <summary>"req", "res" or "evt".</summary>
@@ -21,7 +22,11 @@ public sealed class IpcEnvelope
 
 public static class IpcProtocol
 {
-    public const string PipeName = "LiveClaude.v1";
+    /// <summary>
+    /// Bumped when the message shapes change. The platform endpoint factories build their pipe name
+    /// or socket file name from it, so an old app never talks to a new supervisor.
+    /// </summary>
+    public const string Version = "v1";
 
     public static readonly JsonSerializerOptions Json = new()
     {

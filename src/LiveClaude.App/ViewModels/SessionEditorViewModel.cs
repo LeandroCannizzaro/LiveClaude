@@ -135,7 +135,11 @@ public sealed class SessionEditorViewModel : ObservableObject
         {
             var config = ToConfig();
             var args = Core.Claude.ClaudeArgs.BuildRemoteControl(config);
-            return "claude " + string.Join(' ', args.Select(Core.Claude.ClaudeArgs.Quote));
+
+            // Quoted the way this platform's shell would, so what the preview shows is what someone
+            // could paste into their own terminal — Windows and POSIX do not agree on that.
+            return Abstractions.PlatformLoader.Current.Processes.FormatCommandLine(
+                Abstractions.PlatformLoader.Current.Claude.ExecutableName, args);
         }
     }
 

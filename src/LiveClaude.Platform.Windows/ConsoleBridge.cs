@@ -1,6 +1,6 @@
 using System.Runtime.InteropServices;
 
-namespace LiveClaude.Core.Hosting;
+namespace LiveClaude.Platform.Windows;
 
 /// <summary>
 /// The supervisor is a windowed executable on purpose: a process that owns a console hands its own

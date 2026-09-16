@@ -1,7 +1,7 @@
 using System.Runtime.InteropServices;
 using System.Security.Principal;
 
-namespace LiveClaude.Core.Hosting;
+namespace LiveClaude.Platform.Windows.Autostart;
 
 /// <summary>
 /// Grants "Log on as a service" (SeServiceLogonRight) to an account.

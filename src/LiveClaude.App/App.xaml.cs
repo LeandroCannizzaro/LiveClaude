@@ -82,7 +82,7 @@ public partial class App : Application
             var exitCode = 1;
             try
             {
-                LiveClaude.Core.Hosting.ConsoleBridge.AttachToParent();
+                LiveClaude.Abstractions.PlatformLoader.Current.AttachToParentConsole();
                 exitCode = await LiveClaude.Service.SupervisorCli.RunAsync(args);
             }
             catch (Exception ex)

@@ -7,77 +7,78 @@
       <TextBlock Text="Service &amp; startup" Style="{StaticResource Heading}" />
       <TextBlock Text="{Binding Hosting.SupervisorBuild}" Style="{StaticResource Mono}" Margin="0,0,0,8" />
       <TextBlock Style="{StaticResource SubHeading}"
-                 Text="Pick who keeps the servers alive when this window is closed. The scheduled task runs in your own session and is the safest default; the Windows service starts even before you sign in, but must run under your account to reach the Claude Code credentials." />
+                 Text="Pick who keeps the servers alive when this window is closed. The host that runs in your own signed-in session is the safest default; the system-wide one starts even before you sign in, but must run under your account to reach the Claude Code credentials." />
 
-      <!-- Scheduled task -->
-      <Border Style="{StaticResource Card}">
+      <!-- The host that runs in the signed-in session: scheduled task, systemd user unit, LaunchAgent. -->
+      <Border Style="{StaticResource Card}" DataContext="{Binding Hosting.UserHost}">
         <StackPanel>
           <StackPanel Orientation="Horizontal">
-            <TextBlock Text="Scheduled task" FontSize="15" FontWeight="SemiBold" />
+            <TextBlock Text="{Binding DisplayName}" FontSize="15" FontWeight="SemiBold" />
             <Border Background="{StaticResource SurfaceAltBrush}" CornerRadius="10" Padding="8,2" Margin="10,1,0,0">
-              <TextBlock Text="{Binding Hosting.TaskStatus}" FontSize="11.5" Foreground="{StaticResource MutedTextBrush}" />
+              <TextBlock Text="{Binding Status}" FontSize="11.5" Foreground="{StaticResource MutedTextBrush}" />
             </Border>
             <TextBlock Text="recommended" Foreground="{StaticResource SuccessBrush}" FontSize="11.5" Margin="10,2,0,0" />
           </StackPanel>
 
-          <TextBlock Style="{StaticResource SubHeading}" Margin="0,8,0,4"
-                     Text="Triggers at logon and 30 seconds after boot, restarts every minute if it fails, never stops on battery, no time limit." />
+          <TextBlock Style="{StaticResource SubHeading}" Margin="0,8,0,4" Text="{Binding Summary}" />
           <TextBlock Style="{StaticResource SubHeading}" Margin="0,0,0,10"
-                     Text="Windows only lets an administrator register the boot trigger, so installing asks for elevation. Decline it and the task is still installed for logon only — everything works except starting before anyone signs in." />
+                     Text="{Binding StartBeforeSignInRequirement}"
+                     Visibility="{Binding StartBeforeSignInRequirement, Converter={StaticResource StringToVisibility}}" />
 
           <StackPanel Orientation="Horizontal">
-            <Button Content="Install / update task" Style="{StaticResource PrimaryButton}" Click="OnInstallTask" />
-            <Button Content="Start" Click="OnStartTask" />
-            <Button Content="Stop" Click="OnStopTask" />
-            <Button Content="Remove" Click="OnRemoveTask" />
+            <Button Content="Install / update" Style="{StaticResource PrimaryButton}" Click="OnInstallUserHost" />
+            <Button Content="Start" Click="OnStartUserHost" />
+            <Button Content="Stop" Click="OnStopUserHost" />
+            <Button Content="Remove" Click="OnRemoveUserHost" />
           </StackPanel>
 
-          <TextBlock Text="{Binding Hosting.TaskResult}" Style="{StaticResource Mono}" Margin="0,12,0,0"
+          <TextBlock Text="{Binding Result}" Style="{StaticResource Mono}" Margin="0,12,0,0"
                      TextWrapping="Wrap" Foreground="{StaticResource TextBrush}"
-                     Visibility="{Binding Hosting.HasTaskResult, Converter={StaticResource BoolToVisibility}}" />
+                     Visibility="{Binding HasResult, Converter={StaticResource BoolToVisibility}}" />
         </StackPanel>
       </Border>
 
-      <!-- Windows service -->
-      <Border Style="{StaticResource Card}">
+      <!-- The machine-wide host, where the platform has one: Windows service, systemd system unit, LaunchDaemon. -->
+      <Border Style="{StaticResource Card}" DataContext="{Binding Hosting.SystemHost}"
+              Visibility="{Binding DataContext.Hosting.HasSystemHost, RelativeSource={RelativeSource AncestorType=UserControl}, Converter={StaticResource BoolToVisibility}}">
         <StackPanel>
           <StackPanel Orientation="Horizontal">
-            <TextBlock Text="Windows service" FontSize="15" FontWeight="SemiBold" />
+            <TextBlock Text="{Binding DisplayName}" FontSize="15" FontWeight="SemiBold" />
             <Border Background="{StaticResource SurfaceAltBrush}" CornerRadius="10" Padding="8,2" Margin="10,1,0,0">
-              <TextBlock Text="{Binding Hosting.ServiceStatus}" FontSize="11.5" Foreground="{StaticResource MutedTextBrush}" />
+              <TextBlock Text="{Binding Status}" FontSize="11.5" Foreground="{StaticResource MutedTextBrush}" />
             </Border>
           </StackPanel>
 
-          <TextBlock Style="{StaticResource SubHeading}" Margin="0,8,0,4"
-                     Text="Installed with automatic start and sc.exe failure actions (restart after 5s, 10s, then every 30s). Installation asks for elevation." />
+          <TextBlock Style="{StaticResource SubHeading}" Margin="0,8,0,4" Text="{Binding Summary}" />
           <TextBlock Style="{StaticResource SubHeading}" Foreground="{StaticResource WarningBrush}" Margin="0,0,0,6"
-                     Text="Run it as your own Windows account: LocalSystem has a different profile and will not find the Claude Code sign-in." />
+                     Text="Run it as your own account: the system account has a different profile and will not find the Claude Code sign-in." />
 
-          <Grid>
+          <Grid Visibility="{Binding SupportsAccount, Converter={StaticResource BoolToVisibility}}">
             <Grid.ColumnDefinitions>
               <ColumnDefinition Width="*" />
               <ColumnDefinition Width="*" />
             </Grid.ColumnDefinitions>
             <StackPanel Grid.Column="0" Margin="0,0,10,0">
               <TextBlock Text="Account" Style="{StaticResource FieldLabel}" />
-              <TextBox Text="{Binding Hosting.Account, UpdateSourceTrigger=PropertyChanged}" />
+              <TextBox Text="{Binding DataContext.Hosting.Account, RelativeSource={RelativeSource AncestorType=UserControl}, UpdateSourceTrigger=PropertyChanged}" />
             </StackPanel>
-            <StackPanel Grid.Column="1" Margin="10,0,0,0">
-              <TextBlock Text="Windows password (used once by sc.exe, never stored)" Style="{StaticResource FieldLabel}" />
+            <StackPanel Grid.Column="1" Margin="10,0,0,0"
+                        Visibility="{Binding RequiresPassword, Converter={StaticResource BoolToVisibility}}">
+              <TextBlock Text="Password (used once during the install, never stored)" Style="{StaticResource FieldLabel}" />
               <PasswordBox x:Name="ServicePassword" />
             </StackPanel>
           </Grid>
 
           <StackPanel Orientation="Horizontal" Margin="0,14,0,0">
-            <Button Content="Install service" Click="OnInstallService" />
-            <Button Content="Start" Click="OnStartService" />
-            <Button Content="Stop" Click="OnStopService" />
-            <Button Content="Remove" Click="OnRemoveService" />
+            <Button Content="Install" Click="OnInstallSystemHost" />
+            <Button Content="Start" Click="OnStartSystemHost" />
+            <Button Content="Stop" Click="OnStopSystemHost" />
+            <Button Content="Remove" Click="OnRemoveSystemHost" />
           </StackPanel>
 
-          <TextBlock Text="{Binding Hosting.ServiceResult}" Style="{StaticResource Mono}" Margin="0,12,0,0"
+          <TextBlock Text="{Binding Result}" Style="{StaticResource Mono}" Margin="0,12,0,0"
                      TextWrapping="Wrap" Foreground="{StaticResource TextBrush}"
-                     Visibility="{Binding Hosting.HasServiceResult, Converter={StaticResource BoolToVisibility}}" />
+                     Visibility="{Binding HasResult, Converter={StaticResource BoolToVisibility}}" />
         </StackPanel>
       </Border>
 

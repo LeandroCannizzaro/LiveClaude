@@ -1,19 +1,13 @@
 using System.Diagnostics;
 using System.Security.Principal;
 using System.Text;
+using LiveClaude.Abstractions;
 
-namespace LiveClaude.Core.Hosting;
+namespace LiveClaude.Platform.Windows;
 
-public sealed record ProcessResult(int ExitCode, string StandardOutput, string StandardError)
+public sealed class WindowsProcessLauncher : IProcessLauncher
 {
-    public bool Success => ExitCode == 0;
-    public string Combined => string.Join(Environment.NewLine,
-        new[] { StandardOutput, StandardError }.Where(s => !string.IsNullOrWhiteSpace(s)));
-}
-
-public static class ProcessHelper
-{
-    public static bool IsElevated
+    public bool IsElevated
     {
         get
         {
@@ -22,44 +16,25 @@ public static class ProcessHelper
         }
     }
 
-    public static string CurrentUserName => WindowsIdentity.GetCurrent().Name;
+    public string CurrentUserName => WindowsIdentity.GetCurrent().Name;
 
-    public static async Task<ProcessResult> RunAsync(
+    public Task<ProcessResult> RunAsync(
         string fileName,
         IEnumerable<string> arguments,
         string? workingDirectory = null,
-        CancellationToken ct = default)
-    {
-        var psi = new ProcessStartInfo(fileName)
-        {
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-            UseShellExecute = false,
-            CreateNoWindow = true,
-            WorkingDirectory = workingDirectory ?? Environment.CurrentDirectory,
-            StandardOutputEncoding = Encoding.UTF8,
-            StandardErrorEncoding = Encoding.UTF8
-        };
+        CancellationToken ct = default) =>
+        ProcessRunner.RunAsync(fileName, arguments, workingDirectory, ct);
 
-        foreach (var argument in arguments)
-            psi.ArgumentList.Add(argument);
-
-        using var process = Process.Start(psi)
-                            ?? throw new InvalidOperationException($"Could not start '{fileName}'.");
-
-        var stdout = process.StandardOutput.ReadToEndAsync(ct);
-        var stderr = process.StandardError.ReadToEndAsync(ct);
-        await process.WaitForExitAsync(ct).ConfigureAwait(false);
-
-        return new ProcessResult(process.ExitCode, await stdout.ConfigureAwait(false), await stderr.ConfigureAwait(false));
-    }
+    public string FormatCommandLine(string executable, IEnumerable<string> arguments) =>
+        WindowsCommandLine.Build(executable, arguments);
 
     /// <summary>
     /// Runs a program with a command line built by the caller.
     ///
     /// sc.exe parses its own command line and rejects the quoting .NET applies to
     /// <see cref="ProcessStartInfo.ArgumentList"/>: <c>sc create X "binPath= …"</c> comes back as a
-    /// usage error (1639). Its options have to be passed exactly as they would be typed.
+    /// usage error (1639). Its options have to be passed exactly as they would be typed, which is
+    /// why this stays Windows-only rather than joining <see cref="IProcessLauncher"/>.
     /// </summary>
     public static async Task<ProcessResult> RunRawAsync(
         string fileName,
@@ -86,9 +61,16 @@ public static class ProcessHelper
 
         return new ProcessResult(process.ExitCode, await stdout.ConfigureAwait(false), await stderr.ConfigureAwait(false));
     }
+}
 
-    /// <summary>Re-launches this executable elevated (UAC) with the given arguments and waits for it.</summary>
-    public static async Task<int> RunElevatedAsync(string fileName, IEnumerable<string> arguments, CancellationToken ct = default)
+/// <summary>Re-launches an executable through UAC and waits for it.</summary>
+public sealed class WindowsElevator : IPrivilegeElevator
+{
+    public bool IsAvailable => true;
+
+    public string Mechanism => "UAC";
+
+    public async Task<int> RunElevatedAsync(string fileName, IEnumerable<string> arguments, CancellationToken ct = default)
     {
         var psi = new ProcessStartInfo(fileName)
         {
@@ -106,4 +88,18 @@ public static class ProcessHelper
         await process.WaitForExitAsync(ct).ConfigureAwait(false);
         return process.ExitCode;
     }
+}
+
+public sealed class WindowsShellIntegration : IShellIntegration
+{
+    public void Reveal(string path)
+    {
+        if (File.Exists(path))
+            Process.Start(new ProcessStartInfo("explorer.exe", $"/select,\"{path}\"") { UseShellExecute = true });
+        else if (Directory.Exists(path))
+            Process.Start(new ProcessStartInfo("explorer.exe", $"\"{path}\"") { UseShellExecute = true });
+    }
+
+    public void OpenUrl(string url) =>
+        Process.Start(new ProcessStartInfo(url) { UseShellExecute = true });
 }

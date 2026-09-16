@@ -1,28 +1,18 @@
 using System.ComponentModel;
 using System.Runtime.InteropServices;
 using System.Text;
-using LiveClaude.Core.Claude;
+using LiveClaude.Abstractions;
 using Microsoft.Win32.SafeHandles;
-using static LiveClaude.Core.Pty.NativeMethods;
+using static LiveClaude.Platform.Windows.Pty.NativeMethods;
 
-namespace LiveClaude.Core.Pty;
-
-public sealed class PtyOptions
-{
-    public required string ExecutablePath { get; init; }
-    public IReadOnlyList<string> Arguments { get; init; } = [];
-    public string? WorkingDirectory { get; init; }
-    public IReadOnlyDictionary<string, string>? Environment { get; init; }
-    public short Columns { get; init; } = 120;
-    public short Rows { get; init; } = 30;
-}
+namespace LiveClaude.Platform.Windows.Pty;
 
 /// <summary>
 /// A child process hosted in a Windows pseudo console (ConPTY). Unlike plain redirected pipes this
 /// gives the CLI a real terminal, so its full-screen prompts — workspace trust, the Remote Control
 /// confirmation — render and can be answered, including from a Windows service with no desktop.
 /// </summary>
-public sealed class PtyProcess : IDisposable
+public sealed class ConPtyProcess : IPtyProcess
 {
     private readonly IntPtr _pseudoConsole;
     private readonly IntPtr _processHandle;
@@ -33,7 +23,7 @@ public sealed class PtyProcess : IDisposable
     private RegisteredWaitHandle? _waitHandle;
     private int _disposed;
 
-    private PtyProcess(IntPtr pseudoConsole, PROCESS_INFORMATION pi, SafeFileHandle inputWrite, SafeFileHandle outputRead)
+    private ConPtyProcess(IntPtr pseudoConsole, PROCESS_INFORMATION pi, SafeFileHandle inputWrite, SafeFileHandle outputRead)
     {
         _pseudoConsole = pseudoConsole;
         _processHandle = pi.hProcess;
@@ -66,12 +56,12 @@ public sealed class PtyProcess : IDisposable
     /// <summary>
     /// True when this process owns a console window. Windows then attaches every child to that
     /// console and ignores the pseudo-console attribute, so the child's output never reaches the
-    /// pipes — which is why the supervisor and the app are both built as windowed executables and
+    /// pipes — which is why the supervisor and the app are both windowed executables and
     /// only attach to the caller's console for one-shot CLI commands.
     /// </summary>
     public static bool HasOwnConsole => GetConsoleCP() != 0 || GetConsoleWindow() != IntPtr.Zero;
 
-    public static PtyProcess Start(PtyOptions options)
+    public static ConPtyProcess Start(PtyOptions options)
     {
         var attributes = new SECURITY_ATTRIBUTES
         {
@@ -105,7 +95,10 @@ public sealed class PtyProcess : IDisposable
 
             environmentBlock = CreateEnvironmentBlock(options.Environment);
 
-            var commandLine = ClaudeArgs.ToCommandLine(options.ExecutablePath, options.Arguments);
+            // CreateProcessW takes one string, so the argument vector has to be quoted back into the
+            // form CommandLineToArgvW parses. This is the only place that conversion is correct —
+            // every other platform hands the vector to the child untouched.
+            var commandLine = WindowsCommandLine.Build(options.ExecutablePath, options.Arguments);
 
             var created = CreateProcessW(
                 null,
@@ -126,7 +119,7 @@ public sealed class PtyProcess : IDisposable
             inputRead.Dispose();
             outputWrite.Dispose();
 
-            return new PtyProcess(pseudoConsole, processInfo, inputWrite, outputRead);
+            return new ConPtyProcess(pseudoConsole, processInfo, inputWrite, outputRead);
         }
         catch
         {
@@ -173,7 +166,7 @@ public sealed class PtyProcess : IDisposable
     /// Sends Ctrl+C into the pseudo console. This is how a Remote Control server is meant to stop:
     /// it deregisters itself, instead of leaving a dead entry behind as a hard kill does.
     /// </summary>
-    public void SendCtrlC()
+    public void SendInterrupt()
     {
         if (HasExited)
             return;
@@ -326,4 +319,14 @@ public sealed class PtyProcess : IDisposable
             return false;
         }
     }
+}
+
+/// <summary>Starts ConPTY-hosted processes.</summary>
+public sealed class WindowsPtyFactory : IPtyFactory
+{
+    public bool IsSupported => ConPtyProcess.IsSupported;
+
+    public bool HostOwnsConsole => ConPtyProcess.HasOwnConsole;
+
+    public IPtyProcess Start(PtyOptions options) => ConPtyProcess.Start(options);
 }

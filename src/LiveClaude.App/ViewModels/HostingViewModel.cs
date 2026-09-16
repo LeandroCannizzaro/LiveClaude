@@ -1,64 +1,62 @@
 using System.ComponentModel;
 using System.IO;
-using LiveClaude.Core.Hosting;
+using LiveClaude.Abstractions;
 using LiveClaude.Core.Logging;
 
 namespace LiveClaude.App.ViewModels;
 
-/// <summary>Drives the two supported hosts: the Windows service and the scheduled task.</summary>
-public sealed class HostingViewModel : ObservableObject
+/// <summary>
+/// One autostart host — a scheduled task, a Windows service, a systemd unit, a LaunchAgent — as the
+/// Hosting page sees it. The page shows one card per scope the platform offers.
+/// </summary>
+public sealed class AutostartHostViewModel : ObservableObject
 {
-    private string _serviceStatus = "unknown";
-    private string _taskStatus = "unknown";
-    private string _account = ProcessHelper.CurrentUserName;
-    private string _taskResult = "";
-    private string _serviceResult = "";
+    private readonly IAutostartProvider _provider;
+    private readonly HostingViewModel _owner;
+
+    private string _status = "unknown";
+    private string _result = "";
     private bool _busy;
-    private string? _supervisorPath;
 
-    public string ServiceStatus
+    public AutostartHostViewModel(IAutostartProvider provider, HostingViewModel owner)
     {
-        get => _serviceStatus;
-        private set => SetProperty(ref _serviceStatus, value);
+        _provider = provider;
+        _owner = owner;
     }
 
-    public string TaskStatus
+    public string DisplayName => _provider.DisplayName;
+
+    public string Kind => _provider.Kind;
+
+    public string Summary => _provider.Summary;
+
+    public AutostartScope Scope => _provider.Scope;
+
+    public bool SupportsAccount => _provider.SupportsAccount;
+
+    public bool RequiresPassword => _provider.RequiresPassword;
+
+    public string? StartBeforeSignInRequirement => _provider.StartBeforeSignInRequirement;
+
+    public bool IsRecommended => Scope == AutostartScope.User;
+
+    public string Status
     {
-        get => _taskStatus;
-        private set => SetProperty(ref _taskStatus, value);
+        get => _status;
+        private set => SetProperty(ref _status, value);
     }
 
-    public string Account
+    public string Result
     {
-        get => _account;
-        set => SetProperty(ref _account, value);
-    }
-
-    /// <summary>Outcome of the last scheduled-task operation, shown under that card.</summary>
-    public string TaskResult
-    {
-        get => _taskResult;
+        get => _result;
         private set
         {
-            if (SetProperty(ref _taskResult, value))
-                OnPropertyChanged(nameof(HasTaskResult));
+            if (SetProperty(ref _result, value))
+                OnPropertyChanged(nameof(HasResult));
         }
     }
 
-    public bool HasTaskResult => !string.IsNullOrWhiteSpace(TaskResult);
-
-    /// <summary>Outcome of the last Windows-service operation, shown under that card.</summary>
-    public string ServiceResult
-    {
-        get => _serviceResult;
-        private set
-        {
-            if (SetProperty(ref _serviceResult, value))
-                OnPropertyChanged(nameof(HasServiceResult));
-        }
-    }
-
-    public bool HasServiceResult => !string.IsNullOrWhiteSpace(ServiceResult);
+    public bool HasResult => !string.IsNullOrWhiteSpace(Result);
 
     public bool Busy
     {
@@ -66,82 +64,300 @@ public sealed class HostingViewModel : ObservableObject
         private set => SetProperty(ref _busy, value);
     }
 
-    /// <summary>
-    /// Path of the supervisor to register. ClickOnce and winget put the app in a folder that is
-    /// replaced on every update, so in that case a stable copy is deployed first.
-    /// </summary>
-    public string SupervisorPath => _supervisorPath ??= SupervisorDeployment.EnsureDeployed();
-
-    /// <summary>
-    /// Refreshes the stable copy before registering anything.
-    ///
-    /// The scheduled task runs that copy, so its files are locked while it runs and the refresh used
-    /// to be skipped without a word: every install then ran whatever build was there before, which
-    /// is how an install could quietly do nothing. The supervisor is stopped, the copy refreshed and
-    /// the supervisor left for the caller to start again.
-    /// </summary>
-    private async Task<(SupervisorCommand Command, string Note)> PrepareAsync(bool asService)
+    public async Task RefreshAsync()
     {
-        // Nothing may be running from the deployment folder while it is refreshed: a process started
-        // from there holds its own executable, and the copy then keeps an old build that gets
-        // registered and run. Stop the hosts, then kill anything left over from earlier attempts.
-        await ScheduledTaskInstaller.EndAsync();
-        await WindowsServiceInstaller.StopAsync();
+        var state = await _provider.QueryAsync();
 
-        var stopped = SupervisorDeployment.StopProcessesIn(SupervisorDeployment.StableDirectory).ToList();
-        if (stopped.Count > 0)
-            await Task.Delay(TimeSpan.FromSeconds(1));
-
-        var deployment = SupervisorDeployment.Deploy();
-
-        // One more round if something grabbed a file in the meantime.
-        if (!deployment.UpToDate)
+        Status = state.Installed switch
         {
-            stopped.AddRange(SupervisorDeployment.StopProcessesIn(SupervisorDeployment.StableDirectory));
-            await Task.Delay(TimeSpan.FromSeconds(1));
-            deployment = SupervisorDeployment.Deploy();
-        }
+            true => state.Status ?? "installed",
+            // The supervisor answering on the endpoint is proof it runs, even when the registration
+            // itself is unreadable from this account.
+            false when string.Equals(_owner.ConnectedSupervisorHost, Kind, StringComparison.OrdinalIgnoreCase) =>
+                "running (not listed for this account)",
+            false => "not installed",
+            _ => "running, not readable here"
+        };
 
-        _supervisorPath = deployment.ExecutablePath;
-        var command = ResolveCommand(asService);
-
-        var notes = new List<string>();
-
-        if (SupervisorDeployment.DescribeDeployment(deployment.ExecutablePath) is { } deployed)
-            notes.Add(deployed);
-
-        if (command.Note is not null)
-            notes.Add(command.Note);
-
-        if (deployment.Version is not null)
-            notes.Add($"Registered build: {deployment.Version}.");
-
-        if (stopped.Count > 0)
-            notes.Add($"Stopped {string.Join(", ", stopped)} to refresh the copy.");
-
-        if (!deployment.UpToDate)
-        {
-            notes.Add(
-                $"Warning: {deployment.Locked.Count} file(s) could not be refreshed because something still has them " +
-                $"open ({string.Join(", ", deployment.Locked.Take(3))}). Close every LiveClaude window, stop the task " +
-                "and the service, then install again — otherwise this registers an older build.");
-        }
-
-        return (command, string.Join(" ", notes));
+        // Explain an unreadable registration once, rather than leaving the card looking wrong.
+        if (state.Installed is null && state.Detail is not null && string.IsNullOrWhiteSpace(Result))
+            Result = state.Detail;
     }
 
     /// <summary>
-    /// The executable and arguments to register. A ClickOnce install cannot start
-    /// LiveClaude.Service.exe (its runtime configuration is not deployed), so there the desktop
-    /// application hosts the supervisor itself.
+    /// Installs and starts the host.
+    ///
+    /// The shape is the same on every platform: refresh the copy that will be registered, install
+    /// directly when this process already has the rights, otherwise re-launch elevated and run the
+    /// same CLI verb. Never trust the exit code — query the registration back before claiming
+    /// success, because an install that reported success while doing nothing is exactly the failure
+    /// this flow was built around.
     /// </summary>
-    private SupervisorCommand ResolveCommand(bool asService) =>
-        SupervisorLauncher.Resolve(Path.GetDirectoryName(SupervisorPath)!, asService);
+    public Task InstallAsync(string? password = null, bool useSystemAccount = false) => RunAsync(async () =>
+    {
+        var options = new AutostartOptions
+        {
+            StartBeforeSignIn = true,
+            UserName = SupportsAccount && !useSystemAccount ? _owner.Account : null,
+            Password = password
+        };
 
-    /// <summary>Set by the shell so the card can say a supervisor is running even when the task is unreadable.</summary>
+        if (RequiresPassword && !string.IsNullOrWhiteSpace(options.UserName) && string.IsNullOrEmpty(password))
+        {
+            return $"Enter the password for {options.UserName}. {DisplayName} cannot log on with a blank one " +
+                   "(error 1069). Clear the account box to install it as the system account instead — which " +
+                   "usually cannot reach the Claude Code sign-in.";
+        }
+
+        var (command, note) = await _owner.PrepareAsync(Scope);
+
+        if (!_provider.RequiresElevation(options) || _owner.IsElevated)
+        {
+            var direct = await _provider.InstallAsync(command, options, CancellationToken.None);
+            if (!direct.Success)
+                return $"Could not install {DisplayName.ToLowerInvariant()}: {direct.Message}";
+
+            await _provider.StartAsync(CancellationToken.None);
+            return HostingViewModel.Combine($"{DisplayName} installed and started. {direct.Message}".Trim(), note);
+        }
+
+        var elevated = await _owner.RunElevatedVerbAsync(BuildInstallArguments(command, options));
+
+        if (elevated == 0)
+        {
+            var verification = await _provider.QueryAsync();
+
+            if (verification.Installed == true)
+                return HostingViewModel.Combine($"{DisplayName} installed and started ({verification.Status ?? "ready"}).", note);
+
+            if (verification.Installed is null)
+            {
+                return HostingViewModel.Combine(
+                    $"{DisplayName} installed and started. This account cannot read the registration back — it was " +
+                    "made through the elevation prompt, possibly by another account — so the card above cannot show " +
+                    "its state.",
+                    note);
+            }
+
+            // Reported success, nothing registered: say so and fall through rather than lie.
+            Result = HostingViewModel.Combine(
+                         $"The elevated install reported success but no {DisplayName.ToLowerInvariant()} exists; retrying without elevation.",
+                         note) +
+                     $"{Environment.NewLine}What ran:{Environment.NewLine}{HostingViewModel.ReadInstallLog()}";
+        }
+
+        return await InstallWithoutElevationAsync(command, options, note);
+    });
+
+    /// <summary>
+    /// What is still possible when the elevation prompt is declined.
+    ///
+    /// For a user-scope host that is a registration without the start-before-sign-in part: on Windows
+    /// a logon-only task, on Linux a user unit without lingering. Everything works except starting
+    /// before anyone signs in. A system-scope host has no such fallback — it is elevation or nothing.
+    /// </summary>
+    private async Task<string> InstallWithoutElevationAsync(SupervisorCommand command, AutostartOptions options, string note)
+    {
+        if (Scope == AutostartScope.System)
+            return HostingViewModel.Combine($"The elevation prompt was declined, so the {DisplayName.ToLowerInvariant()} was not installed.", note);
+
+        options.StartBeforeSignIn = false;
+        var fallback = await _provider.InstallAsync(command, options, CancellationToken.None);
+
+        if (!fallback.Success)
+            return $"Could not install {DisplayName.ToLowerInvariant()}: {fallback.Message}";
+
+        await _provider.StartAsync(CancellationToken.None);
+        var verified = await _provider.QueryAsync();
+
+        var outcome = verified.Installed switch
+        {
+            true => $"Installed for sign-in only and started ({verified.Status ?? "ready"}).",
+            false => $"Reported success but the {DisplayName.ToLowerInvariant()} is not listed afterwards.",
+            _ => "Installed for sign-in only and started; this account cannot read it back to confirm."
+        };
+
+        var why = StartBeforeSignInRequirement is { Length: > 0 } requirement
+            ? $" {requirement}"
+            : "";
+
+        return HostingViewModel.Combine(
+            outcome +
+            " The elevation prompt was declined or cancelled, so the servers start when you sign in, not before." +
+            why,
+            note);
+    }
+
+    private string[] BuildInstallArguments(SupervisorCommand command, AutostartOptions options)
+    {
+        var args = new List<string>
+        {
+            "install-autostart",
+            "--scope", Scope == AutostartScope.System ? "system" : "user",
+            "--exe", command.ExecutablePath,
+            "--args", command.Arguments
+        };
+
+        if (!string.IsNullOrWhiteSpace(options.UserName))
+        {
+            args.Add("--user");
+            args.Add(options.UserName);
+        }
+
+        if (RequiresPassword && !string.IsNullOrWhiteSpace(options.UserName))
+        {
+            args.Add("--password");
+            args.Add(options.Password ?? "");
+        }
+
+        return args.ToArray();
+    }
+
+    public Task UninstallAsync() => RunAsync(async () =>
+    {
+        await _provider.StopAsync(CancellationToken.None);
+        var result = await _provider.UninstallAsync(CancellationToken.None);
+
+        if (result.Success)
+            return $"{DisplayName} removed.";
+
+        if (!_owner.IsElevated)
+        {
+            var exitCode = await _owner.RunElevatedVerbAsync(
+                ["uninstall-autostart", "--scope", Scope == AutostartScope.System ? "system" : "user"]);
+
+            if (exitCode == 0)
+                return $"{DisplayName} removed.";
+        }
+
+        return result.Message;
+    });
+
+    public Task StartAsync() => RunAsync(async () =>
+    {
+        var start = await _provider.StartAsync(CancellationToken.None);
+        if (start.Success)
+            return $"{DisplayName} started.";
+
+        if (!_owner.IsElevated &&
+            await _owner.RunElevatedVerbAsync(["start-autostart", "--scope", Scope == AutostartScope.System ? "system" : "user"]) == 0)
+        {
+            return $"{DisplayName} started.";
+        }
+
+        return start.Message;
+    });
+
+    public Task StopAsync() => RunAsync(async () =>
+    {
+        var stop = await _provider.StopAsync(CancellationToken.None);
+        if (stop.Success)
+            return $"{DisplayName} stopped.";
+
+        if (!_owner.IsElevated &&
+            await _owner.RunElevatedVerbAsync(["stop-autostart", "--scope", Scope == AutostartScope.System ? "system" : "user"]) == 0)
+        {
+            return $"{DisplayName} stopped.";
+        }
+
+        return stop.Message;
+    });
+
+    /// <summary>
+    /// Stops the host without reporting anything. Used before refreshing the deployed copy, where a
+    /// "not installed" answer is the normal case and would only be noise on the card.
+    /// </summary>
+    internal async Task StopQuietlyAsync()
+    {
+        try
+        {
+            await _provider.StopAsync(CancellationToken.None);
+        }
+        catch (Exception ex) when (ex is IOException or InvalidOperationException or UnauthorizedAccessException)
+        {
+            // Nothing to stop, or not ours to stop.
+        }
+    }
+
+    private async Task RunAsync(Func<Task<string>> action)
+    {
+        Busy = true;
+        _owner.NotifyBusy(true);
+
+        try
+        {
+            Result = await action();
+        }
+        catch (Exception ex)
+        {
+            Result = ex.Message;
+        }
+        finally
+        {
+            Busy = false;
+            _owner.NotifyBusy(false);
+            await RefreshAsync();
+        }
+    }
+}
+
+/// <summary>
+/// Drives the autostart hosts this platform offers: one for the signed-in session, and one that
+/// starts before sign-in where the platform has such a thing.
+/// </summary>
+public sealed class HostingViewModel : ObservableObject
+{
+    private static IPlatform Platform => PlatformLoader.Current;
+
+    private string _account = Platform.Processes.CurrentUserName;
+    private string _supervisorBuild = "";
+    private bool _busy;
+    private string? _supervisorPath;
+
+    public HostingViewModel()
+    {
+        UserHost = new AutostartHostViewModel(Platform.UserAutostart, this);
+        SystemHost = Platform.SystemAutostart is { } system
+            ? new AutostartHostViewModel(system, this)
+            : null;
+    }
+
+    /// <summary>The recommended host: runs in the user's session, where the Claude credentials are.</summary>
+    public AutostartHostViewModel UserHost { get; }
+
+    /// <summary>Starts before anyone signs in. Null on a platform with no such host.</summary>
+    public AutostartHostViewModel? SystemHost { get; }
+
+    public bool HasSystemHost => SystemHost is not null;
+
+    /// <summary>What to call the elevation prompt in the UI: "UAC", "pkexec", "osascript".</summary>
+    public string ElevationMechanism => Platform.Elevation.Mechanism;
+
+    public bool IsElevated => Platform.Processes.IsElevated;
+
+    public string Account
+    {
+        get => _account;
+        set => SetProperty(ref _account, value);
+    }
+
+    public bool Busy
+    {
+        get => _busy;
+        private set => SetProperty(ref _busy, value);
+    }
+
+    internal void NotifyBusy(bool busy) => Busy = busy;
+
+    /// <summary>Set by the shell so a card can say a supervisor is running even when unreadable.</summary>
     public string? ConnectedSupervisorHost { get; set; }
 
-    private string _supervisorBuild = "";
+    /// <summary>
+    /// Path of the supervisor to register. On Windows, ClickOnce and winget put the app in a folder
+    /// that is replaced on every update, so a stable copy is deployed first; elsewhere the install
+    /// location does not move and this is simply where the app runs from.
+    /// </summary>
+    public string SupervisorPath => _supervisorPath ??= Platform.Deployment.Deploy().ExecutablePath;
 
     /// <summary>
     /// The build sitting in the deployed copy — the one a registration actually runs. Shown always,
@@ -157,258 +373,106 @@ public sealed class HostingViewModel : ObservableObject
     {
         UpdateSupervisorBuild();
 
-        var service = WindowsServiceInstaller.Query();
-        ServiceStatus = service.Installed ? service.Status ?? "installed" : "not installed";
+        await UserHost.RefreshAsync();
 
-        var task = await ScheduledTaskInstaller.QueryAsync();
-        TaskStatus = task.Installed switch
-        {
-            true => task.Status ?? "installed",
-            false when string.Equals(ConnectedSupervisorHost, "task", StringComparison.OrdinalIgnoreCase) =>
-                "running (not listed for this account)",
-            false => "not installed",
-            _ => "running, not readable here"
-        };
-
-        // Explain an unreadable task once, rather than leaving the card looking wrong.
-        if (task.Installed is null && task.Detail is not null && string.IsNullOrWhiteSpace(TaskResult))
-            TaskResult = task.Detail;
+        if (SystemHost is not null)
+            await SystemHost.RefreshAsync();
     }
 
     /// <summary>
-    /// Installs the scheduled task. The boot trigger can only be registered by an administrator, so
-    /// this asks for elevation; declining falls back to a logon-only task, which works as a normal
-    /// user and covers everything except starting before sign-in.
+    /// Refreshes the copy that will be registered, before registering anything.
+    ///
+    /// On Windows the registered host runs that copy, so its files are locked while it runs and the
+    /// refresh used to be skipped without a word: every install then ran whatever build was there
+    /// before, which is how an install could quietly do nothing. The hosts are stopped, the copy
+    /// refreshed, and starting again is left to the caller. On Linux and macOS the deployment is a
+    /// no-op and this costs two cheap queries.
     /// </summary>
-    public Task InstallTaskAsync() => RunAsync(result => TaskResult = result, async () =>
+    internal async Task<(SupervisorCommand Command, string Note)> PrepareAsync(AutostartScope scope)
     {
-        var (command, note) = await PrepareAsync(asService: false);
+        var deployment = Platform.Deployment;
 
-        if (ProcessHelper.IsElevated)
+        // Nothing may be running from the deployment folder while it is refreshed: a process started
+        // from there holds its own executable, and the copy then keeps an old build that gets
+        // registered and run. Stop the hosts, then kill anything left over from earlier attempts.
+        await UserHost.StopQuietlyAsync();
+        if (SystemHost is not null)
+            await SystemHost.StopQuietlyAsync();
+
+        var stopped = deployment.StopProcessesIn(deployment.StableDirectory).ToList();
+        if (stopped.Count > 0)
+            await Task.Delay(TimeSpan.FromSeconds(1));
+
+        var result = deployment.Deploy();
+
+        // One more round if something grabbed a file in the meantime.
+        if (!result.UpToDate)
         {
-            var elevatedInstall = await ScheduledTaskInstaller.InstallAsync(
-                command.ExecutablePath, runAtBoot: true, userName: ProcessHelper.CurrentUserName, arguments: command.Arguments);
-
-            if (!elevatedInstall.Success)
-                return $"Could not install the task: {elevatedInstall.Combined}";
-
-            await ScheduledTaskInstaller.RunAsync();
-            return Combine("Installed with the logon and boot triggers, and started.", note);
+            stopped.AddRange(deployment.StopProcessesIn(deployment.StableDirectory));
+            await Task.Delay(TimeSpan.FromSeconds(1));
+            result = deployment.Deploy();
         }
 
-        var exitCode = -1;
-        try
+        _supervisorPath = result.ExecutablePath;
+        var command = deployment.ResolveCommand(Path.GetDirectoryName(result.ExecutablePath)!, scope);
+
+        var notes = new List<string>();
+
+        if (deployment.DescribeDeployment(result.ExecutablePath) is { } deployed)
+            notes.Add(deployed);
+
+        if (command.Note is not null)
+            notes.Add(command.Note);
+
+        if (result.Version is not null)
+            notes.Add($"Registered build: {result.Version}.");
+
+        if (stopped.Count > 0)
+            notes.Add($"Stopped {string.Join(", ", stopped)} to refresh the copy.");
+
+        if (!result.UpToDate)
         {
-            // The elevation goes through the supervisor executable when it can run; otherwise the
-            // app elevates itself. The user is passed explicitly because UAC may be answered with a
-            // different administrator account.
-            var elevator = SupervisorLauncher.CanRunStandalone(SupervisorPath) ? SupervisorPath : command.ExecutablePath;
-            LogInstallStep($"elevating {elevator} (build {SupervisorDeployment.ReadVersion(elevator) ?? "unknown"}) for install-task");
-
-            exitCode = await ProcessHelper.RunElevatedAsync(elevator,
-            [
-                "install-task",
-                "--user", ProcessHelper.CurrentUserName,
-                "--exe", command.ExecutablePath,
-                "--args", command.Arguments
-            ]);
-
-            LogInstallStep($"install-task returned {exitCode}");
-        }
-        catch (Win32Exception)
-        {
-            // UAC declined, or no administrator available on this machine.
-        }
-
-        if (exitCode == 0)
-        {
-            // Never take the exit code's word for it: verify the task is really there.
-            var verification = await ScheduledTaskInstaller.QueryAsync();
-
-            if (verification.Installed == true)
-                return Combine($"Installed with the logon and boot triggers, and started ({verification.Status ?? "ready"}).", note);
-
-            if (verification.Installed is null)
-            {
-                return Combine(
-                    "Installed with the logon and boot triggers, and started. Windows will not let this account " +
-                    "read the task back — it was registered through the elevation prompt by another administrator " +
-                    "account — so the card above cannot show its state.",
-                    note);
-            }
-
-            // Reported success, no task: fall through to the unelevated install rather than lie.
-            TaskResult = Combine("The elevated install reported success but no task exists; retrying without elevation.", note) +
-                         $"{Environment.NewLine}What ran:{Environment.NewLine}{ReadInstallLog()}";
+            notes.Add(
+                $"Warning: {result.Locked.Count} file(s) could not be refreshed because something still has them " +
+                $"open ({string.Join(", ", result.Locked.Take(3))}). Close every LiveClaude window, stop every host, " +
+                "then install again — otherwise this registers an older build.");
         }
 
-        var fallback = await ScheduledTaskInstaller.InstallAsync(
-            command.ExecutablePath, runAtBoot: false, userName: ProcessHelper.CurrentUserName, arguments: command.Arguments);
-        if (!fallback.Success)
-        {
-            return ScheduledTaskInstaller.IsAccessDenied(fallback)
-                ? $"Windows refused the task: {fallback.Combined.Trim()} Your account may be blocked from creating scheduled tasks by policy; the Windows service below is the alternative."
-                : $"Could not install the task: {fallback.Combined}";
-        }
+        return (command, string.Join(" ", notes));
+    }
 
-        await ScheduledTaskInstaller.RunAsync();
-
-        var verified = await ScheduledTaskInstaller.QueryAsync();
-        var outcome = verified.Installed switch
-        {
-            true => $"Installed for logon only and started (Task Scheduler reports: {verified.Status ?? "ready"}).",
-            false => "Windows reported success but does not list the task afterwards — check Task Scheduler for 'LiveClaude Supervisor'.",
-            _ => "Installed for logon only and started; this account cannot read the task back to confirm."
-        };
-
-        return Combine(
-            outcome +
-            " The elevation prompt was declined or cancelled, so there is no boot trigger: the servers start at " +
-            "sign-in, not before. Run this again and accept the prompt to add it.",
-            note);
-    });
-
-    public Task UninstallTaskAsync() => RunAsync(result => TaskResult = result, async () =>
-    {
-        await ScheduledTaskInstaller.EndAsync();
-        var result = await ScheduledTaskInstaller.UninstallAsync();
-
-        if (result.Success)
-            return "Task removed.";
-
-        if (!ProcessHelper.IsElevated)
-        {
-            var exitCode = await TryElevatedAsync("uninstall-task");
-            if (exitCode == 0)
-                return "Task removed.";
-        }
-
-        return result.Combined;
-    });
-
-    public Task StartTaskAsync() =>
-        RunAsync(result => TaskResult = result, async () => (await ScheduledTaskInstaller.RunAsync()).Combined);
-
-    public Task StopTaskAsync() =>
-        RunAsync(result => TaskResult = result, async () => (await ScheduledTaskInstaller.EndAsync()).Combined);
-
-    /// <summary>Service management needs elevation, so it goes through the supervisor exe with UAC.</summary>
     /// <summary>
-    /// Installs the service. <paramref name="asLocalSystem"/> is the deliberate choice to ignore the
-    /// account box; without it, a user account with no password is refused here rather than failing
-    /// with 1069 after the elevation prompt.
+    /// Re-launches the supervisor elevated with a CLI verb and waits for it.
+    ///
+    /// The elevation goes through the supervisor executable when it can run on its own; otherwise the
+    /// application elevates itself, which is what a ClickOnce install needs.
     /// </summary>
-    public Task InstallServiceAsync(string? password, bool asLocalSystem = false) => RunAsync(result => ServiceResult = result, async () =>
+    internal async Task<int> RunElevatedVerbAsync(string[] arguments)
     {
-        var account = asLocalSystem ? "" : Account;
+        var elevator = SupervisorPath;
 
-        if (!string.IsNullOrWhiteSpace(account) && string.IsNullOrEmpty(password))
-        {
-            return $"Enter the Windows password for {account}. A service cannot log on with a blank password " +
-                   "(error 1069). Clear the account box to install it as LocalSystem instead — which usually " +
-                   "cannot reach the Claude Code sign-in.";
-        }
-
-        var (command, note) = await PrepareAsync(asService: true);
-
-        var args = new List<string>
-        {
-            "install-service",
-            "--exe", command.ExecutablePath,
-            "--args", command.Arguments
-        };
-
-        if (!string.IsNullOrWhiteSpace(account))
-        {
-            args.Add("--account");
-            args.Add(account);
-            args.Add("--password");
-            args.Add(password ?? "");
-        }
-
-        int exitCode;
         try
         {
-            var elevator = SupervisorLauncher.CanRunStandalone(SupervisorPath) ? SupervisorPath : command.ExecutablePath;
-            LogInstallStep($"elevating {elevator} (build {SupervisorDeployment.ReadVersion(elevator) ?? "unknown"}) for install-service");
-
-            exitCode = await ProcessHelper.RunElevatedAsync(elevator, args);
-            LogInstallStep($"install-service returned {exitCode}");
+            LogInstallStep($"elevating {elevator} (build {Platform.Deployment.ReadVersion(elevator) ?? "unknown"}) for {arguments.FirstOrDefault()}");
+            var exitCode = await Platform.Elevation.RunElevatedAsync(elevator, arguments);
+            LogInstallStep($"{arguments.FirstOrDefault()} returned {exitCode}");
+            return exitCode;
         }
-        catch (Win32Exception)
+        catch (Exception ex) when (ex is Win32Exception or InvalidOperationException)
         {
-            LogInstallStep("the elevation prompt was declined or cancelled");
-            return Combine("The elevation prompt was declined, so the service was not installed.", note);
-        }
-
-        if (exitCode != 0)
-            return $"Service installation returned exit code {exitCode}.";
-
-        // Same rule as the task: confirm with the service control manager before claiming success.
-        var state = WindowsServiceInstaller.Query();
-        return state.Installed
-            ? Combine($"Service installed ({state.Status ?? "created"}).", note)
-            : Combine("The installer reported success but the service is not registered.", note) +
-              Environment.NewLine + "What ran:" + Environment.NewLine + ReadInstallLog();
-    });
-
-    public Task UninstallServiceAsync() => RunAsync(result => ServiceResult = result, async () =>
-    {
-        var exitCode = await TryElevatedAsync("uninstall-service");
-        return exitCode == 0 ? "Service removed." : $"Uninstall returned exit code {exitCode}.";
-    });
-
-    public Task StartServiceAsync() => RunAsync(result => ServiceResult = result, async () =>
-    {
-        var start = await WindowsServiceInstaller.StartAsync();
-        if (start.Success)
-            return "Service started.";
-
-        // Starting needs elevation too; retry through the supervisor before giving up.
-        if (!ProcessHelper.IsElevated && await TryElevatedAsync("start-service") == 0)
-            return "Service started.";
-
-        return WindowsServiceInstaller.Explain(start);
-    });
-
-    public Task StopServiceAsync() => RunAsync(result => ServiceResult = result, async () =>
-    {
-        var stop = await WindowsServiceInstaller.StopAsync();
-        if (stop.Success)
-            return "Service stopped.";
-
-        if (!ProcessHelper.IsElevated && await TryElevatedAsync("stop-service") == 0)
-            return "Service stopped.";
-
-        return WindowsServiceInstaller.Explain(stop);
-    });
-
-    private async Task<int> TryElevatedAsync(params string[] arguments)
-    {
-        try
-        {
-            return await ProcessHelper.RunElevatedAsync(SupervisorPath, arguments);
-        }
-        catch (Win32Exception)
-        {
+            // The prompt was declined, or there is no way to elevate on this machine.
+            LogInstallStep($"the elevation prompt was declined or unavailable: {ex.Message}");
             return -1;
         }
     }
 
-    /// <summary>
-    /// The last lines an install command printed. Those commands run elevated, in a process the user
-    /// never sees, so this is the only way the reason for a failure reaches the screen.
-    /// </summary>
-    /// <summary>
-    /// Records what the app is about to launch elevated. The elevated process may be an old build
-    /// that writes nothing at all, and then this is the only evidence of what actually ran.
-    /// </summary>
     private void UpdateSupervisorBuild()
     {
-        var running = SupervisorDeployment.ReadVersion(Environment.ProcessPath ?? "") ?? "unknown";
+        var deployment = Platform.Deployment;
+        var running = deployment.ReadVersion(Environment.ProcessPath ?? "") ?? "unknown";
         var directory = Path.GetDirectoryName(SupervisorPath);
-        var deployedApp = directory is null ? null : Path.Combine(directory, SupervisorLauncher.AppExecutable);
-        var deployed = SupervisorDeployment.ReadVersion(deployedApp ?? SupervisorPath);
+        var deployedApp = directory is null ? null : Path.Combine(directory, deployment.AppExecutable);
+        var deployed = deployment.ReadVersion(deployedApp ?? SupervisorPath);
 
         SupervisorBuild = deployed is null
             ? $"app {running}"
@@ -417,11 +481,15 @@ public sealed class HostingViewModel : ObservableObject
                 : $"app {running}, but the registered copy is {deployed} — install again to refresh it";
     }
 
+    /// <summary>
+    /// Records what the app is about to launch elevated. The elevated process may be an old build
+    /// that writes nothing at all, and then this is the only evidence of what actually ran.
+    /// </summary>
     private static void LogInstallStep(string message)
     {
         try
         {
-            using var log = new RollingLogWriter(LiveClaude.Service.SupervisorCli.LogPath, maxSizeMb: 2);
+            using var log = new RollingLogWriter(Service.SupervisorCli.LogPath, maxSizeMb: 2);
             log.Write($"[app] {message}");
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
@@ -430,16 +498,20 @@ public sealed class HostingViewModel : ObservableObject
         }
     }
 
-    private static string ReadInstallLog(int lines = 8)
+    /// <summary>
+    /// The last lines an install command printed. Those commands run elevated, in a process the user
+    /// never sees, so this is the only way the reason for a failure reaches the screen.
+    /// </summary>
+    internal static string ReadInstallLog(int lines = 8)
     {
         try
         {
-            var log = new RollingLogWriter(LiveClaude.Service.SupervisorCli.LogPath, maxSizeMb: 2);
+            var log = new RollingLogWriter(Service.SupervisorCli.LogPath, maxSizeMb: 2);
             var tail = log.Tail(lines);
             log.Dispose();
 
             return tail.Count == 0
-                ? $"(nothing was written to {LiveClaude.Service.SupervisorCli.LogPath})"
+                ? $"(nothing was written to {Service.SupervisorCli.LogPath})"
                 : string.Join(Environment.NewLine, tail);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
@@ -448,24 +520,6 @@ public sealed class HostingViewModel : ObservableObject
         }
     }
 
-    private static string Combine(string message, string? note) =>
+    internal static string Combine(string message, string? note) =>
         string.IsNullOrWhiteSpace(note) ? message : $"{message} {note}";
-
-    private async Task RunAsync(Action<string> report, Func<Task<string>> action)
-    {
-        Busy = true;
-        try
-        {
-            report(await action());
-        }
-        catch (Exception ex)
-        {
-            report(ex.Message);
-        }
-        finally
-        {
-            Busy = false;
-            await RefreshAsync();
-        }
-    }
 }

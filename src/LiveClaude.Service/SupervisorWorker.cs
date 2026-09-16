@@ -1,3 +1,4 @@
+using LiveClaude.Abstractions;
 using LiveClaude.Core.Config;
 using LiveClaude.Core.Ipc;
 using LiveClaude.Core.Supervision;
@@ -42,8 +43,9 @@ public sealed class SupervisorWorker : BackgroundService
         if (await AnotherSupervisorIsRunningAsync(stoppingToken).ConfigureAwait(false))
         {
             _logger.LogWarning(
-                "Another LiveClaude supervisor is already running on this machine, so this one is stopping. " +
-                "Close the app's own supervisor, or stop the scheduled task or service, to run just one.");
+                "Another LiveClaude supervisor is already serving {Endpoint}, so this one is stopping. " +
+                "Close the app's own supervisor, or stop the registered autostart host, to run just one.",
+                PlatformLoader.Current.Ipc.EndpointDescription);
 
             _lifetime?.StopApplication();
             return;
@@ -56,10 +58,10 @@ public sealed class SupervisorWorker : BackgroundService
 
         _logger.LogInformation("LiveClaude supervisor starting as '{Host}'. Config: {Config}", _host, store.Path);
 
-        if (LiveClaude.Core.Pty.PtyProcess.HasOwnConsole)
+        if (PlatformLoader.Current.Pty.HostOwnsConsole)
         {
             _logger.LogWarning(
-                "This process owns a console, so Windows will attach the CLI to it instead of the pseudo console " +
+                "This process owns a console, so the CLI will be attached to it instead of the pseudo console " +
                 "and no output can be captured. Run the supervisor windowless (--supervise / --service).");
         }
 
@@ -93,22 +95,16 @@ public sealed class SupervisorWorker : BackgroundService
         await base.StopAsync(cancellationToken).ConfigureAwait(false);
     }
 
-    /// <summary>Probes the IPC endpoint: an answer means a supervisor already owns this machine.</summary>
-    private static async Task<bool> AnotherSupervisorIsRunningAsync(CancellationToken ct)
-    {
-        try
-        {
-            using var client = new System.IO.Pipes.NamedPipeClientStream(
-                ".", LiveClaude.Core.Ipc.IpcProtocol.PipeName, System.IO.Pipes.PipeDirection.InOut);
-
-            await client.ConnectAsync(750, ct).ConfigureAwait(false);
-            return true;
-        }
-        catch (Exception ex) when (ex is TimeoutException or IOException or OperationCanceledException or UnauthorizedAccessException)
-        {
-            return false;
-        }
-    }
+    /// <summary>
+    /// Probes the IPC endpoint: an answer means a supervisor already owns it.
+    ///
+    /// The scope of "already" is the platform's. Windows uses a machine-wide named pipe, so this is
+    /// one supervisor per machine; POSIX uses a socket under the user's runtime directory, so it is
+    /// one per user — which is the right answer on a multi-user Linux box, where two people each
+    /// supervising their own projects is not a conflict.
+    /// </summary>
+    private static Task<bool> AnotherSupervisorIsRunningAsync(CancellationToken ct) =>
+        PlatformLoader.Current.Ipc.IsServedAsync(TimeSpan.FromMilliseconds(750), ct);
 
     private void StartConfigWatcher(ConfigStore store)
     {
