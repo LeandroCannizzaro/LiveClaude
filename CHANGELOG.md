@@ -4,6 +4,48 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project uses
 [semantic versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+
+- **Linux and macOS.** LiveClaude runs on Windows, Linux and macOS, with the same supervisor, the
+  same management app and the same embedded terminal. See [#2](https://github.com/LeandroCannizzaro/LiveClaude/issues/2)
+  for the plan this followed.
+- **Autostart on every platform.** A systemd user unit or a LaunchAgent for the signed-in session, a
+  systemd system unit or a LaunchDaemon for before sign-in — alongside the scheduled task and the
+  Windows service, which are unchanged. Each host carries its own failure knowledge: missing
+  lingering, an unreachable session bus, launchd's bootstrap errors, and Windows' 1069 and friends.
+- **Native packages.** `.deb`, `.rpm` and self-contained tar.gz for Linux (x64 and arm64), an `.app`
+  bundle in a `.dmg` for macOS (Intel and Apple silicon). The Windows zip, winget and ClickOnce
+  packages are unchanged.
+- `install-autostart` / `uninstall-autostart` / `start-autostart` / `stop-autostart`, with
+  `--scope user|system`. `install-task` and `install-service` remain as aliases.
+- `LIVECLAUDE_ROOT` overrides the configuration root on any platform. The systemd system unit uses it
+  to point a daemon at a shared location instead of root's home directory.
+
+### Changed
+
+- **The operating system lives behind one contract.** Everything that has to differ — the pseudo
+  terminal, autostart, elevation, the IPC transport, file locations, finding the CLI — sits behind
+  `IPlatform` in `LiveClaude.Abstractions` and is implemented in `LiveClaude.Platform.<OS>`, loaded
+  by name at run time. Nothing references those assemblies at compile time, so `LiveClaude.Core`
+  dropped from `net10.0-windows` to `net10.0` and a package for one system ships no binaries
+  belonging to another.
+- **The management app moved from WPF to Avalonia**, on Windows too. One UI for three systems rather
+  than one per system. The theme shrank by more than half, because Avalonia's Fluent theme supplies
+  the control chrome that WPF made us template by hand.
+- The VT emulator moved into `LiveClaude.Vt`, which has no UI dependency and is testable anywhere.
+- The test suite is now three projects: portable, platform (runs everywhere through `IPlatform`) and
+  Windows-only.
+- On macOS, Claude Code's credentials are read from the login Keychain, which is where the CLI keeps
+  them there; the `~/.claude/.credentials.json` file remains the source on Windows and Linux.
+
+### Fixed
+
+- Listening on the IPC endpoint twice inside one process now fails on Windows as it already did on
+  POSIX. Windows is happy to let a process open many instances of its own named pipe — that is how
+  one serves several clients — so a duplicate supervisor in a single process went unnoticed there.
+
 ## [1.0.15] - 2026-09-15
 
 ### Changed

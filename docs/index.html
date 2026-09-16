@@ -3,11 +3,11 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>LiveClaude — keep Claude Code Remote Control alive on Windows</title>
-  <meta name="description" content="A Windows supervisor and desktop app that keeps Claude Code Remote Control servers running across crashes, logons and reboots — with an embedded terminal. Written entirely in C#." />
+  <title>LiveClaude — keep Claude Code Remote Control alive</title>
+  <meta name="description" content="A supervisor and desktop app that keeps Claude Code Remote Control servers running across crashes, sign-ins and reboots, on Windows, Linux and macOS — with an embedded terminal. Written entirely in C#." />
   <link rel="icon" href="assets/favicon.ico" />
   <meta property="og:title" content="LiveClaude" />
-  <meta property="og:description" content="Keep Claude Code Remote Control alive on your Windows machine — many projects, one supervisor, one desktop app." />
+  <meta property="og:description" content="Keep Claude Code Remote Control alive on Windows, Linux and macOS — many projects, one supervisor, one desktop app." />
   <meta property="og:image" content="assets/dashboard.png" />
   <meta property="og:type" content="website" />
   <style>
@@ -162,11 +162,11 @@
 <div class="wrap hero">
   <h1>Your machine stays <span>reachable</span>.</h1>
   <p class="lead">
-    LiveClaude keeps Claude Code Remote Control servers running on Windows — one per project directory,
+    LiveClaude keeps Claude Code Remote Control servers running on Windows, Linux and macOS — one per project directory,
     restarted after a crash, at logon and after a reboot. Plus a desktop app with a real terminal inside it.
   </p>
   <div class="cta">
-    <a class="btn primary" href="https://github.com/LeandroCannizzaro/LiveClaude/releases/latest">Download for Windows</a>
+    <a class="btn primary" href="https://github.com/LeandroCannizzaro/LiveClaude/releases/latest">Download</a>
     <a class="btn" href="https://github.com/LeandroCannizzaro/LiveClaude">View on GitHub</a>
   </div>
 </div>
@@ -194,9 +194,10 @@
     </div>
     <div class="card">
       <span class="tag">Hosting</span>
-      <h3>Scheduled task or Windows service</h3>
-      <p>The task runs in your own session and survives logon and boot. The service starts before sign-in.
-         Both are installed, started and removed from the app.</p>
+      <h3>Task, service, systemd or launchd</h3>
+      <p>A scheduled task, a systemd user unit or a LaunchAgent runs in your own session and survives
+         sign-in and boot. A Windows service, a systemd system unit or a LaunchDaemon starts before
+         anyone signs in. All of them are installed, started and removed from the app.</p>
     </div>
     <div class="card">
       <span class="tag">Control</span>
@@ -234,7 +235,7 @@
 
 <section id="install" class="wrap">
   <h2>Install</h2>
-  <p class="sub">Windows 10 1809+ or Windows 11, and a Claude Code sign-in on a Pro, Max, Team or Enterprise plan.</p>
+  <p class="sub">Windows 10 1809+, Linux with systemd, or macOS 12+ — and a Claude Code sign-in on a Pro, Max, Team or Enterprise plan.</p>
 
   <div class="tabs" role="tablist">
     <button role="tab" aria-selected="true" aria-controls="p-winget" id="t-winget">winget</button>
