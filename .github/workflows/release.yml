@@ -1,4 +1,4 @@
-﻿name: Release
+name: Release
 
 on:
   push:
@@ -17,26 +17,28 @@ env:
   DOTNET_VERSION: '10.0.x'
 
 jobs:
-  release:
-    name: Build, package and publish
-    runs-on: windows-latest
+  version:
+    name: Resolve version
+    runs-on: ubuntu-latest
     outputs:
       version: ${{ steps.version.outputs.version }}
+    steps:
+      - id: version
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            version="${{ github.event.inputs.version }}"
+          else
+            version="${GITHUB_REF_NAME#v}"
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "Publishing version $version"
 
+  windows:
+    name: Windows packages
+    needs: version
+    runs-on: windows-latest
     steps:
       - uses: actions/checkout@v5
-
-      - name: Resolve version
-        id: version
-        shell: pwsh
-        run: |
-          $version = if ('${{ github.event_name }}' -eq 'workflow_dispatch') {
-            '${{ github.event.inputs.version }}'
-          } else {
-            '${{ github.ref_name }}'.TrimStart('v')
-          }
-          "version=$version" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
-          Write-Host "Publishing version $version"
 
       - name: Set up .NET
         uses: actions/setup-dotnet@v5
@@ -46,32 +48,48 @@ jobs:
       - name: Set up MSBuild (ClickOnce needs the .NET Framework MSBuild)
         uses: microsoft/setup-msbuild@v2
 
-      - name: Restore
-        run: dotnet restore
-
       - name: Test
-        run: dotnet test -c Release --logger "trx;LogFileName=tests.trx" --results-directory artifacts/test-results
+        run: >
+          dotnet test LiveClaude.slnx -c Release
+          --logger "trx;LogFileName=tests.trx" --results-directory artifacts/test-results
 
       - name: Publish framework-dependent (win-x64)
         run: >
           dotnet publish src/LiveClaude.App/LiveClaude.App.csproj
           -c Release -r win-x64 --self-contained false
-          -p:Version=${{ steps.version.outputs.version }}
+          -p:Version=${{ needs.version.outputs.version }}
           -o artifacts/win-x64
 
       - name: Publish framework-dependent (win-arm64)
         run: >
           dotnet publish src/LiveClaude.App/LiveClaude.App.csproj
           -c Release -r win-arm64 --self-contained false
-          -p:Version=${{ steps.version.outputs.version }}
+          -p:Version=${{ needs.version.outputs.version }}
           -o artifacts/win-arm64
 
       - name: Publish self-contained (win-x64)
         run: >
           dotnet publish src/LiveClaude.App/LiveClaude.App.csproj
           -c Release -r win-x64 --self-contained true
-          -p:Version=${{ steps.version.outputs.version }}
+          -p:Version=${{ needs.version.outputs.version }}
           -o artifacts/win-x64-selfcontained
+
+      # The supervisor executable goes into every Windows package: registering it rather than the
+      # app keeps a headless install from loading the UI, and the app falls back to hosting the
+      # supervisor itself only where this file cannot start (ClickOnce).
+      - name: Add the supervisor executable to every package
+        shell: pwsh
+        run: |
+          foreach ($rid in 'win-x64', 'win-arm64') {
+            dotnet publish src/LiveClaude.Service/LiveClaude.Service.csproj `
+              -c Release -r $rid --self-contained false `
+              -p:Version=${{ needs.version.outputs.version }} `
+              -o "artifacts/$rid"
+          }
+          dotnet publish src/LiveClaude.Service/LiveClaude.Service.csproj `
+            -c Release -r win-x64 --self-contained true `
+            -p:Version=${{ needs.version.outputs.version }} `
+            -o artifacts/win-x64-selfcontained
 
       - name: Add the portable installer script to every package
         shell: pwsh
@@ -83,7 +101,7 @@ jobs:
       - name: Create zips
         shell: pwsh
         run: |
-          $version = '${{ steps.version.outputs.version }}'
+          $version = '${{ needs.version.outputs.version }}'
           New-Item -ItemType Directory -Force -Path artifacts/packages | Out-Null
           Compress-Archive artifacts/win-x64/* "artifacts/packages/LiveClaude-$version-win-x64.zip"
           Compress-Archive artifacts/win-arm64/* "artifacts/packages/LiveClaude-$version-win-arm64.zip"
@@ -96,67 +114,171 @@ jobs:
             /t:Publish `
             /p:PublishProfile=ClickOnce `
             /p:Configuration=Release `
-            /p:ApplicationVersion=${{ steps.version.outputs.version }}.0 `
-            /p:Version=${{ steps.version.outputs.version }} `
+            /p:ApplicationVersion=${{ needs.version.outputs.version }}.0 `
+            /p:Version=${{ needs.version.outputs.version }} `
             /v:minimal
-          Compress-Archive artifacts/clickonce/* "artifacts/packages/LiveClaude-${{ steps.version.outputs.version }}-clickonce.zip"
+          Compress-Archive artifacts/clickonce/* "artifacts/packages/LiveClaude-${{ needs.version.outputs.version }}-clickonce.zip"
+
+      - uses: actions/upload-artifact@v5
+        with:
+          name: packages-windows
+          path: artifacts/packages
+
+  linux:
+    name: Linux packages (${{ matrix.rid }})
+    needs: version
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        rid: [linux-x64, linux-arm64]
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - name: Test
+        if: matrix.rid == 'linux-x64'
+        run: |
+          dotnet test tests/LiveClaude.Tests/LiveClaude.Tests.csproj -c Release
+          dotnet test tests/LiveClaude.Tests.Platform/LiveClaude.Tests.Platform.csproj -c Release
+
+      - name: Install rpmbuild
+        run: sudo apt-get update && sudo apt-get install -y rpm
+
+      - name: Build packages
+        run: |
+          chmod +x packaging/linux/build-linux-packages.sh
+          packaging/linux/build-linux-packages.sh \
+            "${{ needs.version.outputs.version }}" "${{ matrix.rid }}" artifacts/packages
+
+      - uses: actions/upload-artifact@v5
+        with:
+          name: packages-${{ matrix.rid }}
+          path: artifacts/packages
+
+  macos:
+    name: macOS packages (${{ matrix.rid }})
+    needs: version
+    runs-on: macos-latest
+    strategy:
+      matrix:
+        rid: [osx-x64, osx-arm64]
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - name: Test
+        if: matrix.rid == 'osx-arm64'
+        run: |
+          dotnet test tests/LiveClaude.Tests/LiveClaude.Tests.csproj -c Release
+          dotnet test tests/LiveClaude.Tests.Platform/LiveClaude.Tests.Platform.csproj -c Release
+
+      - name: Build packages
+        run: |
+          chmod +x packaging/macos/build-macos-packages.sh
+          packaging/macos/build-macos-packages.sh \
+            "${{ needs.version.outputs.version }}" "${{ matrix.rid }}" artifacts/packages
+
+      - uses: actions/upload-artifact@v5
+        with:
+          name: packages-${{ matrix.rid }}
+          path: artifacts/packages
+
+  release:
+    name: Publish the release
+    needs: [version, windows, linux, macos]
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ needs.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Collect every platform's packages
+        uses: actions/download-artifact@v5
+        with:
+          pattern: packages-*
+          merge-multiple: true
+          path: artifacts/packages
 
       - name: Compute checksums
         id: hashes
-        shell: pwsh
         run: |
-          $version = '${{ steps.version.outputs.version }}'
-          $lines = @()
-          Get-ChildItem artifacts/packages/*.zip | ForEach-Object {
-            $hash = (Get-FileHash $_.FullName -Algorithm SHA256).Hash
-            $lines += "$hash  $($_.Name)"
-            if ($_.Name -like '*win-x64.zip') {
-              "x64sha=$hash" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
-            }
-            if ($_.Name -like '*win-arm64.zip') {
-              "arm64sha=$hash" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
-            }
-          }
-          $lines | Out-File artifacts/packages/SHA256SUMS.txt -Encoding utf8
-          Get-Content artifacts/packages/SHA256SUMS.txt
+          cd artifacts/packages
+          sha256sum * > SHA256SUMS.txt
+          cat SHA256SUMS.txt
+
+          # winget needs these two by hand; every other checksum is only read by people.
+          version='${{ needs.version.outputs.version }}'
+          echo "x64sha=$(sha256sum "LiveClaude-$version-win-x64.zip" | cut -d' ' -f1 | tr 'a-f' 'A-F')" >> "$GITHUB_OUTPUT"
+          echo "arm64sha=$(sha256sum "LiveClaude-$version-win-arm64.zip" | cut -d' ' -f1 | tr 'a-f' 'A-F')" >> "$GITHUB_OUTPUT"
 
       - name: Render winget manifests
         shell: pwsh
         run: |
           ./packaging/winget/Update-Manifests.ps1 `
-            -Version '${{ steps.version.outputs.version }}' `
+            -Version '${{ needs.version.outputs.version }}' `
             -X64Sha256 '${{ steps.hashes.outputs.x64sha }}' `
             -Arm64Sha256 '${{ steps.hashes.outputs.arm64sha }}' `
             -OutputDirectory artifacts/winget
-          Compress-Archive artifacts/winget/* "artifacts/packages/LiveClaude-${{ steps.version.outputs.version }}-winget-manifests.zip"
+          Compress-Archive artifacts/winget/* "artifacts/packages/LiveClaude-${{ needs.version.outputs.version }}-winget-manifests.zip"
 
       - name: Create the GitHub release
-        shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          $version = '${{ steps.version.outputs.version }}'
-          $notes = @"
+          version='${{ needs.version.outputs.version }}'
+
+          cat > notes.md <<NOTES
           ## LiveClaude $version
+
+          ### Windows
 
           | Download | For |
           |---|---|
-          | ``LiveClaude-$version-win-x64.zip`` | Windows x64, needs the [.NET 10 Desktop Runtime](https://dotnet.microsoft.com/download/dotnet/10.0) |
-          | ``LiveClaude-$version-win-arm64.zip`` | Windows on ARM |
-          | ``LiveClaude-$version-win-x64-selfcontained.zip`` | Windows x64, no prerequisites |
-          | ``LiveClaude-$version-clickonce.zip`` | ClickOnce payload (also published to the product page) |
+          | \`LiveClaude-$version-win-x64.zip\` | Windows x64, needs the [.NET 10 Desktop Runtime](https://dotnet.microsoft.com/download/dotnet/10.0) |
+          | \`LiveClaude-$version-win-arm64.zip\` | Windows on ARM |
+          | \`LiveClaude-$version-win-x64-selfcontained.zip\` | Windows x64, no prerequisites |
+          | \`LiveClaude-$version-clickonce.zip\` | ClickOnce payload (also published to the product page) |
 
-          ``winget install LeandroCannizzaro.LiveClaude``
+          \`winget install LeandroCannizzaro.LiveClaude\`
 
-          Checksums are in ``SHA256SUMS.txt``.
-          "@
-          gh release create "v$version" (Get-ChildItem artifacts/packages/* | ForEach-Object { $_.FullName }) `
-            --title "LiveClaude $version" --notes $notes
+          ### Linux
+
+          | Download | For |
+          |---|---|
+          | \`liveclaude_${version}_amd64.deb\` / \`liveclaude_${version}_arm64.deb\` | Debian, Ubuntu and derivatives |
+          | \`liveclaude-$version-1.x86_64.rpm\` / \`liveclaude-$version-1.aarch64.rpm\` | Fedora, RHEL, openSUSE |
+          | \`LiveClaude-$version-linux-x64.tar.gz\` / \`-linux-arm64.tar.gz\` | Anything else |
+
+          Everything is self-contained; no .NET runtime is required. Packages install to
+          \`/opt/liveclaude\`, and autostart is a systemd unit.
+
+          ### macOS
+
+          | Download | For |
+          |---|---|
+          | \`LiveClaude-$version-osx-arm64.dmg\` | Apple silicon |
+          | \`LiveClaude-$version-osx-x64.dmg\` | Intel |
+
+          The app is **not notarised yet**: drag it to Applications, then right-click it and choose
+          Open the first time. Autostart is a LaunchAgent.
+
+          Checksums are in \`SHA256SUMS.txt\`.
+          NOTES
+
+          gh release create "v$version" artifacts/packages/* \
+            --title "LiveClaude $version" --notes-file notes.md
 
       # Pages only deploys from the default branch, so the product page is refreshed by its own
       # workflow, which picks the ClickOnce payload up from this release.
       - name: Refresh the product page
-        shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
         run: gh workflow run pages.yml --ref main

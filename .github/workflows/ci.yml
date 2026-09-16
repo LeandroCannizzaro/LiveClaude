@@ -1,8 +1,8 @@
-﻿name: CI
+name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [main, Multiplatform]
     paths-ignore: ['docs/**', '**/*.md']
   pull_request:
     branches: [main]
@@ -13,8 +13,21 @@ permissions:
 
 jobs:
   build:
-    name: Build & test
-    runs-on: windows-latest
+    name: ${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            name: Windows
+            rid: win-x64
+          - os: ubuntu-latest
+            name: Linux
+            rid: linux-x64
+          - os: macos-latest
+            name: macOS
+            rid: osx-arm64
 
     steps:
       - uses: actions/checkout@v5
@@ -24,31 +37,64 @@ jobs:
         with:
           dotnet-version: '10.0.x'
 
-      - name: Restore
-        run: dotnet restore
+      # Windows builds the whole solution, including the two projects that target net10.0-windows.
+      # The other runners build an explicit list instead: LiveClaude.Platform.Windows and
+      # LiveClaude.Tests.Windows are Windows-only by design, and asking Linux to build them would
+      # pull down a Windows targeting pack to produce something that can never run there.
+      - name: Build (Windows)
+        if: runner.os == 'Windows'
+        run: dotnet build LiveClaude.slnx -c Release
 
-      - name: Build
-        run: dotnet build -c Release --no-restore
+      - name: Build (Linux and macOS)
+        if: runner.os != 'Windows'
+        run: |
+          dotnet build src/LiveClaude.App/LiveClaude.App.csproj -c Release
+          dotnet build src/LiveClaude.Service/LiveClaude.Service.csproj -c Release
+          dotnet build tests/LiveClaude.Tests/LiveClaude.Tests.csproj -c Release
+          dotnet build tests/LiveClaude.Tests.Platform/LiveClaude.Tests.Platform.csproj -c Release
 
-      - name: Test
-        run: dotnet test -c Release --no-build --logger "trx;LogFileName=tests.trx" --results-directory artifacts/test-results
+      - name: Test (Windows)
+        if: runner.os == 'Windows'
+        run: >
+          dotnet test LiveClaude.slnx -c Release --no-build
+          --logger "trx;LogFileName=tests.trx" --results-directory artifacts/test-results
+
+      - name: Test (Linux and macOS)
+        if: runner.os != 'Windows'
+        run: |
+          dotnet test tests/LiveClaude.Tests/LiveClaude.Tests.csproj -c Release --no-build \
+            --logger "trx;LogFileName=core.trx" --results-directory artifacts/test-results
+          dotnet test tests/LiveClaude.Tests.Platform/LiveClaude.Tests.Platform.csproj -c Release --no-build \
+            --logger "trx;LogFileName=platform.trx" --results-directory artifacts/test-results
+
+      # Proof that the seam is real: the platform assembly for this OS must be next to the
+      # application, and nobody else's must be. A package that shipped the wrong one, or none, would
+      # fail on a user's machine rather than here.
+      - name: Check the published package carries exactly one platform assembly
+        shell: bash
+        run: |
+          dotnet publish src/LiveClaude.App/LiveClaude.App.csproj \
+            -c Release -r ${{ matrix.rid }} --self-contained false -o artifacts/publish
+
+          present=$(ls artifacts/publish | grep -c '^LiveClaude\.Platform\.\(Windows\|Linux\|MacOS\)\.dll$' || true)
+          echo "platform assemblies found: $present"
+          ls artifacts/publish | grep '^LiveClaude\.Platform\.' || true
+
+          if [ "$present" != "1" ]; then
+            echo "::error::expected exactly one LiveClaude.Platform.<OS>.dll, found $present"
+            exit 1
+          fi
 
       - name: Upload test results
         if: always()
         uses: actions/upload-artifact@v5
         with:
-          name: test-results
+          name: test-results-${{ matrix.name }}
           path: artifacts/test-results
           if-no-files-found: ignore
-
-      - name: Publish portable build
-        run: >
-          dotnet publish src/LiveClaude.App/LiveClaude.App.csproj
-          -c Release -r win-x64 --self-contained false
-          -o artifacts/ci-build
 
       - name: Upload build
         uses: actions/upload-artifact@v5
         with:
-          name: LiveClaude-ci-win-x64
-          path: artifacts/ci-build
+          name: LiveClaude-ci-${{ matrix.rid }}
+          path: artifacts/publish

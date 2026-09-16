@@ -1,7 +1,8 @@
 <Project>
 
   <!--
-    Puts the platform assembly for the OS being built next to the output, without referencing it.
+    Puts the platform assembly for the target operating system next to the output, without
+    referencing it.
 
     Two separate things are going on here, and both matter:
 
@@ -15,46 +16,82 @@
       guessing bin/$(Configuration)/<tfm>/, so a custom OutputPath does not silently produce a
       package with no platform assembly in it.
 
-    A published package ships exactly one platform assembly. Building on Windows produces the Windows
-    one; the CI matrix builds the others on their own runners.
+    The selection follows the RuntimeIdentifier when there is one, and the build host only when there
+    is not. That distinction is the whole point: `dotnet publish -r linux-x64` from a Windows machine
+    has to produce a Linux package, and keying off the build host would quietly put the Windows
+    assembly in it — a package that fails on the first user's machine rather than here.
   -->
 
   <PropertyGroup>
-    <_LiveClaudeOnWindows>$([System.Runtime.InteropServices.RuntimeInformation]::IsOSPlatform($([System.Runtime.InteropServices.OSPlatform]::Windows)))</_LiveClaudeOnWindows>
-    <_LiveClaudeOnLinux>$([System.Runtime.InteropServices.RuntimeInformation]::IsOSPlatform($([System.Runtime.InteropServices.OSPlatform]::Linux)))</_LiveClaudeOnLinux>
-    <_LiveClaudeOnMacOS>$([System.Runtime.InteropServices.RuntimeInformation]::IsOSPlatform($([System.Runtime.InteropServices.OSPlatform]::OSX)))</_LiveClaudeOnMacOS>
+    <_LiveClaudeHostIsWindows>$([System.Runtime.InteropServices.RuntimeInformation]::IsOSPlatform($([System.Runtime.InteropServices.OSPlatform]::Windows)))</_LiveClaudeHostIsWindows>
+    <_LiveClaudeHostIsLinux>$([System.Runtime.InteropServices.RuntimeInformation]::IsOSPlatform($([System.Runtime.InteropServices.OSPlatform]::Linux)))</_LiveClaudeHostIsLinux>
+    <_LiveClaudeHostIsMacOS>$([System.Runtime.InteropServices.RuntimeInformation]::IsOSPlatform($([System.Runtime.InteropServices.OSPlatform]::OSX)))</_LiveClaudeHostIsMacOS>
+
+    <!-- "windows", "linux" or "macos": the RID's operating system, or the host's when none is set. -->
+    <_LiveClaudeTargetOs Condition="'$(RuntimeIdentifier)' != ''">unknown</_LiveClaudeTargetOs>
+    <_LiveClaudeTargetOs Condition="$(RuntimeIdentifier.StartsWith('win'))">windows</_LiveClaudeTargetOs>
+    <_LiveClaudeTargetOs Condition="$(RuntimeIdentifier.StartsWith('linux'))">linux</_LiveClaudeTargetOs>
+    <_LiveClaudeTargetOs Condition="$(RuntimeIdentifier.StartsWith('osx'))">macos</_LiveClaudeTargetOs>
+
+    <_LiveClaudeTargetOs Condition="'$(RuntimeIdentifier)' == '' and '$(_LiveClaudeHostIsWindows)' == 'true'">windows</_LiveClaudeTargetOs>
+    <_LiveClaudeTargetOs Condition="'$(RuntimeIdentifier)' == '' and '$(_LiveClaudeHostIsLinux)' == 'true'">linux</_LiveClaudeTargetOs>
+    <_LiveClaudeTargetOs Condition="'$(RuntimeIdentifier)' == '' and '$(_LiveClaudeHostIsMacOS)' == 'true'">macos</_LiveClaudeTargetOs>
+
     <_LiveClaudeSrc>$(MSBuildThisFileDirectory)..\src\</_LiveClaudeSrc>
   </PropertyGroup>
 
-  <ItemGroup Condition="'$(_LiveClaudeOnWindows)' == 'true'">
+  <!--
+    LiveClaude.Platform.Windows targets net10.0-windows, so building it on Linux or macOS needs
+    EnableWindowsTargeting. Rather than require that of every contributor, a cross-OS Windows package
+    is refused outright: the release workflow builds each operating system on its own runner.
+  -->
+  <Target Name="RefuseCrossBuildingTheWindowsPlatform"
+          BeforeTargets="Build"
+          Condition="'$(_LiveClaudeTargetOs)' == 'windows' and '$(_LiveClaudeHostIsWindows)' != 'true'">
+    <Error Text="Building a Windows package needs a Windows machine: LiveClaude.Platform.Windows targets net10.0-windows. The release workflow builds each operating system on its own runner." />
+  </Target>
+
+  <ItemGroup Condition="'$(_LiveClaudeTargetOs)' == 'windows'">
     <LiveClaudePlatformProject Include="$(_LiveClaudeSrc)LiveClaude.Platform.Windows\LiveClaude.Platform.Windows.csproj" />
   </ItemGroup>
 
-  <ItemGroup Condition="'$(_LiveClaudeOnLinux)' == 'true' or '$(_LiveClaudeOnMacOS)' == 'true'">
+  <ItemGroup Condition="'$(_LiveClaudeTargetOs)' == 'linux' or '$(_LiveClaudeTargetOs)' == 'macos'">
     <LiveClaudePlatformProject Include="$(_LiveClaudeSrc)LiveClaude.Platform.Posix\LiveClaude.Platform.Posix.csproj" />
   </ItemGroup>
 
-  <ItemGroup Condition="'$(_LiveClaudeOnLinux)' == 'true'">
+  <ItemGroup Condition="'$(_LiveClaudeTargetOs)' == 'linux'">
     <LiveClaudePlatformProject Include="$(_LiveClaudeSrc)LiveClaude.Platform.Linux\LiveClaude.Platform.Linux.csproj" />
   </ItemGroup>
 
-  <ItemGroup Condition="'$(_LiveClaudeOnMacOS)' == 'true'">
+  <ItemGroup Condition="'$(_LiveClaudeTargetOs)' == 'macos'">
     <LiveClaudePlatformProject Include="$(_LiveClaudeSrc)LiveClaude.Platform.MacOS\LiveClaude.Platform.MacOS.csproj" />
   </ItemGroup>
 
+  <!--
+    UndefineProperties keeps the RuntimeIdentifier and the publish settings from flowing into the
+    platform assembly. A platform assembly is plain managed code with no native bits, so it has one
+    build for every target; letting it inherit a runtime identifier and a self-contained flag would put its output
+    in a RID-specific folder that the copy below then fails to find.
+  -->
   <ItemGroup>
     <ProjectReference Include="@(LiveClaudePlatformProject)"
                       ReferenceOutputAssembly="false"
                       SkipGetTargetFrameworkProperties="true"
+                      UndefineProperties="TargetFramework;RuntimeIdentifier;SelfContained;PublishDir;PublishSingleFile;PublishReadyToRun"
                       Private="false" />
   </ItemGroup>
 
   <Target Name="ResolveLiveClaudePlatformAssemblies"
           Condition="'@(LiveClaudePlatformProject)' != ''">
+    <!--
+      RemoveProperties matters: without it the platform project inherits this one's RuntimeIdentifier
+      and publish settings, and a self-contained publish would try to build the platform assembly
+      self-contained too.
+    -->
     <MSBuild Projects="@(LiveClaudePlatformProject)"
              Targets="GetTargetPath"
              Properties="Configuration=$(Configuration)"
-             RemoveProperties="TargetFramework;RuntimeIdentifier;SelfContained;PublishDir">
+             RemoveProperties="TargetFramework;RuntimeIdentifier;SelfContained;PublishDir;PublishSingleFile;PublishReadyToRun">
       <Output TaskParameter="TargetOutputs" ItemName="LiveClaudePlatformAssembly" />
     </MSBuild>
   </Target>
