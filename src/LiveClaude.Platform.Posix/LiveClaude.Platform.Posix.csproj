@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <AssemblyName>LiveClaude.Platform.Posix</AssemblyName>
+    <RootNamespace>LiveClaude.Platform.Posix</RootNamespace>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\LiveClaude.Abstractions\LiveClaude.Abstractions.csproj" />
+  </ItemGroup>
+
+</Project>

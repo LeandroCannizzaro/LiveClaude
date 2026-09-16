@@ -8,6 +8,9 @@
     <Project Path="src/LiveClaude.Vt/LiveClaude.Vt.csproj" />
   </Folder>
   <Folder Name="/src/platform/">
+    <Project Path="src/LiveClaude.Platform.Linux/LiveClaude.Platform.Linux.csproj" />
+    <Project Path="src/LiveClaude.Platform.MacOS/LiveClaude.Platform.MacOS.csproj" />
+    <Project Path="src/LiveClaude.Platform.Posix/LiveClaude.Platform.Posix.csproj" />
     <Project Path="src/LiveClaude.Platform.Windows/LiveClaude.Platform.Windows.csproj" />
   </Folder>
   <Folder Name="/tests/">

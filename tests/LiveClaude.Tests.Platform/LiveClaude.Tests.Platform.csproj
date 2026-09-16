@@ -15,6 +15,17 @@
     <ProjectReference Include="..\..\src\LiveClaude.Abstractions\LiveClaude.Abstractions.csproj" />
     <ProjectReference Include="..\..\src\LiveClaude.Core\LiveClaude.Core.csproj" />
     <ProjectReference Include="..\..\src\LiveClaude.Vt\LiveClaude.Vt.csproj" />
+
+    <!--
+      The POSIX assemblies are referenced here, unlike everywhere else, because what they produce —
+      a systemd unit, a launchd property list, a quoted command line — is a pure function of its
+      input and worth asserting on every operating system. A unit file that is wrong announces itself
+      at the next reboot; a test that only runs on the machine which would have caught it is no help.
+      These are net10.0 like this project, so referencing them costs nothing.
+    -->
+    <ProjectReference Include="..\..\src\LiveClaude.Platform.Posix\LiveClaude.Platform.Posix.csproj" />
+    <ProjectReference Include="..\..\src\LiveClaude.Platform.Linux\LiveClaude.Platform.Linux.csproj" />
+    <ProjectReference Include="..\..\src\LiveClaude.Platform.MacOS\LiveClaude.Platform.MacOS.csproj" />
   </ItemGroup>
 
   <!--
