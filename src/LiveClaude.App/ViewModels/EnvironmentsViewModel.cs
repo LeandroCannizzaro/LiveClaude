@@ -1,7 +1,7 @@
 using System.Collections.ObjectModel;
 using System.IO;
-using System.Windows;
-using System.Windows.Media;
+using Avalonia.Media;
+using Avalonia.Media.Immutable;
 using LiveClaude.Core.Claude;
 using LiveClaude.Core.Config;
 using LiveClaude.Core.Logging;
@@ -52,11 +52,11 @@ public sealed class EnvironmentViewModel : ObservableObject
         _ => Environment.IsBridge ? "not tracked by LiveClaude" : "not a Remote Control bridge"
     };
 
-    public Brush UsageBrush => Usage switch
+    public IBrush UsageBrush => Usage switch
     {
-        EnvironmentUsage.InUse => new SolidColorBrush(Color.FromRgb(0x4A, 0xDE, 0x80)),
-        EnvironmentUsage.Stale => new SolidColorBrush(Color.FromRgb(0xFB, 0xBF, 0x24)),
-        _ => new SolidColorBrush(Color.FromRgb(0x6B, 0x72, 0x80))
+        EnvironmentUsage.InUse => new ImmutableSolidColorBrush(Color.FromRgb(0x4A, 0xDE, 0x80)),
+        EnvironmentUsage.Stale => new ImmutableSolidColorBrush(Color.FromRgb(0xFB, 0xBF, 0x24)),
+        _ => new ImmutableSolidColorBrush(Color.FromRgb(0x6B, 0x72, 0x80))
     };
 
     /// <summary>A live environment can never be selected: deleting it would cut the running server loose.</summary>
@@ -302,13 +302,7 @@ public sealed class EnvironmentsViewModel : ObservableObject
             : $"Permanently delete {selected.Count} environment(s) from your Claude account?{Environment.NewLine}{Environment.NewLine}{names}" +
               $"{Environment.NewLine}{Environment.NewLine}This cannot be undone. Servers running right now are never included.";
 
-        var confirm = MessageBox.Show(
-            question,
-            force ? "Force delete" : "Delete environments",
-            MessageBoxButton.YesNo,
-            MessageBoxImage.Warning);
-
-        if (confirm != MessageBoxResult.Yes)
+        if (!await Dialogs.ConfirmAsync(question, force ? "Force delete" : "Delete environments"))
             return;
 
         Busy = true;

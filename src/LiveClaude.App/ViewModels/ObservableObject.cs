@@ -1,6 +1,7 @@
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
-using System.Windows.Input;
+using System.Windows.Input;  // ICommand lives in the BCL under this namespace; it is not a WPF type.
+using Avalonia.Threading;
 
 namespace LiveClaude.App.ViewModels;
 
@@ -39,31 +40,36 @@ public sealed class RelayCommand : ICommand
         _canExecute = canExecute;
     }
 
-    public event EventHandler? CanExecuteChanged
-    {
-        add => CommandManager.RequerySuggested += value;
-        remove => CommandManager.RequerySuggested -= value;
-    }
+    /// <summary>
+    /// Avalonia has no CommandManager, and therefore no ambient "something changed, re-query every
+    /// command" signal. Each command raises its own instead, which is both cheaper and more
+    /// predictable than the WPF behaviour it replaces.
+    /// </summary>
+    public event EventHandler? CanExecuteChanged;
+
+    public void RaiseCanExecuteChanged() =>
+        Dispatcher.UIThread.Post(() => CanExecuteChanged?.Invoke(this, EventArgs.Empty));
 
     public bool CanExecute(object? parameter) => !_running && (_canExecute?.Invoke(parameter) ?? true);
 
     public async void Execute(object? parameter)
     {
         _running = true;
-        CommandManager.InvalidateRequerySuggested();
+        RaiseCanExecuteChanged();
         try
         {
             await _execute(parameter);
         }
         catch (Exception ex)
         {
-            System.Windows.MessageBox.Show(ex.Message, "LiveClaude", System.Windows.MessageBoxButton.OK,
-                System.Windows.MessageBoxImage.Warning);
+            // Fire and forget: a command handler cannot await, and a failed command should surface
+            // without blocking the one that raised it.
+            _ = Dialogs.ShowWarningAsync(ex.Message);
         }
         finally
         {
             _running = false;
-            CommandManager.InvalidateRequerySuggested();
+            RaiseCanExecuteChanged();
         }
     }
 }

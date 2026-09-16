@@ -18,10 +18,17 @@ public static class SupervisorHost
     {
         var builder = Host.CreateApplicationBuilder(args);
 
+        // The host names itself with the platform's own kind — "task", "systemd-user",
+        // "launch-agent" — so the app can match a running supervisor to the card that registered it.
+        var platform = PlatformLoader.Current;
+        var hostKind = asService
+            ? platform.SystemAutostart?.Kind ?? "system"
+            : platform.UserAutostart.Kind;
+
         builder.Services.AddSingleton(sp => new SupervisorWorker(
             sp.GetRequiredService<ILogger<SupervisorWorker>>(),
             sp.GetRequiredService<ILoggerFactory>(),
-            asService ? "service" : "task",
+            hostKind,
             sp.GetRequiredService<IHostApplicationLifetime>()));
 
         builder.Services.AddHostedService(sp => sp.GetRequiredService<SupervisorWorker>());

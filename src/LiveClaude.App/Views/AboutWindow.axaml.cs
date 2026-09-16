@@ -1,7 +1,7 @@
 using System.Diagnostics;
-using System.IO;
 using System.Reflection;
-using System.Windows;
+using Avalonia.Controls;
+using Avalonia.Interactivity;
 using LiveClaude.App.ViewModels;
 
 namespace LiveClaude.App.Views;
@@ -14,16 +14,16 @@ public partial class AboutWindow : Window
     public AboutWindow()
     {
         InitializeComponent();
-        VersionText.Text = $"version {AppInfo.Version}";
+        VersionText.Text = $"version {AppInfo.Version} · {Abstractions.PlatformLoader.Current.DisplayName}";
     }
 
-    private void OnOpenRepository(object sender, RoutedEventArgs e) => ShellViewModel.OpenUrl(RepositoryUrl);
+    private void OnOpenRepository(object? sender, RoutedEventArgs e) => ShellViewModel.OpenUrl(RepositoryUrl);
 
-    private void OnOpenProductPage(object sender, RoutedEventArgs e) => ShellViewModel.OpenUrl(ProductPageUrl);
+    private void OnOpenProductPage(object? sender, RoutedEventArgs e) => ShellViewModel.OpenUrl(ProductPageUrl);
 
-    private void OnOpenLicense(object sender, RoutedEventArgs e) => ShellViewModel.OpenUrl($"{RepositoryUrl}/blob/main/LICENSE");
+    private void OnOpenLicense(object? sender, RoutedEventArgs e) => ShellViewModel.OpenUrl($"{RepositoryUrl}/blob/main/LICENSE");
 
-    private void OnClose(object sender, RoutedEventArgs e) => Close();
+    private void OnClose(object? sender, RoutedEventArgs e) => Close();
 }
 
 /// <summary>Version of the running build, as shown in the footer and in the About window.</summary>

@@ -1,0 +1,134 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:LiveClaude.App.ViewModels"
+             x:Class="LiveClaude.App.Views.SessionsView"
+             Background="{StaticResource SurfaceBrush}">
+  <Grid Margin="20" ColumnDefinitions="280,*">
+
+    <!-- List -->
+    <DockPanel Grid.Column="0" Margin="0,0,20,0">
+      <TextBlock DockPanel.Dock="Top" Text="Sessions" Classes="heading" />
+      <Button DockPanel.Dock="Bottom" Content="New session" Classes="primary"
+              Command="{Binding NewSessionCommand}" Margin="0,12,0,0" HorizontalAlignment="Stretch"
+              HorizontalContentAlignment="Center" />
+      <ListBox ItemsSource="{Binding Instances}" SelectedItem="{Binding SelectedInstance, Mode=TwoWay}">
+        <ListBox.ItemTemplate>
+          <DataTemplate>
+            <StackPanel>
+              <StackPanel Orientation="Horizontal">
+                <Ellipse Width="8" Height="8" Fill="{Binding StateBrush}" VerticalAlignment="Center" Margin="0,0,8,0" />
+                <TextBlock Text="{Binding Name}" FontWeight="SemiBold" />
+              </StackPanel>
+              <TextBlock Text="{Binding Directory}" Classes="mono" FontSize="11" Margin="16,3,0,0"
+                         TextTrimming="CharacterEllipsis" />
+            </StackPanel>
+          </DataTemplate>
+        </ListBox.ItemTemplate>
+      </ListBox>
+    </DockPanel>
+
+    <!-- Editor -->
+    <ScrollViewer Grid.Column="1" VerticalScrollBarVisibility="Auto" DataContext="{Binding Editor}">
+      <StackPanel>
+        <TextBlock Text="Session parameters" Classes="heading" />
+        <TextBlock Classes="subheading"
+                   Text="These map one-to-one onto the flags of claude remote-control. The command preview at the bottom shows exactly what the supervisor will run." />
+
+        <Border Classes="card">
+          <StackPanel>
+            <TextBlock Text="Name (shown at claude.ai/code)" Classes="field" />
+            <TextBox Text="{Binding Name}" />
+
+            <TextBlock Text="Project directory" Classes="field" />
+            <Grid ColumnDefinitions="*,Auto">
+              <TextBox Grid.Column="0" Text="{Binding Directory}" />
+              <Button Grid.Column="1" Content="Browse…" Click="OnBrowse" Margin="8,0,0,0" />
+            </Grid>
+
+            <WrapPanel>
+              <CheckBox Content="Enabled" IsChecked="{Binding Enabled}" Margin="0,10,20,0" />
+              <CheckBox Content="Start with the supervisor" IsChecked="{Binding AutoStart}" Margin="0,10,20,0" />
+              <CheckBox Content="Pre-create a session in this directory" IsChecked="{Binding CreateSessionInDir}" Margin="0,10,20,0" />
+            </WrapPanel>
+          </StackPanel>
+        </Border>
+
+        <Border Classes="card">
+          <Grid ColumnDefinitions="*,*" RowDefinitions="Auto,Auto,Auto,Auto">
+
+            <StackPanel Grid.Row="0" Grid.Column="0" Margin="0,0,10,0">
+              <TextBlock Text="Spawn mode" Classes="field" />
+              <ComboBox ItemsSource="{x:Static vm:SessionEditorViewModel.SpawnModes}"
+                        SelectedItem="{Binding Spawn}"
+                        ItemTemplate="{StaticResource CliLabelTemplate}"
+                        HorizontalAlignment="Stretch" />
+              <TextBlock Classes="mono" FontSize="11" Margin="0,4,0,0" TextWrapping="Wrap"
+                         Text="same-dir: every session shares this folder · worktree: each remote session gets its own git worktree · session: exactly one session" />
+            </StackPanel>
+
+            <StackPanel Grid.Row="0" Grid.Column="1" Margin="10,0,0,0">
+              <TextBlock Text="Permission mode" Classes="field" />
+              <ComboBox ItemsSource="{x:Static vm:SessionEditorViewModel.PermissionModes}"
+                        SelectedItem="{Binding PermissionMode}"
+                        ItemTemplate="{StaticResource CliLabelTemplate}"
+                        HorizontalAlignment="Stretch" />
+              <TextBlock Classes="mono" FontSize="11" Margin="0,4,0,0" TextWrapping="Wrap"
+                         Text="acceptEdits or auto keep the server moving when nobody is at the keyboard." />
+            </StackPanel>
+
+            <StackPanel Grid.Row="1" Grid.Column="0" Margin="0,0,10,0">
+              <TextBlock Text="Capacity (max concurrent sessions)" Classes="field" />
+              <TextBox Text="{Binding Capacity}" />
+            </StackPanel>
+
+            <StackPanel Grid.Row="1" Grid.Column="1" Margin="10,0,0,0">
+              <TextBlock Text="Model override (optional)" Classes="field" />
+              <TextBox Text="{Binding Model}" />
+            </StackPanel>
+
+            <StackPanel Grid.Row="2" Grid.Column="0" Margin="0,0,10,0">
+              <TextBlock Text="Session name prefix (optional)" Classes="field" />
+              <TextBox Text="{Binding SessionNamePrefix}" />
+            </StackPanel>
+
+            <StackPanel Grid.Row="2" Grid.Column="1" Margin="10,0,0,0">
+              <TextBlock Text="Fixed session id (optional)" Classes="field" />
+              <TextBox Text="{Binding SessionId}" />
+            </StackPanel>
+
+            <StackPanel Grid.Row="3" Grid.Column="0" Grid.ColumnSpan="2">
+              <TextBlock Text="Extra arguments (appended verbatim)" Classes="field" />
+              <TextBox Text="{Binding ExtraArgs}" />
+
+              <WrapPanel>
+                <CheckBox Content="Reattach to the previous session after a restart (--continue)"
+                          IsChecked="{Binding ContinuePrevious}" Margin="0,12,20,0" />
+                <CheckBox Content="Sandbox" IsChecked="{Binding Sandbox}" Margin="0,12,20,0" />
+                <CheckBox Content="Verbose" IsChecked="{Binding Verbose}" Margin="0,12,20,0" />
+              </WrapPanel>
+            </StackPanel>
+          </Grid>
+        </Border>
+
+        <Border Classes="card" Background="{StaticResource SurfaceAltBrush}">
+          <StackPanel>
+            <TextBlock Text="Command preview" Classes="field" Margin="0,0,0,6" />
+            <TextBlock Text="{Binding CommandPreview}" Classes="mono" TextWrapping="Wrap"
+                       Foreground="{StaticResource TextBrush}" />
+            <Button Content="Update preview" Click="OnUpdatePreview" HorizontalAlignment="Left" Margin="0,10,0,0"
+                    Classes="small" />
+          </StackPanel>
+        </Border>
+
+        <StackPanel Orientation="Horizontal" Margin="0,4,0,20">
+          <Button Content="Save session" Classes="primary"
+                  Command="{Binding $parent[UserControl].DataContext.SaveSessionCommand}" />
+          <Button Content="Trust this directory…" Click="OnTrustDirectory" />
+          <Button Content="Run remote-control once…" Click="OnRunOnce" />
+          <Button Content="Delete" Margin="0"
+                  Command="{Binding $parent[UserControl].DataContext.DeleteSessionCommand}" />
+        </StackPanel>
+      </StackPanel>
+    </ScrollViewer>
+  </Grid>
+</UserControl>

@@ -1,29 +1,46 @@
 using System.Globalization;
-using System.Windows;
-using System.Windows.Input;
-using System.Windows.Media;
-using System.Windows.Threading;
+using Avalonia;
+using Avalonia.Controls;
+using Avalonia.Interactivity;
+using Avalonia.Input;
+using Avalonia.Input.Platform;
+using Avalonia.Media;
+using Avalonia.Media.Immutable;
+using Avalonia.Threading;
 using LiveClaude.Vt;
 
 namespace LiveClaude.Terminal.Controls;
 
 /// <summary>
 /// A terminal surface: renders a <see cref="TerminalScreen"/> and turns keystrokes into the bytes a
-/// pseudo console expects. Pure WPF drawing, no browser and no native control.
+/// pseudo terminal expects. Drawn directly onto the canvas — no browser, no native terminal control,
+/// and the same code on Windows, Linux and macOS.
 /// </summary>
-public sealed class TerminalView : FrameworkElement
+public sealed class TerminalView : Control
 {
     private readonly TerminalScreen _screen;
     private readonly VtParser _parser;
     private readonly DispatcherTimer _renderTimer;
     private readonly DispatcherTimer _blinkTimer;
 
-    private Typeface _typeface = null!;
-    private Typeface _boldTypeface = null!;
+    private Typeface _typeface;
+    private Typeface _boldTypeface;
     private double _cellWidth = 8;
     private double _cellHeight = 16;
     private long _renderedRevision = -1;
     private bool _cursorOn = true;
+
+    static TerminalView()
+    {
+        AffectsRender<TerminalView>(
+            TerminalFontFamilyProperty,
+            TerminalFontSizeProperty,
+            DefaultForegroundProperty,
+            DefaultBackgroundProperty);
+
+        FocusableProperty.OverrideDefaultValue<TerminalView>(true);
+        ClipToBoundsProperty.OverrideDefaultValue<TerminalView>(true);
+    }
 
     public TerminalView()
     {
@@ -32,11 +49,8 @@ public sealed class TerminalView : FrameworkElement
         _parser.Respond += text => Input?.Invoke(text);
         _parser.TitleChanged += title => TitleChanged?.Invoke(title);
 
-        Focusable = true;
-        FocusVisualStyle = null;
-        ClipToBounds = true;
-        SnapsToDevicePixels = true;
-
+        _typeface = default;
+        _boldTypeface = default;
         UpdateTypeface();
 
         _renderTimer = new DispatcherTimer(DispatcherPriority.Render)
@@ -65,43 +79,46 @@ public sealed class TerminalView : FrameworkElement
 
     #region Properties
 
-    public static readonly DependencyProperty TerminalFontFamilyProperty = DependencyProperty.Register(
-        nameof(TerminalFontFamily), typeof(string), typeof(TerminalView),
-        new FrameworkPropertyMetadata("Cascadia Mono, Consolas, Courier New", FrameworkPropertyMetadataOptions.AffectsRender, OnFontChanged));
+    /// <summary>
+    /// A comma-separated list, because no one font is present everywhere: Cascadia on a modern
+    /// Windows, DejaVu Sans Mono on most Linux desktops, Menlo on macOS. The last entry is the
+    /// generic family, which every system resolves to something fixed-width.
+    /// </summary>
+    public static readonly StyledProperty<string> TerminalFontFamilyProperty =
+        AvaloniaProperty.Register<TerminalView, string>(
+            nameof(TerminalFontFamily),
+            "Cascadia Mono, Consolas, DejaVu Sans Mono, Menlo, Liberation Mono, monospace");
 
-    public static readonly DependencyProperty TerminalFontSizeProperty = DependencyProperty.Register(
-        nameof(TerminalFontSize), typeof(double), typeof(TerminalView),
-        new FrameworkPropertyMetadata(13.0, FrameworkPropertyMetadataOptions.AffectsRender, OnFontChanged));
+    public static readonly StyledProperty<double> TerminalFontSizeProperty =
+        AvaloniaProperty.Register<TerminalView, double>(nameof(TerminalFontSize), 13.0);
 
-    public static readonly DependencyProperty DefaultForegroundProperty = DependencyProperty.Register(
-        nameof(DefaultForeground), typeof(Color), typeof(TerminalView),
-        new FrameworkPropertyMetadata(Color.FromRgb(0xE6, 0xE6, 0xE6), FrameworkPropertyMetadataOptions.AffectsRender));
+    public static readonly StyledProperty<Color> DefaultForegroundProperty =
+        AvaloniaProperty.Register<TerminalView, Color>(nameof(DefaultForeground), Color.FromRgb(0xE6, 0xE6, 0xE6));
 
-    public static readonly DependencyProperty DefaultBackgroundProperty = DependencyProperty.Register(
-        nameof(DefaultBackground), typeof(Color), typeof(TerminalView),
-        new FrameworkPropertyMetadata(Color.FromRgb(0x0C, 0x0C, 0x0C), FrameworkPropertyMetadataOptions.AffectsRender));
+    public static readonly StyledProperty<Color> DefaultBackgroundProperty =
+        AvaloniaProperty.Register<TerminalView, Color>(nameof(DefaultBackground), Color.FromRgb(0x0C, 0x0C, 0x0C));
 
     public string TerminalFontFamily
     {
-        get => (string)GetValue(TerminalFontFamilyProperty);
+        get => GetValue(TerminalFontFamilyProperty);
         set => SetValue(TerminalFontFamilyProperty, value);
     }
 
     public double TerminalFontSize
     {
-        get => (double)GetValue(TerminalFontSizeProperty);
+        get => GetValue(TerminalFontSizeProperty);
         set => SetValue(TerminalFontSizeProperty, value);
     }
 
     public Color DefaultForeground
     {
-        get => (Color)GetValue(DefaultForegroundProperty);
+        get => GetValue(DefaultForegroundProperty);
         set => SetValue(DefaultForegroundProperty, value);
     }
 
     public Color DefaultBackground
     {
-        get => (Color)GetValue(DefaultBackgroundProperty);
+        get => GetValue(DefaultBackgroundProperty);
         set => SetValue(DefaultBackgroundProperty, value);
     }
 
@@ -109,10 +126,10 @@ public sealed class TerminalView : FrameworkElement
 
     public int Rows => _screen.Rows;
 
-    /// <summary>Text the user typed, ready to be written to the pseudo console.</summary>
+    /// <summary>Text the user typed, ready to be written to the pseudo terminal.</summary>
     public event Action<string>? Input;
 
-    /// <summary>Raised when the grid size changes, so the host can resize the pseudo console.</summary>
+    /// <summary>Raised when the grid size changes, so the host can resize the pseudo terminal.</summary>
     public event Action<int, int>? GridSizeChanged;
 
     public event Action<string>? TitleChanged;
@@ -139,30 +156,33 @@ public sealed class TerminalView : FrameworkElement
 
     public string GetScreenText() => _screen.GetText();
 
-    private static void OnFontChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
+    protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)
     {
-        if (d is TerminalView view)
+        base.OnPropertyChanged(change);
+
+        if (change.Property == TerminalFontFamilyProperty || change.Property == TerminalFontSizeProperty)
         {
-            view.UpdateTypeface();
-            view.UpdateGridSize(view.RenderSize);
+            UpdateTypeface();
+            UpdateGridSize(Bounds.Size);
         }
     }
 
     private void UpdateTypeface()
     {
-        var family = new FontFamily(TerminalFontFamily);
-        _typeface = new Typeface(family, FontStyles.Normal, FontWeights.Normal, FontStretches.Normal);
-        _boldTypeface = new Typeface(family, FontStyles.Normal, FontWeights.Bold, FontStretches.Normal);
+        var family = FontFamily.Parse(TerminalFontFamily);
+        _typeface = new Typeface(family, FontStyle.Normal, FontWeight.Normal, FontStretch.Normal);
+        _boldTypeface = new Typeface(family, FontStyle.Normal, FontWeight.Bold, FontStretch.Normal);
 
         var probe = CreateText("M", _typeface, Brushes.White);
         _cellWidth = Math.Max(1, probe.WidthIncludingTrailingWhitespace);
         _cellHeight = Math.Max(1, Math.Ceiling(probe.Height));
     }
 
-    protected override void OnRenderSizeChanged(SizeChangedInfo info)
+    protected override Size ArrangeOverride(Size finalSize)
     {
-        base.OnRenderSizeChanged(info);
-        UpdateGridSize(info.NewSize);
+        var size = base.ArrangeOverride(finalSize);
+        UpdateGridSize(size);
+        return size;
     }
 
     private void UpdateGridSize(Size size)
@@ -181,13 +201,11 @@ public sealed class TerminalView : FrameworkElement
         InvalidateVisual();
     }
 
-    protected override void OnRender(DrawingContext dc)
+    public override void Render(DrawingContext dc)
     {
         _renderedRevision = _screen.Revision;
 
-        var defaultBackground = new SolidColorBrush(DefaultBackground);
-        defaultBackground.Freeze();
-        dc.DrawRectangle(defaultBackground, null, new Rect(RenderSize));
+        dc.FillRectangle(new ImmutableSolidColorBrush(DefaultBackground), new Rect(Bounds.Size));
 
         for (var row = 0; row < _screen.Rows; row++)
             RenderRow(dc, row);
@@ -204,6 +222,8 @@ public sealed class TerminalView : FrameworkElement
             var cell = _screen[row, column];
             var text = new System.Text.StringBuilder();
 
+            // Cells are coalesced into runs of identical styling, so a full-width row costs one draw
+            // rather than one per character.
             while (column < _screen.Columns && _screen[row, column].SameStyle(cell))
             {
                 var current = _screen[row, column];
@@ -215,29 +235,21 @@ public sealed class TerminalView : FrameworkElement
             var rect = new Rect(start * _cellWidth, row * _cellHeight, (column - start) * _cellWidth, _cellHeight);
 
             if (background != DefaultBackground)
-            {
-                var brush = new SolidColorBrush(background);
-                brush.Freeze();
-                dc.DrawRectangle(brush, null, rect);
-            }
+                dc.FillRectangle(new ImmutableSolidColorBrush(background), rect);
 
             var content = text.ToString();
-            if (!string.IsNullOrWhiteSpace(content) && !cell.Flags.HasFlag(CellFlags.Hidden))
+            if (string.IsNullOrWhiteSpace(content) || cell.Flags.HasFlag(CellFlags.Hidden))
+                continue;
+
+            var brush = new ImmutableSolidColorBrush(foreground);
+            var typeface = cell.Flags.HasFlag(CellFlags.Bold) ? _boldTypeface : _typeface;
+
+            dc.DrawText(CreateText(content, typeface, brush), new Point(rect.X, rect.Y));
+
+            if (cell.Flags.HasFlag(CellFlags.Underline))
             {
-                var brush = new SolidColorBrush(foreground);
-                brush.Freeze();
-
-                var typeface = cell.Flags.HasFlag(CellFlags.Bold) ? _boldTypeface : _typeface;
-                var formatted = CreateText(content, typeface, brush);
-                dc.DrawText(formatted, new Point(rect.X, rect.Y));
-
-                if (cell.Flags.HasFlag(CellFlags.Underline))
-                {
-                    var y = rect.Bottom - 1.5;
-                    var pen = new Pen(brush, 1);
-                    pen.Freeze();
-                    dc.DrawLine(pen, new Point(rect.X, y), new Point(rect.Right, y));
-                }
+                var y = rect.Bottom - 1.5;
+                dc.DrawLine(new ImmutablePen(brush, 1), new Point(rect.X, y), new Point(rect.Right, y));
             }
         }
     }
@@ -253,26 +265,25 @@ public sealed class TerminalView : FrameworkElement
             _cellWidth,
             _cellHeight);
 
-        var brush = new SolidColorBrush(DefaultForeground) { Opacity = IsFocused ? 0.85 : 0.35 };
-        brush.Freeze();
+        var colour = DefaultForeground;
+        var brush = new ImmutableSolidColorBrush(colour, IsFocused ? 0.85 : 0.35);
 
-        if (IsFocused)
+        if (!IsFocused)
         {
-            dc.DrawRectangle(brush, null, rect);
-
-            var cell = _screen[_screen.CursorRow, _screen.CursorColumn];
-            if (cell.Char is not ' ' and not '\0')
-            {
-                var textBrush = new SolidColorBrush(DefaultBackground);
-                textBrush.Freeze();
-                dc.DrawText(CreateText(cell.Char.ToString(), _typeface, textBrush), new Point(rect.X, rect.Y));
-            }
+            // Hollow while unfocused: the block would otherwise read as "this is where your typing
+            // goes" in a window that is not listening.
+            dc.DrawRectangle(null, new ImmutablePen(brush, 1), rect);
+            return;
         }
-        else
+
+        dc.FillRectangle(brush, rect);
+
+        var cell = _screen[_screen.CursorRow, _screen.CursorColumn];
+        if (cell.Char is not ' ' and not '\0')
         {
-            var pen = new Pen(brush, 1);
-            pen.Freeze();
-            dc.DrawRectangle(null, pen, rect);
+            dc.DrawText(
+                CreateText(cell.Char.ToString(), _typeface, new ImmutableSolidColorBrush(DefaultBackground)),
+                new Point(rect.X, rect.Y));
         }
     }
 
@@ -293,25 +304,18 @@ public sealed class TerminalView : FrameworkElement
     private static Color FromRgb(int rgb) =>
         Color.FromRgb((byte)((rgb >> 16) & 0xFF), (byte)((rgb >> 8) & 0xFF), (byte)(rgb & 0xFF));
 
-    private FormattedText CreateText(string text, Typeface typeface, Brush brush) =>
-        new(
-            text,
-            CultureInfo.InvariantCulture,
-            FlowDirection.LeftToRight,
-            typeface,
-            TerminalFontSize,
-            brush,
-            VisualTreeHelper.GetDpi(this).PixelsPerDip);
+    private FormattedText CreateText(string text, Typeface typeface, IBrush brush) =>
+        new(text, CultureInfo.InvariantCulture, FlowDirection.LeftToRight, typeface, TerminalFontSize, brush);
 
     #region Input
 
-    protected override void OnMouseDown(MouseButtonEventArgs e)
+    protected override void OnPointerPressed(PointerPressedEventArgs e)
     {
-        base.OnMouseDown(e);
+        base.OnPointerPressed(e);
         Focus();
     }
 
-    protected override void OnGotFocus(RoutedEventArgs e)
+    protected override void OnGotFocus(GotFocusEventArgs e)
     {
         base.OnGotFocus(e);
         _cursorOn = true;
@@ -324,14 +328,14 @@ public sealed class TerminalView : FrameworkElement
         InvalidateVisual();
     }
 
-    protected override void OnTextInput(TextCompositionEventArgs e)
+    protected override void OnTextInput(TextInputEventArgs e)
     {
         base.OnTextInput(e);
 
         if (string.IsNullOrEmpty(e.Text))
             return;
 
-        // Control characters are produced by OnPreviewKeyDown; here only real text.
+        // Control characters come from OnKeyDown; here only real text.
         if (e.Text.Length == 1 && char.IsControl(e.Text[0]) && e.Text[0] is not '\t')
             return;
 
@@ -339,23 +343,28 @@ public sealed class TerminalView : FrameworkElement
         e.Handled = true;
     }
 
-    protected override void OnPreviewKeyDown(KeyEventArgs e)
+    protected override void OnKeyDown(KeyEventArgs e)
     {
-        base.OnPreviewKeyDown(e);
+        base.OnKeyDown(e);
 
-        var control = (Keyboard.Modifiers & ModifierKeys.Control) != 0;
-        var shift = (Keyboard.Modifiers & ModifierKeys.Shift) != 0;
-        var alt = (Keyboard.Modifiers & ModifierKeys.Alt) != 0;
+        var control = e.KeyModifiers.HasFlag(KeyModifiers.Control);
+        var shift = e.KeyModifiers.HasFlag(KeyModifiers.Shift);
+        var alt = e.KeyModifiers.HasFlag(KeyModifiers.Alt);
 
-        // Ctrl+Shift+C / Ctrl+Shift+V follow the Windows Terminal convention.
-        if (control && shift && e.Key == Key.C)
+        // On macOS the clipboard lives on Cmd, and Ctrl+C has to stay available as the interrupt —
+        // which is the whole reason this control exists.
+        var clipboardModifier = OperatingSystem.IsMacOS()
+            ? e.KeyModifiers.HasFlag(KeyModifiers.Meta)
+            : control && shift;
+
+        if (clipboardModifier && e.Key == Key.C)
         {
             CopyScreen();
             e.Handled = true;
             return;
         }
 
-        if (control && shift && e.Key == Key.V)
+        if (clipboardModifier && e.Key == Key.V)
         {
             Paste();
             e.Handled = true;
@@ -370,26 +379,55 @@ public sealed class TerminalView : FrameworkElement
         e.Handled = true;
     }
 
-    public void Paste()
+    /// <summary>
+    /// Pastes the clipboard. Newlines become carriage returns because that is what a terminal expects
+    /// from a keyboard, and bracketed paste is honoured when the application asked for it — without
+    /// it an editor treats a pasted block as a burst of typing and auto-indents every line.
+    /// </summary>
+    public void Paste() => _ = PasteAsync();
+
+    private async Task PasteAsync()
     {
-        if (!Clipboard.ContainsText())
+        if (Clipboard is not { } clipboard)
             return;
 
-        var text = Clipboard.GetText().Replace("\r\n", "\r").Replace('\n', '\r');
-        Input?.Invoke(_parser.BracketedPaste ? $"\x1b[200~{text}\x1b[201~" : text);
-    }
-
-    public void CopyScreen()
-    {
         try
         {
-            Clipboard.SetText(GetScreenText());
+            var text = await clipboard.GetTextAsync();
+            if (string.IsNullOrEmpty(text))
+                return;
+
+            text = text.Replace("\r\n", "\r").Replace('\n', '\r');
+            Input?.Invoke(_parser.BracketedPaste ? $"\x1b[200~{text}\x1b[201~" : text);
         }
-        catch (System.Runtime.InteropServices.ExternalException)
+        catch (Exception ex) when (ex is System.Runtime.InteropServices.ExternalException or InvalidOperationException)
         {
-            // clipboard busy; nothing useful to do
+            // clipboard busy or unavailable; nothing useful to do
         }
     }
+
+    public void CopyScreen() => _ = CopyScreenAsync();
+
+    private async Task CopyScreenAsync()
+    {
+        if (Clipboard is not { } clipboard)
+            return;
+
+        try
+        {
+            await clipboard.SetTextAsync(GetScreenText());
+        }
+        catch (Exception ex) when (ex is System.Runtime.InteropServices.ExternalException or InvalidOperationException)
+        {
+            // clipboard busy or unavailable
+        }
+    }
+
+    /// <summary>
+    /// The clipboard belongs to the window, so there is none until the control is in a visual tree —
+    /// which is why every use above checks first rather than assuming.
+    /// </summary>
+    private IClipboard? Clipboard => TopLevel.GetTopLevel(this)?.Clipboard;
 
     private string? Translate(Key key, bool control, bool shift, bool alt)
     {

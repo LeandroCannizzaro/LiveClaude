@@ -1,10 +1,9 @@
-using System.IO;
-using System.Windows;
-using System.Windows.Controls;
+using Avalonia.Controls;
+using Avalonia.Interactivity;
+using Avalonia.Threading;
 using LiveClaude.App.ViewModels;
 using LiveClaude.Core.Claude;
 using LiveClaude.Terminal.Controls;
-using Microsoft.Win32;
 
 namespace LiveClaude.App.Views;
 
@@ -20,6 +19,10 @@ public partial class TerminalPane : UserControl
         Loaded += (_, _) => WireTerminal();
     }
 
+
+
+
+
     private ShellViewModel? Shell => DataContext as ShellViewModel;
 
     private void WireTerminal()
@@ -32,7 +35,7 @@ public partial class TerminalPane : UserControl
         Terminal.GridSizeChanged += OnGridSizeChanged;
     }
 
-    /// <summary>Streams a supervised instance's pseudo console into this view, in both directions.</summary>
+    /// <summary>Streams a supervised instance's pseudo terminal into this view, in both directions.</summary>
     public async Task AttachAsync(string instanceId)
     {
         var api = Shell?.Api;
@@ -97,11 +100,11 @@ public partial class TerminalPane : UserControl
         Terminal.Clear();
 
         _local = new LocalTerminalSession(Terminal);
-        _local.Exited += _ => Dispatcher.BeginInvoke(() => StatusText.Text = "Local process exited.");
+        _local.Exited += _ => Dispatcher.UIThread.Post(() => StatusText.Text = "Local process exited.");
         _local.Start(install.Path, arguments, directory);
 
         StatusText.Text = arguments.Length == 0
-            ? $"Running 'claude' in {directory} — accept the trust prompt, then type /exit."
+            ? $"Running the CLI in {directory} — accept the trust prompt, then type /exit."
             : $"Running 'claude {string.Join(' ', arguments)}' in {directory}.";
 
         Terminal.Focus();
@@ -124,7 +127,7 @@ public partial class TerminalPane : UserControl
         if (instanceId != _attachedInstanceId)
             return;
 
-        Dispatcher.BeginInvoke(() => Terminal.Write(data));
+        Dispatcher.UIThread.Post(() => Terminal.Write(data));
     }
 
     private async void OnTerminalInput(string text)
@@ -163,7 +166,7 @@ public partial class TerminalPane : UserControl
         }
     }
 
-    private async void OnInstancePicked(object sender, SelectionChangedEventArgs e)
+    private async void OnInstancePicked(object? sender, SelectionChangedEventArgs e)
     {
         if (InstancePicker.SelectedItem is InstanceViewModel instance)
         {
@@ -172,40 +175,39 @@ public partial class TerminalPane : UserControl
         }
     }
 
-    private void OnBrowse(object sender, RoutedEventArgs e)
+    private async void OnBrowse(object? sender, RoutedEventArgs e)
     {
-        var dialog = new OpenFolderDialog { Title = "Choose a directory" };
-        if (dialog.ShowDialog() == true)
-            DirectoryBox.Text = dialog.FolderName;
+        if (await Dialogs.PickFolderAsync("Choose a directory", DirectoryBox.Text) is { } folder)
+            DirectoryBox.Text = folder;
     }
 
-    private void OnOpenClaude(object sender, RoutedEventArgs e)
+    private async void OnOpenClaude(object? sender, RoutedEventArgs e)
     {
-        var directory = DirectoryBox.Text.Trim();
+        var directory = (DirectoryBox.Text ?? "").Trim();
+
         if (!Directory.Exists(directory))
         {
-            MessageBox.Show("Choose an existing directory first.", "LiveClaude",
-                MessageBoxButton.OK, MessageBoxImage.Warning);
+            await Dialogs.ShowWarningAsync("Choose an existing directory first.");
             return;
         }
 
         StartLocal(directory, []);
     }
 
-    private void OnStop(object sender, RoutedEventArgs e)
+    private void OnStop(object? sender, RoutedEventArgs e)
     {
         StopLocal();
         _ = DetachAsync();
         StatusText.Text = "Stopped.";
     }
 
-    private void OnClear(object sender, RoutedEventArgs e) => Terminal.Clear();
+    private void OnClear(object? sender, RoutedEventArgs e) => Terminal.Clear();
 
-    private void OnCopy(object sender, RoutedEventArgs e) => Terminal.CopyScreen();
+    private void OnCopy(object? sender, RoutedEventArgs e) => Terminal.CopyScreen();
 
-    private void OnPaste(object sender, RoutedEventArgs e) => Terminal.Paste();
+    private void OnPaste(object? sender, RoutedEventArgs e) => Terminal.Paste();
 
-    private void OnSendCtrlC(object sender, RoutedEventArgs e)
+    private void OnSendCtrlC(object? sender, RoutedEventArgs e)
     {
         // Both the local session and the remote attachment listen on TerminalView.Input.
         Terminal.Focus();

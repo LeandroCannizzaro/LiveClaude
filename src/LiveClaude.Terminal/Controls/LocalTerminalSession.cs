@@ -1,26 +1,23 @@
-using System.IO;
 using System.Text;
-using System.Windows.Threading;
+using Avalonia.Threading;
 using LiveClaude.Abstractions;
 
 namespace LiveClaude.Terminal.Controls;
 
 /// <summary>
-/// Runs a command in a pseudo console and wires it to a <see cref="TerminalView"/>. Used by the app's
+/// Runs a command in a pseudo terminal and wires it to a <see cref="TerminalView"/>. Used by the app's
 /// Terminal tab for the interactive one-off runs: accepting workspace trust for a new directory,
 /// answering the Remote Control confirmation, or signing in with /login.
 /// </summary>
 public sealed class LocalTerminalSession : IDisposable
 {
     private readonly TerminalView _view;
-    private readonly Dispatcher _dispatcher;
     private IPtyProcess? _pty;
     private CancellationTokenSource? _cts;
 
     public LocalTerminalSession(TerminalView view)
     {
         _view = view;
-        _dispatcher = view.Dispatcher;
         _view.Input += OnInput;
         _view.GridSizeChanged += OnGridSizeChanged;
     }
@@ -50,7 +47,7 @@ public sealed class LocalTerminalSession : IDisposable
         _ = pty.Exited.ContinueWith(t =>
         {
             var code = t.IsCompletedSuccessfully ? t.Result : -1;
-            _dispatcher.BeginInvoke(() =>
+            Dispatcher.UIThread.Post(() =>
             {
                 _view.Write($"\r\n\x1b[90m[process exited with code {code}]\x1b[0m\r\n");
                 Exited?.Invoke(code);
@@ -87,7 +84,7 @@ public sealed class LocalTerminalSession : IDisposable
                     continue;
 
                 var text = new string(chars, 0, count);
-                await _dispatcher.InvokeAsync(() => _view.Write(text), DispatcherPriority.Render);
+                await Dispatcher.UIThread.InvokeAsync(() => _view.Write(text), DispatcherPriority.Render);
             }
         }
         catch (Exception ex) when (ex is IOException or ObjectDisposedException or OperationCanceledException)

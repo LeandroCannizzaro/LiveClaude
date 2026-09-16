@@ -1,0 +1,37 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="LiveClaude.App.Views.LogsView"
+             Background="{StaticResource SurfaceBrush}">
+  <Grid Margin="20" RowDefinitions="Auto,Auto,*">
+
+    <StackPanel Grid.Row="0">
+      <TextBlock Text="Logs" Classes="heading" />
+      <!--
+        Bound rather than written out: the log directory is %ProgramData% on Windows, an XDG state
+        directory on Linux and ~/Library/Logs on macOS, so naming one of them in the UI would be
+        wrong on the other two.
+      -->
+      <TextBlock Classes="subheading" Text="{Binding LogsDescription}" />
+    </StackPanel>
+
+    <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="0,0,0,12">
+      <ComboBox Name="InstancePicker" Width="260" ItemsSource="{Binding Instances}"
+                SelectionChanged="OnInstancePicked">
+        <ComboBox.ItemTemplate>
+          <DataTemplate>
+            <TextBlock Text="{Binding Name}" />
+          </DataTemplate>
+        </ComboBox.ItemTemplate>
+      </ComboBox>
+      <Button Content="Refresh" Click="OnRefresh" Margin="10,0,8,0" />
+      <Button Content="Open logs folder" Command="{Binding OpenLogFolderCommand}" />
+      <CheckBox Name="AutoRefresh" Content="Auto-refresh" IsChecked="True" Margin="10,0,0,0" VerticalAlignment="Center" />
+    </StackPanel>
+
+    <Border Grid.Row="2" Classes="terminal" Padding="10">
+      <TextBox Name="LogBox" Classes="mono" IsReadOnly="True"
+               TextWrapping="NoWrap" AcceptsReturn="True"
+               VerticalAlignment="Stretch" HorizontalAlignment="Stretch" />
+    </Border>
+  </Grid>
+</UserControl>

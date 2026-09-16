@@ -1,0 +1,243 @@
+<Styles xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:conv="using:LiveClaude.App.Converters">
+
+  <Styles.Resources>
+    <conv:EmptyCountConverter x:Key="IsEmpty" />
+    <conv:HasTextConverter x:Key="HasText" />
+    <conv:CliLabelConverter x:Key="CliLabel" />
+
+    <!-- Spawn and permission modes are shown the way the CLI spells them. -->
+    <DataTemplate x:Key="CliLabelTemplate">
+      <TextBlock Text="{Binding Converter={StaticResource CliLabel}}" />
+    </DataTemplate>
+
+    <!--
+      The palette. Same values as the WPF theme this replaces, so the application looks identical on
+      Windows and brings its own look to Linux and macOS rather than inheriting three different ones.
+    -->
+    <Color x:Key="BackgroundColor">#0E1013</Color>
+    <Color x:Key="SurfaceColor">#161A20</Color>
+    <Color x:Key="SurfaceAltColor">#1D222A</Color>
+    <Color x:Key="BorderColor">#2A313B</Color>
+    <Color x:Key="TextColor">#E7EAEE</Color>
+    <Color x:Key="MutedTextColor">#9AA4B2</Color>
+    <Color x:Key="AccentColor">#D97757</Color>
+    <Color x:Key="AccentHoverColor">#E68B6D</Color>
+    <Color x:Key="SuccessColor">#4ADE80</Color>
+    <Color x:Key="WarningColor">#FBBF24</Color>
+    <Color x:Key="DangerColor">#F87171</Color>
+    <Color x:Key="TerminalBackgroundColor">#0C0C0C</Color>
+
+    <SolidColorBrush x:Key="BackgroundBrush" Color="{StaticResource BackgroundColor}" />
+    <SolidColorBrush x:Key="SurfaceBrush" Color="{StaticResource SurfaceColor}" />
+    <SolidColorBrush x:Key="SurfaceAltBrush" Color="{StaticResource SurfaceAltColor}" />
+    <SolidColorBrush x:Key="BorderBrush" Color="{StaticResource BorderColor}" />
+    <SolidColorBrush x:Key="TextBrush" Color="{StaticResource TextColor}" />
+    <SolidColorBrush x:Key="MutedTextBrush" Color="{StaticResource MutedTextColor}" />
+    <SolidColorBrush x:Key="AccentBrush" Color="{StaticResource AccentColor}" />
+    <SolidColorBrush x:Key="AccentHoverBrush" Color="{StaticResource AccentHoverColor}" />
+    <SolidColorBrush x:Key="SuccessBrush" Color="{StaticResource SuccessColor}" />
+    <SolidColorBrush x:Key="WarningBrush" Color="{StaticResource WarningColor}" />
+    <SolidColorBrush x:Key="DangerBrush" Color="{StaticResource DangerColor}" />
+    <SolidColorBrush x:Key="TerminalBackgroundBrush" Color="{StaticResource TerminalBackgroundColor}" />
+
+    <!--
+      No one monospace font exists everywhere. Avalonia walks the list until something resolves, and
+      the generic family at the end is guaranteed to.
+    -->
+    <FontFamily x:Key="MonoFont">Cascadia Mono, Consolas, DejaVu Sans Mono, Menlo, Liberation Mono, monospace</FontFamily>
+
+    <!-- Fluent reads these for the controls it templates, so the chrome matches the palette. -->
+    <SolidColorBrush x:Key="SystemAccentColorBrush" Color="{StaticResource AccentColor}" />
+    <Color x:Key="SystemAccentColor">#D97757</Color>
+  </Styles.Resources>
+
+  <Style Selector="Window">
+    <Setter Property="Background" Value="{StaticResource BackgroundBrush}" />
+    <Setter Property="FontSize" Value="13" />
+  </Style>
+
+  <Style Selector="TextBlock">
+    <Setter Property="Foreground" Value="{StaticResource TextBrush}" />
+    <Setter Property="FontSize" Value="13" />
+  </Style>
+
+  <Style Selector="TextBlock.heading">
+    <Setter Property="FontSize" Value="19" />
+    <Setter Property="FontWeight" Value="SemiBold" />
+    <Setter Property="Margin" Value="0,0,0,4" />
+  </Style>
+
+  <Style Selector="TextBlock.subheading">
+    <Setter Property="Foreground" Value="{StaticResource MutedTextBrush}" />
+    <Setter Property="FontSize" Value="12.5" />
+    <Setter Property="TextWrapping" Value="Wrap" />
+    <Setter Property="Margin" Value="0,0,0,12" />
+  </Style>
+
+  <Style Selector="TextBlock.field">
+    <Setter Property="Foreground" Value="{StaticResource MutedTextBrush}" />
+    <Setter Property="FontSize" Value="12" />
+    <Setter Property="Margin" Value="0,10,0,4" />
+  </Style>
+
+  <Style Selector="TextBlock.mono">
+    <Setter Property="FontFamily" Value="{StaticResource MonoFont}" />
+    <Setter Property="FontSize" Value="12" />
+    <Setter Property="Foreground" Value="{StaticResource MutedTextBrush}" />
+  </Style>
+
+  <Style Selector="Border.card">
+    <Setter Property="Background" Value="{StaticResource SurfaceBrush}" />
+    <Setter Property="BorderBrush" Value="{StaticResource BorderBrush}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="CornerRadius" Value="10" />
+    <Setter Property="Padding" Value="16" />
+    <Setter Property="Margin" Value="0,0,0,14" />
+  </Style>
+
+  <Style Selector="Border.terminal">
+    <Setter Property="Background" Value="{StaticResource TerminalBackgroundBrush}" />
+    <Setter Property="BorderBrush" Value="{StaticResource BorderBrush}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="CornerRadius" Value="10" />
+    <Setter Property="ClipToBounds" Value="True" />
+  </Style>
+
+  <Style Selector="Border.pill">
+    <Setter Property="Background" Value="{StaticResource SurfaceAltBrush}" />
+    <Setter Property="CornerRadius" Value="10" />
+    <Setter Property="Padding" Value="8,2" />
+  </Style>
+
+  <Style Selector="Button">
+    <Setter Property="Background" Value="{StaticResource SurfaceAltBrush}" />
+    <Setter Property="Foreground" Value="{StaticResource TextBrush}" />
+    <Setter Property="BorderBrush" Value="{StaticResource BorderBrush}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="CornerRadius" Value="7" />
+    <Setter Property="Padding" Value="13,6" />
+    <Setter Property="Margin" Value="0,0,8,0" />
+    <Setter Property="FontSize" Value="12.5" />
+  </Style>
+
+  <Style Selector="Button:pointerover /template/ ContentPresenter">
+    <Setter Property="Background" Value="{StaticResource BorderBrush}" />
+    <Setter Property="TextBlock.Foreground" Value="{StaticResource TextBrush}" />
+  </Style>
+
+  <Style Selector="Button:disabled /template/ ContentPresenter">
+    <Setter Property="Opacity" Value="0.45" />
+  </Style>
+
+  <Style Selector="Button.primary">
+    <Setter Property="Background" Value="{StaticResource AccentBrush}" />
+    <Setter Property="BorderBrush" Value="{StaticResource AccentBrush}" />
+    <Setter Property="Foreground" Value="#1A0E08" />
+    <Setter Property="FontWeight" Value="SemiBold" />
+  </Style>
+
+  <Style Selector="Button.primary:pointerover /template/ ContentPresenter">
+    <Setter Property="Background" Value="{StaticResource AccentHoverBrush}" />
+    <Setter Property="TextBlock.Foreground" Value="#1A0E08" />
+  </Style>
+
+  <Style Selector="Button.link">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderBrush" Value="Transparent" />
+    <Setter Property="Foreground" Value="{StaticResource MutedTextBrush}" />
+    <Setter Property="Padding" Value="10,3" />
+    <Setter Property="FontSize" Value="11.5" />
+  </Style>
+
+  <Style Selector="Button.small">
+    <Setter Property="Padding" Value="8,3" />
+    <Setter Property="FontSize" Value="11.5" />
+  </Style>
+
+  <Style Selector="TextBox">
+    <Setter Property="Background" Value="{StaticResource SurfaceAltBrush}" />
+    <Setter Property="Foreground" Value="{StaticResource TextBrush}" />
+    <Setter Property="BorderBrush" Value="{StaticResource BorderBrush}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="CornerRadius" Value="7" />
+    <Setter Property="Padding" Value="9,6" />
+    <Setter Property="FontSize" Value="12.5" />
+  </Style>
+
+  <Style Selector="TextBox.mono">
+    <Setter Property="FontFamily" Value="{StaticResource MonoFont}" />
+    <Setter Property="FontSize" Value="12" />
+    <Setter Property="Foreground" Value="#CFD6DE" />
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+  </Style>
+
+  <Style Selector="ComboBox">
+    <Setter Property="Background" Value="{StaticResource SurfaceAltBrush}" />
+    <Setter Property="Foreground" Value="{StaticResource TextBrush}" />
+    <Setter Property="BorderBrush" Value="{StaticResource BorderBrush}" />
+    <Setter Property="CornerRadius" Value="7" />
+    <Setter Property="FontSize" Value="12.5" />
+  </Style>
+
+  <Style Selector="CheckBox">
+    <Setter Property="Foreground" Value="{StaticResource TextBrush}" />
+    <Setter Property="FontSize" Value="12.5" />
+  </Style>
+
+  <Style Selector="TabControl">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="Padding" Value="0" />
+  </Style>
+
+  <Style Selector="TabItem">
+    <Setter Property="Foreground" Value="{StaticResource MutedTextBrush}" />
+    <Setter Property="FontSize" Value="13" />
+    <Setter Property="Padding" Value="14,8" />
+    <Setter Property="MinHeight" Value="0" />
+  </Style>
+
+  <Style Selector="TabItem:selected">
+    <Setter Property="Foreground" Value="{StaticResource TextBrush}" />
+  </Style>
+
+  <Style Selector="ListBox">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="Padding" Value="0" />
+  </Style>
+
+  <!--
+    The selected session is marked with an accent border rather than a filled background: the rows
+    carry their own status colour, and a selection fill would fight with it.
+  -->
+  <Style Selector="ListBoxItem">
+    <Setter Property="Padding" Value="0" />
+    <Setter Property="Margin" Value="0,0,0,6" />
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="Template">
+      <ControlTemplate>
+        <Border Name="Root"
+                Background="{StaticResource SurfaceAltBrush}"
+                CornerRadius="8"
+                Padding="12,10"
+                BorderThickness="1"
+                BorderBrush="Transparent">
+          <ContentPresenter Content="{TemplateBinding Content}"
+                            ContentTemplate="{TemplateBinding ContentTemplate}" />
+        </Border>
+      </ControlTemplate>
+    </Setter>
+  </Style>
+
+  <Style Selector="ListBoxItem:selected /template/ Border#Root">
+    <Setter Property="BorderBrush" Value="{StaticResource AccentBrush}" />
+  </Style>
+
+  <Style Selector="ListBoxItem:pointerover /template/ Border#Root">
+    <Setter Property="Background" Value="{StaticResource BorderBrush}" />
+  </Style>
+
+</Styles>

@@ -1,0 +1,16 @@
+<Application xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="LiveClaude.App.App"
+             RequestedThemeVariant="Dark">
+
+  <Application.Styles>
+    <!--
+      Fluent supplies the control chrome — scrollbars, combo boxes, check boxes, focus adorners —
+      which the WPF version had to template by hand. Dark.axaml only layers this application's
+      palette and its handful of text and button styles on top.
+    -->
+    <FluentTheme />
+    <StyleInclude Source="avares://LiveClaude/Themes/Dark.axaml" />
+  </Application.Styles>
+
+</Application>

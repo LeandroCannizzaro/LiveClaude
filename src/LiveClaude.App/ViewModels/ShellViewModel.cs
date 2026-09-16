@@ -1,8 +1,7 @@
 using System.Collections.ObjectModel;
 using System.Diagnostics;
 using System.IO;
-using System.Windows;
-using System.Windows.Threading;
+using Avalonia.Threading;
 using LiveClaude.Core.Claude;
 using LiveClaude.Abstractions;
 using LiveClaude.Core.Config;
@@ -18,7 +17,6 @@ namespace LiveClaude.App.ViewModels;
 /// </summary>
 public sealed class ShellViewModel : ObservableObject, IAsyncDisposable
 {
-    private readonly Dispatcher _dispatcher = Application.Current?.Dispatcher ?? Dispatcher.CurrentDispatcher;
     private readonly DispatcherTimer _ticker;
 
     private ISupervisorApi? _api;
@@ -230,7 +228,7 @@ public sealed class ShellViewModel : ObservableObject, IAsyncDisposable
         }
 
         _api.StatusChanged += OnStatusChanged;
-        _api.ConnectionChanged += connected => _dispatcher.BeginInvoke(() =>
+        _api.ConnectionChanged += connected => Dispatcher.UIThread.Post(() =>
         {
             IsConnected = connected;
             if (!connected)
@@ -241,6 +239,38 @@ public sealed class ShellViewModel : ObservableObject, IAsyncDisposable
         await RefreshAsync();
         await Hosting.RefreshAsync();
     }
+
+    /// <summary>
+    /// Names the supervisor's host the way this platform calls it. The supervisor reports the kind it
+    /// was registered as ("task", "systemd-user", "launch-daemon"), and the matching provider knows
+    /// the words for it.
+    /// </summary>
+    private static string DescribeHost(string host)
+    {
+        var platform = PlatformLoader.Current;
+
+        if (string.Equals(host, platform.UserAutostart.Kind, StringComparison.OrdinalIgnoreCase))
+            return $"Supervised by the {platform.UserAutostart.DisplayName.ToLowerInvariant()}";
+
+        if (platform.SystemAutostart is { } system &&
+            string.Equals(host, system.Kind, StringComparison.OrdinalIgnoreCase))
+        {
+            return $"Supervised by the {system.DisplayName.ToLowerInvariant()}";
+        }
+
+        return "Supervised by this app (no autostart host running)";
+    }
+
+    /// <summary>Where the configuration file lives, which differs per platform.</summary>
+    public string ConfigPath => new ConfigStore().Path;
+
+    /// <summary>
+    /// The Logs tab's subheading. Written here rather than in the markup because it names the log
+    /// directory, and that is %ProgramData% on Windows, XDG state on Linux and ~/Library/Logs on macOS.
+    /// </summary>
+    public string LogsDescription =>
+        "Everything the supervised server printed, with escape sequences stripped. " +
+        $"Full files live under {ConfigStore.LogDirectory}.";
 
     public async Task RefreshAsync()
     {
@@ -263,16 +293,12 @@ public sealed class ShellViewModel : ObservableObject, IAsyncDisposable
         OnPropertyChanged(nameof(DetectedInstalls));
     }
 
-    private void OnStatusChanged(SupervisorStatus status) => _dispatcher.BeginInvoke(() =>
+    private void OnStatusChanged(SupervisorStatus status) => Dispatcher.UIThread.Post(() =>
     {
-        ConnectionText = status.Host switch
-        {
-            "service" => "Supervised by the Windows service",
-            "task" => "Supervised by the scheduled task",
-            _ => "Supervised by this app (no service or task running)"
-        };
+        ConnectionText = DescribeHost(status.Host);
 
-        // Lets the hosting card say "running" even when Windows will not let us read the task back.
+        // Lets a hosting card say "running" even when the OS will not let us read its registration
+        // back — a task registered by another administrator, a launchd domain we may not print.
         Hosting.ConnectedSupervisorHost = status.Host;
 
         ClaudeInfo = status.ClaudePath is null
@@ -308,7 +334,7 @@ public sealed class ShellViewModel : ObservableObject, IAsyncDisposable
         var error = session.Validate();
         if (error is not null)
         {
-            MessageBox.Show(error, "Session not saved", MessageBoxButton.OK, MessageBoxImage.Warning);
+            await Dialogs.ShowWarningAsync(error, "Session not saved");
             return;
         }
 
@@ -322,13 +348,11 @@ public sealed class ShellViewModel : ObservableObject, IAsyncDisposable
         if (_api is null || Editor.IsNew)
             return;
 
-        var confirm = MessageBox.Show(
+        var confirmed = await Dialogs.ConfirmAsync(
             $"Remove '{Editor.Name}' from LiveClaude?\n\nThe Remote Control server stops; nothing is deleted on disk.",
-            "Remove session",
-            MessageBoxButton.YesNo,
-            MessageBoxImage.Question);
+            "Remove session");
 
-        if (confirm != MessageBoxResult.Yes)
+        if (!confirmed)
             return;
 
         await _api.DeleteSessionAsync(Editor.Id);
@@ -370,7 +394,7 @@ public sealed class ShellViewModel : ObservableObject, IAsyncDisposable
         }
         catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or InvalidOperationException or IOException)
         {
-            MessageBox.Show($"Could not open '{target}'.", "LiveClaude", MessageBoxButton.OK, MessageBoxImage.Warning);
+            _ = Dialogs.ShowWarningAsync($"Could not open '{target}'.");
         }
     }
 

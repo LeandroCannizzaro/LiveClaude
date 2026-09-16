@@ -1,0 +1,156 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="LiveClaude.App.Views.SettingsView"
+             Background="{StaticResource SurfaceBrush}">
+  <ScrollViewer VerticalScrollBarVisibility="Auto">
+    <StackPanel Margin="20">
+      <TextBlock Text="Service &amp; startup" Classes="heading" />
+      <TextBlock Text="{Binding Hosting.SupervisorBuild}" Classes="mono" Margin="0,0,0,8" />
+      <TextBlock Classes="subheading"
+                 Text="Pick who keeps the servers alive when this window is closed. The host that runs in your own signed-in session is the safest default; the system-wide one starts even before you sign in, but must run under your account to reach the Claude Code credentials." />
+
+      <!-- The host that runs in the signed-in session: scheduled task, systemd user unit, LaunchAgent. -->
+      <Border Classes="card" DataContext="{Binding Hosting.UserHost}">
+        <StackPanel>
+          <StackPanel Orientation="Horizontal">
+            <TextBlock Text="{Binding DisplayName}" FontSize="15" FontWeight="SemiBold" />
+            <Border Classes="pill" Margin="10,1,0,0">
+              <TextBlock Text="{Binding Status}" FontSize="11.5" Foreground="{StaticResource MutedTextBrush}" />
+            </Border>
+            <TextBlock Text="recommended" Foreground="{StaticResource SuccessBrush}" FontSize="11.5" Margin="10,2,0,0" />
+          </StackPanel>
+
+          <TextBlock Classes="subheading" Margin="0,8,0,4" Text="{Binding Summary}" />
+          <TextBlock Classes="subheading" Margin="0,0,0,10"
+                     Text="{Binding StartBeforeSignInRequirement}"
+                     IsVisible="{Binding StartBeforeSignInRequirement, Converter={StaticResource HasText}}" />
+
+          <StackPanel Orientation="Horizontal">
+            <Button Content="Install / update" Classes="primary" Click="OnInstallUserHost" />
+            <Button Content="Start" Click="OnStartUserHost" />
+            <Button Content="Stop" Click="OnStopUserHost" />
+            <Button Content="Remove" Click="OnRemoveUserHost" Margin="0" />
+          </StackPanel>
+
+          <TextBlock Text="{Binding Result}" Classes="mono" Margin="0,12,0,0"
+                     TextWrapping="Wrap" Foreground="{StaticResource TextBrush}"
+                     IsVisible="{Binding HasResult}" />
+        </StackPanel>
+      </Border>
+
+      <!-- The machine-wide host, where the platform has one: Windows service, systemd system unit, LaunchDaemon. -->
+      <Border Classes="card" DataContext="{Binding Hosting.SystemHost}"
+              IsVisible="{Binding $parent[UserControl].DataContext.Hosting.HasSystemHost}">
+        <StackPanel>
+          <StackPanel Orientation="Horizontal">
+            <TextBlock Text="{Binding DisplayName}" FontSize="15" FontWeight="SemiBold" />
+            <Border Classes="pill" Margin="10,1,0,0">
+              <TextBlock Text="{Binding Status}" FontSize="11.5" Foreground="{StaticResource MutedTextBrush}" />
+            </Border>
+          </StackPanel>
+
+          <TextBlock Classes="subheading" Margin="0,8,0,4" Text="{Binding Summary}" />
+          <TextBlock Classes="subheading" Foreground="{StaticResource WarningBrush}" Margin="0,0,0,6"
+                     Text="Run it as your own account: the system account has a different profile and will not find the Claude Code sign-in." />
+
+          <Grid ColumnDefinitions="*,*" IsVisible="{Binding SupportsAccount}">
+            <StackPanel Grid.Column="0" Margin="0,0,10,0">
+              <TextBlock Text="Account" Classes="field" />
+              <TextBox Text="{Binding $parent[UserControl].DataContext.Hosting.Account}" />
+            </StackPanel>
+            <StackPanel Grid.Column="1" Margin="10,0,0,0" IsVisible="{Binding RequiresPassword}">
+              <TextBlock Text="Password (used once during the install, never stored)" Classes="field" />
+              <TextBox Name="ServicePassword" PasswordChar="●" />
+            </StackPanel>
+          </Grid>
+
+          <StackPanel Orientation="Horizontal" Margin="0,14,0,0">
+            <Button Content="Install" Click="OnInstallSystemHost" />
+            <Button Content="Start" Click="OnStartSystemHost" />
+            <Button Content="Stop" Click="OnStopSystemHost" />
+            <Button Content="Remove" Click="OnRemoveSystemHost" Margin="0" />
+          </StackPanel>
+
+          <TextBlock Text="{Binding Result}" Classes="mono" Margin="0,12,0,0"
+                     TextWrapping="Wrap" Foreground="{StaticResource TextBrush}"
+                     IsVisible="{Binding HasResult}" />
+        </StackPanel>
+      </Border>
+
+      <!-- Claude CLI -->
+      <Border Classes="card">
+        <StackPanel>
+          <TextBlock Text="Claude Code CLI" FontSize="15" FontWeight="SemiBold" />
+          <TextBlock Classes="subheading" Margin="0,8,0,0"
+                     Text="Prefer a stable native install: the copy bundled with the Claude desktop app lives in a versioned folder whose path changes on every update." />
+
+          <TextBlock Text="Path (leave empty to auto-detect)" Classes="field" />
+          <TextBox Text="{Binding ClaudePath}" />
+
+          <TextBlock Text="Detected installs" Classes="field" />
+          <ItemsControl ItemsSource="{Binding DetectedInstalls}">
+            <ItemsControl.ItemTemplate>
+              <DataTemplate>
+                <Grid Margin="0,0,0,6" ColumnDefinitions="*,Auto">
+                  <StackPanel Grid.Column="0">
+                    <TextBlock Text="{Binding Path}" Classes="mono" Foreground="{StaticResource TextBrush}" />
+                    <TextBlock Classes="mono" FontSize="11">
+                      <Run Text="{Binding Version}" />
+                      <Run Text=" — " />
+                      <Run Text="{Binding Source}" />
+                    </TextBlock>
+                  </StackPanel>
+                  <Button Grid.Column="1" Content="Use" Click="OnUseInstall" Tag="{Binding Path}" Classes="small" Margin="0" />
+                </Grid>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+        </StackPanel>
+      </Border>
+
+      <!-- Restart policy -->
+      <Border Classes="card">
+        <StackPanel>
+          <TextBlock Text="Restart policy" FontSize="15" FontWeight="SemiBold" />
+          <Grid Margin="0,8,0,0" ColumnDefinitions="*,*,*,*">
+            <StackPanel Grid.Column="0" Margin="0,0,10,0">
+              <TextBlock Text="First retry (s)" Classes="field" />
+              <TextBox Text="{Binding BackoffInitialSeconds}" />
+            </StackPanel>
+            <StackPanel Grid.Column="1" Margin="10,0,10,0">
+              <TextBlock Text="Max backoff (s)" Classes="field" />
+              <TextBox Text="{Binding BackoffMaxSeconds}" />
+            </StackPanel>
+            <StackPanel Grid.Column="2" Margin="10,0,10,0">
+              <TextBlock Text="Max restarts (0 = forever)" Classes="field" />
+              <TextBox Text="{Binding BackoffMaxRestarts}" />
+            </StackPanel>
+            <StackPanel Grid.Column="3" Margin="10,0,0,0">
+              <TextBlock Text="Log file size (MB)" Classes="field" />
+              <TextBox Text="{Binding LogMaxSizeMb}" />
+            </StackPanel>
+          </Grid>
+
+          <Grid Margin="0,4,0,0" ColumnDefinitions="*,3*">
+            <StackPanel Grid.Column="0" Margin="0,0,10,0">
+              <TextBlock Text="Clean shutdown wait (s)" Classes="field" />
+              <TextBox Text="{Binding GracefulStopSeconds}" />
+            </StackPanel>
+
+            <StackPanel Grid.Column="1" Margin="10,0,0,0" VerticalAlignment="Bottom">
+              <TextBlock Classes="mono" FontSize="11" TextWrapping="Wrap" Margin="0,0,0,6"
+                         Text="Stopping sends Ctrl+C and waits this long before terminating. The CLI uses that window to deregister its bridge environment — a hard kill is what leaves dead entries in the session picker." />
+              <CheckBox Content="Track which environment each server registers (needs the Anthropic API)"
+                        IsChecked="{Binding TrackEnvironments}" />
+            </StackPanel>
+          </Grid>
+
+          <StackPanel Orientation="Horizontal" Margin="0,16,0,0">
+            <Button Content="Save settings" Classes="primary" Command="{Binding SaveSettingsCommand}" />
+            <Button Content="Reconnect to supervisor" Command="{Binding ReconnectCommand}" Margin="0" />
+          </StackPanel>
+        </StackPanel>
+      </Border>
+    </StackPanel>
+  </ScrollViewer>
+</UserControl>

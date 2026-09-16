@@ -1,33 +1,26 @@
-<UserControl x:Class="LiveClaude.App.Views.EnvironmentsView"
-             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+<UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="LiveClaude.App.Views.EnvironmentsView"
              Background="{StaticResource SurfaceBrush}">
-  <Grid Margin="20" DataContext="{Binding Environments}">
-    <Grid.RowDefinitions>
-      <RowDefinition Height="Auto" />
-      <RowDefinition Height="Auto" />
-      <RowDefinition Height="Auto" />
-      <RowDefinition Height="*" />
-      <RowDefinition Height="Auto" />
-    </Grid.RowDefinitions>
+  <Grid Margin="20" DataContext="{Binding Environments}" RowDefinitions="Auto,Auto,Auto,*,Auto">
 
     <StackPanel Grid.Row="0">
-      <TextBlock Text="Environments on your account" Style="{StaticResource Heading}" />
-      <TextBlock Style="{StaticResource SubHeading}"
-                 Text="Every 'claude remote-control' process registers a bridge environment, and it stays registered after the process is gone — that is why the picker in Claude Desktop shows the same project several times, one live and the rest dead. Delete the leftovers here. LiveClaude never selects an environment that a running server is using." />
+      <TextBlock Text="Environments on your account" Classes="heading" />
+      <TextBlock Classes="subheading"
+                 Text="Every remote-control process registers a bridge environment, and it stays registered after the process is gone — that is why the picker in Claude Desktop shows the same project several times, one live and the rest dead. Delete the leftovers here. LiveClaude never selects an environment that a running server is using." />
     </StackPanel>
 
     <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="0,0,0,12">
       <Button Content="Refresh" Command="{Binding RefreshCommand}" />
-      <Button Content="Select duplicates" Style="{StaticResource PrimaryButton}"
-              ToolTip="Keeps the live one — or the newest — for each directory and selects the rest."
+      <Button Content="Select duplicates" Classes="primary"
+              ToolTip.Tip="Keeps the live one — or the newest — for each directory and selects the rest."
               Command="{Binding SelectDuplicatesCommand}" />
       <Button Content="Select stale" Command="{Binding SelectStaleCommand}" />
       <Button Content="Clear selection" Command="{Binding ClearSelectionCommand}" />
       <Button Content="Delete selected" Command="{Binding DeleteSelectedCommand}" />
       <Button Command="{Binding ForceDeleteCommand}"
-              Visibility="{Binding CanForce, Converter={StaticResource BoolToVisibility}}"
-              ToolTip="These still have session records attached. Forcing deletes those too.">
+              IsVisible="{Binding CanForce}"
+              ToolTip.Tip="These still have session records attached. Forcing deletes those too.">
         <TextBlock>
           <Run Text="Force delete (" /><Run Text="{Binding ForceCandidateCount, Mode=OneWay}" /><Run Text=")" />
         </TextBlock>
@@ -38,13 +31,13 @@
     </StackPanel>
 
     <!-- What went wrong last time, in front of the user rather than only in the log file. -->
-    <Border Grid.Row="2" Style="{StaticResource Card}" Padding="14,12" Margin="0,0,0,12"
+    <Border Grid.Row="2" Classes="card" Padding="14,12" Margin="0,0,0,12"
             Background="#2A1E18" BorderBrush="{StaticResource DangerBrush}"
-            Visibility="{Binding HasFailures, Converter={StaticResource BoolToVisibility}}">
+            IsVisible="{Binding HasFailures}">
       <StackPanel>
         <TextBlock Text="The last delete did not finish" FontWeight="SemiBold" FontSize="13"
                    Foreground="{StaticResource DangerBrush}" Margin="0,0,0,6" />
-        <TextBlock Text="{Binding FailureSummary}" Style="{StaticResource Mono}" TextWrapping="Wrap"
+        <TextBlock Text="{Binding FailureSummary}" Classes="mono" TextWrapping="Wrap"
                    Foreground="{StaticResource TextBrush}" />
       </StackPanel>
     </Border>
@@ -53,13 +46,8 @@
       <ItemsControl ItemsSource="{Binding Items}">
         <ItemsControl.ItemTemplate>
           <DataTemplate>
-            <Border Style="{StaticResource Card}" Background="{StaticResource SurfaceAltBrush}" Padding="14">
-              <Grid>
-                <Grid.ColumnDefinitions>
-                  <ColumnDefinition Width="Auto" />
-                  <ColumnDefinition Width="*" />
-                  <ColumnDefinition Width="Auto" />
-                </Grid.ColumnDefinitions>
+            <Border Classes="card" Background="{StaticResource SurfaceAltBrush}" Padding="14">
+              <Grid ColumnDefinitions="Auto,*,Auto">
 
                 <CheckBox Grid.Column="0" IsChecked="{Binding IsSelected, Mode=TwoWay}"
                           IsEnabled="{Binding CanSelect}" Margin="0,0,14,0" VerticalAlignment="Center" />
@@ -71,27 +59,27 @@
                     <TextBlock Text="{Binding UsageText}" Foreground="{Binding UsageBrush}" FontSize="11.5"
                                VerticalAlignment="Center" Margin="10,1,0,0" />
                   </StackPanel>
-                  <TextBlock Text="{Binding Directory}" Style="{StaticResource Mono}" Margin="17,5,0,0" />
+                  <TextBlock Text="{Binding Directory}" Classes="mono" Margin="17,5,0,0" />
                   <StackPanel Orientation="Horizontal" Margin="17,3,0,0">
-                    <TextBlock Style="{StaticResource Mono}" FontSize="11" Text="{Binding Machine}" />
-                    <TextBlock Style="{StaticResource Mono}" FontSize="11" Text="  ·  " />
-                    <TextBlock Style="{StaticResource Mono}" FontSize="11" Text="{Binding Created}" />
-                    <TextBlock Style="{StaticResource Mono}" FontSize="11" Text="  " />
-                    <TextBlock Style="{StaticResource Mono}" FontSize="11" Text="{Binding Branch}" />
+                    <TextBlock Classes="mono" FontSize="11" Text="{Binding Machine}" />
+                    <TextBlock Classes="mono" FontSize="11" Text="  ·  " />
+                    <TextBlock Classes="mono" FontSize="11" Text="{Binding Created}" />
+                    <TextBlock Classes="mono" FontSize="11" Text="  " />
+                    <TextBlock Classes="mono" FontSize="11" Text="{Binding Branch}" />
                   </StackPanel>
 
-                  <TextBlock Text="{Binding Note}" Style="{StaticResource Mono}" FontSize="11"
+                  <TextBlock Text="{Binding Note}" Classes="mono" FontSize="11"
                              Margin="17,7,0,0" TextWrapping="Wrap"
                              Foreground="{StaticResource SuccessBrush}"
-                             Visibility="{Binding HasNote, Converter={StaticResource BoolToVisibility}}" />
+                             IsVisible="{Binding HasNote}" />
 
-                  <TextBlock Text="{Binding LastError}" Style="{StaticResource Mono}" FontSize="11"
+                  <TextBlock Text="{Binding LastError}" Classes="mono" FontSize="11"
                              Margin="17,7,0,0" TextWrapping="Wrap"
                              Foreground="{StaticResource DangerBrush}"
-                             Visibility="{Binding HasError, Converter={StaticResource BoolToVisibility}}" />
+                             IsVisible="{Binding HasError}" />
                 </StackPanel>
 
-                <TextBlock Grid.Column="2" Text="{Binding Id}" Style="{StaticResource Mono}" FontSize="11"
+                <TextBlock Grid.Column="2" Text="{Binding Id}" Classes="mono" FontSize="11"
                            VerticalAlignment="Center" Opacity="0.6" />
               </Grid>
             </Border>
@@ -101,8 +89,8 @@
     </ScrollViewer>
 
     <StackPanel Grid.Row="4" Orientation="Horizontal" Margin="0,10,0,0">
-      <TextBlock Text="{Binding StatusMessage}" Style="{StaticResource Mono}" VerticalAlignment="Center" />
-      <TextBlock Style="{StaticResource Mono}" VerticalAlignment="Center" Margin="16,0,0,0">
+      <TextBlock Text="{Binding StatusMessage}" Classes="mono" VerticalAlignment="Center" />
+      <TextBlock Classes="mono" VerticalAlignment="Center" Margin="16,0,0,0">
         <Run Text="stale:" />
         <Run Text="{Binding StaleCount, Mode=OneWay}" />
         <Run Text="   selected:" />

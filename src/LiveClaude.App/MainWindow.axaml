@@ -1,0 +1,66 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:views="using:LiveClaude.App.Views"
+        x:Class="LiveClaude.App.MainWindow"
+        Title="LiveClaude" Height="820" Width="1280"
+        MinHeight="620" MinWidth="960"
+        Icon="avares://LiveClaude/Assets/liveclaude.ico"
+        WindowStartupLocation="CenterScreen">
+
+  <Grid Margin="20,16,20,16" RowDefinitions="Auto,*,Auto">
+
+    <!-- Header -->
+    <Grid Grid.Row="0" Margin="0,0,0,14" ColumnDefinitions="*,Auto">
+      <StackPanel Grid.Column="0">
+        <StackPanel Orientation="Horizontal">
+          <TextBlock Text="LiveClaude" FontSize="22" FontWeight="Bold" />
+          <Border Classes="pill" Margin="12,4,0,0" VerticalAlignment="Center">
+            <TextBlock Text="{Binding ConnectionText}" FontSize="11.5" Foreground="{StaticResource MutedTextBrush}" />
+          </Border>
+        </StackPanel>
+        <TextBlock Text="{Binding ClaudeInfo}" Classes="mono" Margin="0,6,0,0" />
+      </StackPanel>
+
+      <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+        <Button Content="Refresh" Command="{Binding RefreshCommand}" />
+        <Button Content="New session" Classes="primary" Command="{Binding NewSessionCommand}" />
+      </StackPanel>
+    </Grid>
+
+    <!-- Tabs -->
+    <TabControl Grid.Row="1" SelectedIndex="{Binding SelectedTabIndex, Mode=TwoWay}">
+      <TabItem Header="Dashboard">
+        <views:DashboardView />
+      </TabItem>
+      <TabItem Header="Sessions">
+        <views:SessionsView />
+      </TabItem>
+      <TabItem Header="Terminal">
+        <views:TerminalPane Name="TerminalTab" />
+      </TabItem>
+      <TabItem Header="Logs">
+        <views:LogsView />
+      </TabItem>
+      <TabItem Header="Environments">
+        <views:EnvironmentsView />
+      </TabItem>
+      <TabItem Header="Service &amp; startup">
+        <views:SettingsView />
+      </TabItem>
+    </TabControl>
+
+    <!-- Footer -->
+    <Grid Grid.Row="2" Margin="0,12,0,0" ColumnDefinitions="*,Auto">
+      <StackPanel Grid.Column="0" Orientation="Horizontal">
+        <TextBlock Classes="mono" Text="Config:" Margin="0,0,6,0" VerticalAlignment="Center" />
+        <TextBlock Classes="mono" Text="{Binding ConfigPath}" Margin="0,0,16,0" VerticalAlignment="Center" />
+        <Button Content="Open config folder" Classes="small" Command="{Binding OpenConfigCommand}" />
+        <Button Content="Open logs folder" Classes="small" Command="{Binding OpenLogFolderCommand}" />
+      </StackPanel>
+
+      <Button Grid.Column="1" Classes="link" Margin="0" Click="OnShowAbout"
+              ToolTip.Tip="About LiveClaude — version, licence and credits"
+              Content="{Binding AppVersion}" />
+    </Grid>
+  </Grid>
+</Window>

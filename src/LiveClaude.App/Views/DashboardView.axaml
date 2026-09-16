@@ -1,0 +1,77 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="LiveClaude.App.Views.DashboardView"
+             Background="{StaticResource SurfaceBrush}">
+  <Grid Margin="20" RowDefinitions="Auto,*">
+
+    <StackPanel Grid.Row="0">
+      <TextBlock Text="Remote Control servers" Classes="heading" />
+      <TextBlock Classes="subheading"
+                 Text="One supervised remote-control server per project directory. The supervisor restarts them on crash, at sign-in and after a reboot." />
+    </StackPanel>
+
+    <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
+      <StackPanel>
+        <ItemsControl ItemsSource="{Binding Instances}">
+          <ItemsControl.ItemTemplate>
+            <DataTemplate>
+              <Border Classes="card" Background="{StaticResource SurfaceAltBrush}">
+                <Grid ColumnDefinitions="*,Auto">
+
+                  <StackPanel Grid.Column="0">
+                    <StackPanel Orientation="Horizontal">
+                      <Ellipse Width="10" Height="10" Fill="{Binding StateBrush}" VerticalAlignment="Center" Margin="0,0,8,0" />
+                      <TextBlock Text="{Binding Name}" FontSize="15" FontWeight="SemiBold" VerticalAlignment="Center" />
+                      <TextBlock Text="{Binding StateText}" Foreground="{Binding StateBrush}" FontSize="12"
+                                 VerticalAlignment="Center" Margin="10,1,0,0" />
+                    </StackPanel>
+
+                    <TextBlock Text="{Binding Directory}" Classes="mono" Margin="18,6,0,0" />
+                    <TextBlock Text="{Binding Details}" Classes="mono" Margin="18,3,0,0" />
+
+                    <TextBlock Text="{Binding Message}" Classes="mono" Margin="18,6,0,0"
+                               TextWrapping="Wrap" Foreground="{StaticResource WarningBrush}"
+                               IsVisible="{Binding HasMessage}" />
+
+                    <Button Content="{Binding SessionUrl}" Margin="14,8,0,0" Classes="small"
+                            HorizontalAlignment="Left"
+                            IsVisible="{Binding HasSessionUrl}"
+                            Command="{Binding $parent[UserControl].DataContext.OpenSessionUrlCommand}"
+                            CommandParameter="{Binding SessionUrl}" />
+                  </StackPanel>
+
+                  <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Top">
+                    <Button Content="Start" IsEnabled="{Binding CanStart}"
+                            Command="{Binding $parent[UserControl].DataContext.StartCommand}"
+                            CommandParameter="{Binding Id}" />
+                    <Button Content="Stop" IsEnabled="{Binding CanStop}"
+                            Command="{Binding $parent[UserControl].DataContext.StopCommand}"
+                            CommandParameter="{Binding Id}" />
+                    <Button Content="Restart"
+                            Command="{Binding $parent[UserControl].DataContext.RestartCommand}"
+                            CommandParameter="{Binding Id}" />
+                    <Button Content="Terminal" Click="OnAttachTerminal" Tag="{Binding Id}" />
+                    <Button Content="Edit" Margin="0"
+                            Command="{Binding $parent[UserControl].DataContext.EditSessionCommand}"
+                            CommandParameter="{Binding}" />
+                  </StackPanel>
+                </Grid>
+              </Border>
+            </DataTemplate>
+          </ItemsControl.ItemTemplate>
+        </ItemsControl>
+
+        <Border Classes="card" Background="Transparent"
+                IsVisible="{Binding Instances.Count, Converter={StaticResource IsEmpty}}">
+          <StackPanel>
+            <TextBlock Text="No sessions yet" FontSize="15" FontWeight="SemiBold" />
+            <TextBlock Classes="subheading" Margin="0,6,0,10"
+                       Text="Add a project directory in the Sessions tab. LiveClaude will start a Remote Control server there and keep it alive." />
+            <Button Content="Create the first session" Classes="primary"
+                    HorizontalAlignment="Left" Command="{Binding NewSessionCommand}" />
+          </StackPanel>
+        </Border>
+      </StackPanel>
+    </ScrollViewer>
+  </Grid>
+</UserControl>

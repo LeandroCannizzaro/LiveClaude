@@ -1,4 +1,5 @@
-using System.Windows.Media;
+using Avalonia.Media;
+using Avalonia.Media.Immutable;
 using LiveClaude.Core.Model;
 
 namespace LiveClaude.App.ViewModels;
@@ -39,14 +40,14 @@ public sealed class InstanceViewModel : ObservableObject
         _ => "Stopped"
     };
 
-    public Brush StateBrush => _snapshot.State switch
+    public IBrush StateBrush => _snapshot.State switch
     {
-        InstanceState.Running => new SolidColorBrush(Color.FromRgb(0x4A, 0xDE, 0x80)),
-        InstanceState.Starting => new SolidColorBrush(Color.FromRgb(0x60, 0xA5, 0xFA)),
-        InstanceState.NeedsAttention => new SolidColorBrush(Color.FromRgb(0xFB, 0xBF, 0x24)),
-        InstanceState.Backoff => new SolidColorBrush(Color.FromRgb(0xFB, 0xBF, 0x24)),
-        InstanceState.Failed => new SolidColorBrush(Color.FromRgb(0xF8, 0x71, 0x71)),
-        _ => new SolidColorBrush(Color.FromRgb(0x6B, 0x72, 0x80))
+        InstanceState.Running => new ImmutableSolidColorBrush(Color.FromRgb(0x4A, 0xDE, 0x80)),
+        InstanceState.Starting => new ImmutableSolidColorBrush(Color.FromRgb(0x60, 0xA5, 0xFA)),
+        InstanceState.NeedsAttention => new ImmutableSolidColorBrush(Color.FromRgb(0xFB, 0xBF, 0x24)),
+        InstanceState.Backoff => new ImmutableSolidColorBrush(Color.FromRgb(0xFB, 0xBF, 0x24)),
+        InstanceState.Failed => new ImmutableSolidColorBrush(Color.FromRgb(0xF8, 0x71, 0x71)),
+        _ => new ImmutableSolidColorBrush(Color.FromRgb(0x6B, 0x72, 0x80))
     };
 
     public string Details

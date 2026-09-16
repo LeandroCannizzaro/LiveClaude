@@ -1,12 +1,15 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFramework>net10.0-windows</TargetFramework>
-    <UseWPF>true</UseWPF>
+    <TargetFramework>net10.0</TargetFramework>
     <AssemblyName>LiveClaude.Terminal</AssemblyName>
     <RootNamespace>LiveClaude.Terminal</RootNamespace>
-    <EnableWindowsTargeting>true</EnableWindowsTargeting>
+    <Nullable>enable</Nullable>
   </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Avalonia" Version="11.3.0" />
+  </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\LiveClaude.Abstractions\LiveClaude.Abstractions.csproj" />
