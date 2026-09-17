@@ -168,7 +168,11 @@ fi
 exit 0
 SPEC
 
-rpmbuild --define "_topdir $RPM" -bb "$RPM/SPECS/liveclaude.spec"
+# --target is required, not decorative: the runner is x86_64, and without being told the target
+# explicitly rpmbuild refuses a spec whose BuildArch is aarch64 with "No compatible architectures
+# found for build". Nothing here is compiled by rpmbuild — the binaries are already built — so
+# naming the architecture is all it takes.
+rpmbuild --target "$ARCH_RPM" --define "_topdir $RPM" -bb "$RPM/SPECS/liveclaude.spec"
 find "$RPM/RPMS" -name '*.rpm' -exec cp {} "$OUTPUT/" \;
 
 echo "==> done: $(ls "$OUTPUT")"
