@@ -45,6 +45,11 @@ All notable changes to this project are documented here. The format follows
 - Listening on the IPC endpoint twice inside one process now fails on Windows as it already did on
   POSIX. Windows is happy to let a process open many instances of its own named pipe — that is how
   one serves several clients — so a duplicate supervisor in a single process went unnoticed there.
+- The supervisor socket on macOS no longer exceeds the 104-byte limit a Unix domain socket path has
+  there. It lived under `~/Library/Application Support/LiveClaude/run/`, which fit for a short user
+  name and failed for a long one; it now sits in a short per-user directory created 0700
+  (`/tmp/liveclaude-<uid>/`). An over-long path is reported with its own length instead of as an
+  `ArgumentOutOfRangeException` naming a parameter.
 
 ## [1.0.15] - 2026-09-15
 

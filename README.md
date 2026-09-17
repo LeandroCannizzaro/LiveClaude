@@ -193,7 +193,7 @@ the `.app` bundle — so nothing is copied there.
 The app talks to whichever supervisor is running over the platform's own channel, so you can close the
 window and the servers keep running — and reopen it later to find them. On Windows that is a named
 pipe (`\.\pipe\LiveClaude.v1`), shared across the machine. On Linux and macOS it is a Unix domain
-socket in your runtime directory, created mode 0700 — which makes the "only one supervisor" rule
+socket in a private per-user directory, created mode 0700 — which makes the "only one supervisor" rule
 per-user there, the right answer on a machine two people share.
 
 ## Dead entries in the session picker
@@ -345,11 +345,18 @@ environments in the session picker.
 | Configuration | `%ProgramData%\LiveClaude\config.json` | `~/.config/liveclaude/config.json` | `~/Library/Application Support/LiveClaude/config.json` |
 | Logs | `%ProgramData%\LiveClaude\logs\` | `~/.local/state/liveclaude/logs/` | `~/Library/Logs/LiveClaude/` |
 | Reattach state | `%ProgramData%\LiveClaude\state\` | `~/.local/state/liveclaude/state/` | `~/Library/Application Support/LiveClaude/state/` |
-| IPC endpoint | `\\.\pipe\LiveClaude.v1` | `$XDG_RUNTIME_DIR/liveclaude/` | `…/LiveClaude/run/` |
+| IPC endpoint | `\\.\pipe\LiveClaude.v1` | `$XDG_RUNTIME_DIR/liveclaude/` | `/tmp/liveclaude-<uid>/` |
 | App errors | `%LOCALAPPDATA%\LiveClaude\app-errors.log` | `~/.local/share/LiveClaude/app-errors.log` | `~/.local/share/LiveClaude/app-errors.log` |
 
 Inside the log directory: `<name>-<id>.log` per instance, `supervisor.log`, and `install.log` —
 which is what the elevated install commands printed, since they run in a window nobody sees.
+
+**Why the socket is not with everything else.** A Unix domain socket path is limited to 104 bytes on
+macOS and 108 on Linux, terminator included — and
+`/Users/<you>/Library/Application Support/LiveClaude/run/` spends more than half of that before the
+file name. So the socket goes in a short per-user directory created 0700, the way tmux does it:
+`$XDG_RUNTIME_DIR/liveclaude/` on Linux when the session has one, `/tmp/liveclaude-<uid>/` otherwise
+and on macOS. A directory other users cannot traverse is what protects the socket.
 
 **Windows keeps one machine-wide root** so a service running under another account reads the same
 configuration the app writes. POSIX has no equivalent that both a daemon and a desktop user can
@@ -382,7 +389,7 @@ sleep — on Windows you can also enable *Wake the computer to run this task* on
 
 ```bash
 dotnet build                 # build everything for this machine
-dotnet test                  # 115 tests, no network needed
+dotnet test                  # 117 tests, no network needed
 dotnet run --project src/LiveClaude.App
 dotnet run --project src/LiveClaude.Service -- status
 ```

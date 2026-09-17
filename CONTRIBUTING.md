@@ -44,6 +44,10 @@ Windows package, which needs Windows, because `LiveClaude.Platform.Windows` targ
 - The child gets a new session and the pty slave as its controlling terminal. That is the only reason
   writing `0x03` reaches the server as SIGINT, and the only reason it can deregister its bridge
   environment instead of being killed.
+- A Unix domain socket path may be at most 104 bytes on macOS, 108 on Linux. That is small enough to
+  rule out the obvious locations: putting the socket under `~/Library/Application Support/` fit for a
+  short user name and failed for a long one. Keep it in the short per-user directory
+  `PosixRuntimeDirectory` provides, and keep the two tests that assert the length.
 - `claude remote-control --continue` only reattaches for about four hours after the previous server
   stopped. `ClaudeArgs.CanReattach` encodes that rule and is covered by tests.
 - The configuration file is shared state: the app writes it, the supervisor watches it. Keep
