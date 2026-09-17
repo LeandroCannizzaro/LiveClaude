@@ -1,9 +1,9 @@
-﻿name: Product page
+name: Product page
 
 on:
   push:
     branches: [main]
-    paths: ['docs/**', '.github/workflows/pages.yml']
+    paths: ['docs/**', 'packaging/scripts/install-*.sh', '.github/workflows/pages.yml']
   workflow_dispatch:
 
 permissions:
@@ -27,22 +27,71 @@ jobs:
           mkdir -p site
           cp -r docs/* site/
 
-      # The ClickOnce payload is produced by the release workflow. Carry the published one over so a
-      # docs-only change never takes the installer offline.
-      - name: Carry over the published ClickOnce payload
+      # Served at https://leandrocannizzaro.github.io/LiveClaude/install.sh so the Linux install is a
+      # one-liner. Kept in packaging/ rather than docs/ because it is a build artefact of the
+      # project, not a page.
+      - name: Publish the install scripts
+        run: |
+          cp packaging/scripts/install-linux.sh site/install.sh
+          cp packaging/scripts/install-macos.sh site/install-macos.sh
+          chmod +x site/install.sh site/install-macos.sh
+
+      # Two ClickOnce channels, and the reason they are separate is the point of this step.
+      #
+      # /clickonce/    is 1.x — the Windows-only WPF program — frozen at 1.0.15 forever. It is taken
+      #                from the v1.0.15 release by tag, never from "latest", so publishing 2.x can
+      #                never carry a 1.0.15 installation onto a different application.
+      # /clickonce/v2/ is 2.x — the cross-platform one — taken from the newest v2 release.
+      #
+      # Both are rebuilt from release assets on every deploy so a docs-only change never takes an
+      # installer offline.
+      - name: Restore the 1.x ClickOnce channel (frozen at 1.0.15)
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set +e
-          asset=$(gh release list --limit 1 --json tagName --jq '.[0].tagName')
-          if [ -n "$asset" ]; then
-            gh release download "$asset" --pattern '*clickonce.zip' --dir /tmp || true
-            if ls /tmp/*clickonce.zip >/dev/null 2>&1; then
-              mkdir -p site/clickonce
-              unzip -o /tmp/*clickonce.zip -d site/clickonce
-            fi
+          gh release download v1.0.15 --pattern '*clickonce.zip' --dir /tmp/co1
+          if ls /tmp/co1/*clickonce.zip >/dev/null 2>&1; then
+            mkdir -p site/clickonce
+            unzip -o /tmp/co1/*clickonce.zip -d site/clickonce
+            echo "1.x channel restored from v1.0.15"
+          else
+            echo "::warning::could not download the v1.0.15 ClickOnce payload; the 1.x channel will be missing from this deploy"
           fi
           exit 0
+
+      - name: Publish the 2.x ClickOnce channel
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set +e
+          # The newest v2 tag, not simply the newest release: a hotfix published on the 1.x line
+          # must not become the 2.x channel.
+          tag=$(gh release list --limit 50 --json tagName --jq '[.[] | select(.tagName | startswith("v2."))] | .[0].tagName')
+
+          if [ -z "$tag" ]; then
+            echo "no v2 release yet — the 2.x channel will appear with the first one"
+            exit 0
+          fi
+
+          gh release download "$tag" --pattern '*clickonce.zip' --dir /tmp/co2
+          if ls /tmp/co2/*clickonce.zip >/dev/null 2>&1; then
+            mkdir -p site/clickonce/v2
+            unzip -o /tmp/co2/*clickonce.zip -d site/clickonce/v2
+            echo "2.x channel published from $tag"
+          else
+            echo "::warning::$tag has no ClickOnce payload; the 2.x channel will be missing from this deploy"
+          fi
+          exit 0
+
+      # A deploy that silently dropped the 1.x installer would break every existing install's update
+      # check, and nobody would notice until someone complained.
+      - name: Check both installers are present
+        run: |
+          missing=0
+          [ -f site/clickonce/LiveClaude.application ] || { echo "::error::1.x installer missing"; missing=1; }
+          [ -f site/install.sh ] || { echo "::error::Linux install script missing"; missing=1; }
+          exit $missing
 
       - uses: actions/upload-pages-artifact@v3
         with:

@@ -238,13 +238,15 @@
   <p class="sub">Windows 10 1809+, Linux with systemd, or macOS 12+ — and a Claude Code sign-in on a Pro, Max, Team or Enterprise plan.</p>
 
   <div class="tabs" role="tablist">
-    <button role="tab" aria-selected="true" aria-controls="p-winget" id="t-winget">winget</button>
-    <button role="tab" aria-selected="false" aria-controls="p-zip" id="t-zip">Zip</button>
-    <button role="tab" aria-selected="false" aria-controls="p-clickonce" id="t-clickonce">ClickOnce</button>
+    <button role="tab" aria-selected="true" aria-controls="p-clickonce" id="t-clickonce">Windows · ClickOnce</button>
+    <button role="tab" aria-selected="false" aria-controls="p-winget" id="t-winget">Windows · winget</button>
+    <button role="tab" aria-selected="false" aria-controls="p-zip" id="t-zip">Windows · Zip</button>
+    <button role="tab" aria-selected="false" aria-controls="p-linux" id="t-linux">Linux</button>
+    <button role="tab" aria-selected="false" aria-controls="p-macos" id="t-macos">macOS</button>
     <button role="tab" aria-selected="false" aria-controls="p-source" id="t-source">From source</button>
   </div>
 
-  <div class="panel" id="p-winget" role="tabpanel" aria-labelledby="t-winget">
+  <div class="panel" id="p-winget" role="tabpanel" aria-labelledby="t-winget" hidden>
     <pre>winget install LeandroCannizzaro.LiveClaude</pre>
     <p>Installs both <code>liveclaude</code> (the app) and <code>liveclaude-service</code> (the supervisor CLI).</p>
   </div>
@@ -260,13 +262,52 @@
     <p><a href="https://github.com/LeandroCannizzaro/LiveClaude/releases/latest">Download the latest zip →</a></p>
   </div>
 
-  <div class="panel" id="p-clickonce" role="tabpanel" aria-labelledby="t-clickonce" hidden>
+  <div class="panel" id="p-clickonce" role="tabpanel" aria-labelledby="t-clickonce">
     <p>Installs for the current user and checks for updates on every launch.</p>
-    <p><a class="btn primary" href="clickonce/LiveClaude.application">Install LiveClaude</a></p>
+    <p><a class="btn primary" href="clickonce/v2/LiveClaude.application">Install LiveClaude 2</a></p>
     <p>
       Your browser will download <code>LiveClaude.application</code>; open it to install. Requires the
-      <a href="https://dotnet.microsoft.com/download/dotnet/10.0">.NET 10 Desktop Runtime</a>. The manifests are
+      <a href="https://dotnet.microsoft.com/download/dotnet/10.0">.NET 10 Runtime</a>. The manifests are
       unsigned, so SmartScreen asks for a confirmation the first time.
+    </p>
+    <p class="note">
+      Still on 1.x? That channel is frozen at
+      <a href="clickonce/LiveClaude.application">1.0.15</a> and keeps working — 2.0 is a separate
+      install, not an update, because it is a different application underneath. Install it alongside
+      and remove 1.x when you are happy.
+    </p>
+  </div>
+
+  <div class="panel" id="p-linux" role="tabpanel" aria-labelledby="t-linux" hidden>
+    <pre>curl -fsSL https://leandrocannizzaro.github.io/LiveClaude/install.sh | sh</pre>
+    <p>
+      Picks the <code>.deb</code>, <code>.rpm</code> or tarball for your machine, installs it to
+      <code>/opt/liveclaude</code> and puts <code>liveclaude</code> and
+      <code>liveclaude-supervisor</code> on your PATH. x86_64 and arm64. Self-contained — no .NET
+      runtime needed.
+    </p>
+    <p>
+      Autostart is a systemd user unit, installed from the app or with
+      <code>liveclaude-supervisor install-autostart</code>. Starting before you sign in additionally
+      needs <code>loginctl enable-linger</code>, which the app offers to do for you.
+    </p>
+    <p><a href="https://github.com/LeandroCannizzaro/LiveClaude/releases/latest">Or download a package directly →</a></p>
+  </div>
+
+  <div class="panel" id="p-macos" role="tabpanel" aria-labelledby="t-macos" hidden>
+    <pre>curl -fsSL https://leandrocannizzaro.github.io/LiveClaude/install-macos.sh | sh</pre>
+    <p>
+      Downloads the <code>.dmg</code> for your Mac, copies the app to <code>/Applications</code> and
+      clears the quarantine flag. Apple silicon and Intel. Self-contained.
+    </p>
+    <p>
+      Installing the <code>.dmg</code> by hand works too — but the app is <strong>not notarised
+      yet</strong>, so macOS refuses the first launch: right-click the app and choose <em>Open</em>,
+      once. The script exists to spare you that.
+    </p>
+    <p>
+      Autostart is a LaunchAgent. A LaunchDaemon can start before sign-in, but the login Keychain —
+      where Claude Code keeps its token — stays locked until somebody signs in.
     </p>
   </div>
 
@@ -274,7 +315,7 @@
     <pre>git clone https://github.com/LeandroCannizzaro/LiveClaude.git
 cd LiveClaude
 dotnet build -c Release
-dotnet run --project src\LiveClaude.App</pre>
+dotnet run --project src/LiveClaude.App</pre>
   </div>
 </section>
 
@@ -282,7 +323,8 @@ dotnet run --project src\LiveClaude.App</pre>
   <h2>How it works</h2>
   <p class="sub">
     The supervisor owns one <code>claude remote-control</code> server per directory, each inside its own
-    pseudo console. The app talks to it over a named pipe, so you can close the window and the servers keep going.
+    pseudo terminal. The app talks to it over a named pipe on Windows and a Unix socket elsewhere, so you can
+    close the window and the servers keep going.
   </p>
 
   <table>

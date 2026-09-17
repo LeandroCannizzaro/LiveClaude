@@ -37,6 +37,11 @@ jobs:
         with:
           dotnet-version: '10.0.x'
 
+      # ClickOnce is published by the .NET Framework MSBuild, not by `dotnet publish`.
+      - name: Set up MSBuild (Windows only, for the ClickOnce check below)
+        if: runner.os == 'Windows'
+        uses: microsoft/setup-msbuild@v2
+
       # Windows builds the whole solution, including the two projects that target net10.0-windows.
       # The other runners build an explicit list instead: LiveClaude.Platform.Windows and
       # LiveClaude.Tests.Windows are Windows-only by design, and asking Linux to build them would
@@ -84,6 +89,28 @@ jobs:
             echo "::error::expected exactly one LiveClaude.Platform.<OS>.dll, found $present"
             exit 1
           fi
+
+      # The ClickOnce package is only ever built during a release, so until now a change that broke
+      # it — the move off WPF, say — would have surfaced as a failed public release. Building it here
+      # costs a minute and turns that into a failed CI run instead. Nothing is published.
+      - name: Check the ClickOnce package still builds
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          msbuild src/LiveClaude.App/LiveClaude.App.csproj `
+            /t:Publish `
+            /p:PublishProfile=ClickOnce `
+            /p:Configuration=Release `
+            /p:ApplicationVersion=0.0.0.1 `
+            /p:PublishDir=$env:GITHUB_WORKSPACE\artifacts\clickonce-check\ `
+            /v:minimal
+
+          $manifest = "artifacts/clickonce-check/LiveClaude.application"
+          if (-not (Test-Path $manifest)) {
+            Write-Error "ClickOnce produced no deployment manifest at $manifest"
+            exit 1
+          }
+          Write-Host "ClickOnce deployment manifest produced: $manifest"
 
       - name: Upload test results
         if: always()

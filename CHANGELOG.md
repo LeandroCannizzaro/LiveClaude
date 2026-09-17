@@ -4,7 +4,15 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project uses
 [semantic versioning](https://semver.org/).
 
-## [Unreleased]
+## [2.0.0] - 2026-09-17
+
+The first cross-platform release. 1.x was a Windows program; 2.x is the same program on Windows,
+Linux and macOS, and the version was bumped to 2.0.0 because the shape of the project changed rather
+than because the features did.
+
+**1.0.15 stays where it is.** Its tag, its release assets and its ClickOnce channel
+(`/clickonce/`) are untouched and keep working. 2.x publishes to `/clickonce/v2/`, a channel of its
+own, so no 1.0.15 installation is carried onto a different application by an update check.
 
 ### Added
 
@@ -22,6 +30,12 @@ All notable changes to this project are documented here. The format follows
   `--scope user|system`. `install-task` and `install-service` remain as aliases.
 - `LIVECLAUDE_ROOT` overrides the configuration root on any platform. The systemd system unit uses it
   to point a daemon at a shared location instead of root's home directory.
+- One-line installers:
+  `curl -fsSL https://leandrocannizzaro.github.io/LiveClaude/install.sh | sh` on Linux, which picks
+  the right package for the machine, and `install-macos.sh` on macOS, which also clears the
+  quarantine flag so the first launch is not refused.
+- CI builds the ClickOnce package on every run. It used to be produced only during a release, so a
+  change that broke it — the move off WPF, for one — would have surfaced as a failed public release.
 
 ### Changed
 

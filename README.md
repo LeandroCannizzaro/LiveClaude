@@ -62,29 +62,45 @@ The `-selfcontained` zip has no prerequisites. The plain zip needs the [.NET 10 
 
 ### Windows — ClickOnce (auto-updating)
 
-Open [LiveClaude.application](https://leandrocannizzaro.github.io/LiveClaude/clickonce/LiveClaude.application) — it installs for the current user and checks for updates on every launch. The manifests are unsigned, so SmartScreen asks once.
+Open [LiveClaude.application](https://leandrocannizzaro.github.io/LiveClaude/clickonce/v2/LiveClaude.application) — it installs for the current user and checks for updates on every launch. The manifests are unsigned, so SmartScreen asks once.
+
+> **Already running 1.x?** That channel is
+> [frozen at 1.0.15](https://leandrocannizzaro.github.io/LiveClaude/clickonce/LiveClaude.application)
+> and keeps working. 2.0 is published to a channel of its own, so a 1.0.15 install is never carried
+> onto it by an update check — install 2.0 alongside, and remove 1.x once you are happy. They are
+> different applications underneath: 1.x is the Windows-only WPF program, 2.x is the cross-platform
+> one.
 
 ### Linux
 
 ```bash
-# Debian, Ubuntu and derivatives
-sudo dpkg -i liveclaude_<version>_amd64.deb
-
-# Fedora, RHEL, openSUSE
-sudo rpm -i liveclaude-<version>-1.x86_64.rpm
-
-# anything else
-tar -xzf LiveClaude-<version>-linux-x64.tar.gz -C ~/liveclaude && ~/liveclaude/LiveClaude
+curl -fsSL https://leandrocannizzaro.github.io/LiveClaude/install.sh | sh
 ```
 
-The packages are self-contained — no .NET runtime needed — and install to `/opt/liveclaude`, with
-`liveclaude` and `liveclaude-supervisor` on your PATH and a desktop entry.
+Picks the `.deb`, `.rpm` or tarball for your machine, installs to `/opt/liveclaude`, and puts
+`liveclaude` and `liveclaude-supervisor` on your PATH with a desktop entry. x86_64 and arm64,
+self-contained — no .NET runtime needed.
+
+By hand, if you prefer:
+
+```bash
+sudo apt install ./liveclaude_<version>_amd64.deb      # Debian, Ubuntu
+sudo dnf install ./liveclaude-<version>-1.x86_64.rpm   # Fedora, RHEL, openSUSE
+tar -xzf LiveClaude-<version>-linux-x64.tar.gz -C ~/liveclaude
+```
 
 ### macOS
 
-Download `LiveClaude-<version>-osx-arm64.dmg` (or `-osx-x64` on Intel), drag the app to Applications,
-then **right-click it and choose Open** the first time: the app is not notarised yet, so Gatekeeper
-refuses a normal double-click. Every later launch works as usual.
+```bash
+curl -fsSL https://leandrocannizzaro.github.io/LiveClaude/install-macos.sh | sh
+```
+
+Downloads the `.dmg` for your Mac, copies the app to `/Applications` and clears the quarantine flag.
+Apple silicon and Intel.
+
+Installing the `.dmg` by hand works too, but the app is **not notarised yet**: Gatekeeper refuses a
+normal double-click, so right-click the app and choose **Open** the first time. Clearing that flag is
+the only reason the script above is worth having.
 
 ### From source
 

@@ -249,7 +249,15 @@ jobs:
 
           \`winget install LeandroCannizzaro.LiveClaude\`
 
+          ClickOnce for 2.x is published to a channel of its own,
+          [/clickonce/v2/](https://leandrocannizzaro.github.io/LiveClaude/clickonce/v2/LiveClaude.application).
+          The 1.x channel stays frozen at 1.0.15 and keeps working.
+
           ### Linux
+
+          \`\`\`
+          curl -fsSL https://leandrocannizzaro.github.io/LiveClaude/install.sh | sh
+          \`\`\`
 
           | Download | For |
           |---|---|
@@ -261,6 +269,10 @@ jobs:
           \`/opt/liveclaude\`, and autostart is a systemd unit.
 
           ### macOS
+
+          \`\`\`
+          curl -fsSL https://leandrocannizzaro.github.io/LiveClaude/install-macos.sh | sh
+          \`\`\`
 
           | Download | For |
           |---|---|
