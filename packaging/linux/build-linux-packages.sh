@@ -137,7 +137,11 @@ Release:        1
 Summary:        Supervisor for Claude Code Remote Control servers
 License:        MIT
 URL:            https://github.com/LeandroCannizzaro/LiveClaude
-BuildArch:      $ARCH_RPM
+# No BuildArch on purpose. Declaring it here overrides --target and is then validated against the
+# machine doing the build, which is x86_64 — that is what produced "No compatible architectures
+# found for build" when packaging arm64. The architecture comes from --target below instead, which
+# is the documented way to build a package for a machine you are not on.
+#
 # The build is self-contained, and the binaries are not built here — stripping and
 # dependency extraction would both be wrong.
 AutoReqProv:    no
@@ -168,11 +172,17 @@ fi
 exit 0
 SPEC
 
-# --target is required, not decorative: the runner is x86_64, and without being told the target
-# explicitly rpmbuild refuses a spec whose BuildArch is aarch64 with "No compatible architectures
-# found for build". Nothing here is compiled by rpmbuild — the binaries are already built — so
-# naming the architecture is all it takes.
+# --target, and no BuildArch in the spec, is the pair that makes this work: the runner is x86_64
+# and the package may be aarch64. Nothing is compiled by rpmbuild — the .NET SDK already published
+# the binaries — so all it has to do is put them in a package labelled for the right machine.
 rpmbuild --target "$ARCH_RPM" --define "_topdir $RPM" -bb "$RPM/SPECS/liveclaude.spec"
+
+# rpmbuild is content to produce a package for the wrong architecture if the target is ignored, and
+# that is not something anyone would notice before installing it.
+if ! find "$RPM/RPMS" -name "*.$ARCH_RPM.rpm" | grep -q .; then
+  echo "expected an .$ARCH_RPM.rpm, found: $(find "$RPM/RPMS" -name '*.rpm' -printf '%f ')" >&2
+  exit 1
+fi
 find "$RPM/RPMS" -name '*.rpm' -exec cp {} "$OUTPUT/" \;
 
 echo "==> done: $(ls "$OUTPUT")"
