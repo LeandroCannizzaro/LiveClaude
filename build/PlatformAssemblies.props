@@ -114,4 +114,22 @@
           SkipUnchangedFiles="true" />
   </Target>
 
+  <!--
+    ClickOnce does not just zip up whatever is sitting in the publish folder: it computes its own file
+    list (from @(ReferenceCopyLocalPaths), among others) and only ever deploys what ends up in that
+    list. The copy above runs long after that list is frozen, so on ClickOnce it was landing the
+    platform assembly next to the other files without ever getting it into the .manifest — installs
+    fine, then throws PlatformNotAvailableException on first launch because the file the installer
+    actually fetched doesn't include it. Adding it to @(ReferenceCopyLocalPaths) before ClickOnce reads
+    that item, instead of copying files around afterward, is what gets it into the manifest.
+  -->
+  <Target Name="AddLiveClaudePlatformAssemblyToClickOnceManifest"
+          BeforeTargets="_DeploymentComputeClickOnceManifestInfo"
+          DependsOnTargets="ResolveLiveClaudePlatformAssemblies"
+          Condition="'$(GenerateClickOnceManifests)' == 'true' and '@(LiveClaudePlatformProject)' != ''">
+    <ItemGroup>
+      <ReferenceCopyLocalPaths Include="@(LiveClaudePlatformAssembly)" />
+    </ItemGroup>
+  </Target>
+
 </Project>
