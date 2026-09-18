@@ -37,6 +37,8 @@ jobs:
     name: Windows packages
     needs: version
     runs-on: windows-latest
+    env:
+      CLICKONCE_PFX_BASE64: ${{ secrets.CLICKONCE_PFX_BASE64 }}
     steps:
       - uses: actions/checkout@v5
 
@@ -107,15 +109,42 @@ jobs:
           Compress-Archive artifacts/win-arm64/* "artifacts/packages/LiveClaude-$version-win-arm64.zip"
           Compress-Archive artifacts/win-x64-selfcontained/* "artifacts/packages/LiveClaude-$version-win-x64-selfcontained.zip"
 
+      # Windows will not grant a ClickOnce package full trust from a public Internet-zone URL unless
+      # its manifests are signed (Microsoft's own guidance: unsigned manifests are only supported for
+      # an isolated intranet). Without this, Launcher.exe throws UnauthorizedAccessException trying to
+      # create the activation context and the install never gets as far as running LiveClaude.exe.
+      - name: Import the ClickOnce signing certificate
+        if: env.CLICKONCE_PFX_BASE64 != ''
+        id: cert
+        shell: pwsh
+        env:
+          CLICKONCE_PFX_PASSWORD: ${{ secrets.CLICKONCE_PFX_PASSWORD }}
+        run: |
+          $pfxPath = Join-Path $env:RUNNER_TEMP "clickonce-signing.pfx"
+          [IO.File]::WriteAllBytes($pfxPath, [Convert]::FromBase64String($env:CLICKONCE_PFX_BASE64))
+          $securePassword = ConvertTo-SecureString -String $env:CLICKONCE_PFX_PASSWORD -Force -AsPlainText
+          $cert = Import-PfxCertificate -FilePath $pfxPath -CertStoreLocation Cert:\CurrentUser\My -Password $securePassword
+          Remove-Item $pfxPath -Force
+          "thumbprint=$($cert.Thumbprint)" >> $env:GITHUB_OUTPUT
+
       - name: Publish ClickOnce
         shell: pwsh
         run: |
+          $signingArgs = @()
+          if ($env:CLICKONCE_PFX_BASE64) {
+            $signingArgs = @(
+              '/p:SignManifests=true',
+              '/p:ManifestCertificateThumbprint=${{ steps.cert.outputs.thumbprint }}',
+              '/p:ManifestTimestampUrl=http://timestamp.digicert.com'
+            )
+          }
           msbuild src/LiveClaude.App/LiveClaude.App.csproj `
             /t:Publish `
             /p:PublishProfile=ClickOnce `
             /p:Configuration=Release `
             /p:ApplicationVersion=${{ needs.version.outputs.version }}.0 `
             /p:Version=${{ needs.version.outputs.version }} `
+            @signingArgs `
             /v:minimal
           Compress-Archive artifacts/clickonce/* "artifacts/packages/LiveClaude-${{ needs.version.outputs.version }}-clickonce.zip"
 
