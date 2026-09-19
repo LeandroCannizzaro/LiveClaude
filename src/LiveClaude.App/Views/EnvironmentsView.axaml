@@ -17,14 +17,8 @@
               Command="{Binding SelectDuplicatesCommand}" />
       <Button Content="Select stale" Command="{Binding SelectStaleCommand}" />
       <Button Content="Clear selection" Command="{Binding ClearSelectionCommand}" />
-      <Button Content="Delete selected" Command="{Binding DeleteSelectedCommand}" />
-      <Button Command="{Binding ForceDeleteCommand}"
-              IsVisible="{Binding CanForce}"
-              ToolTip.Tip="These still have session records attached. Forcing deletes those too.">
-        <TextBlock>
-          <Run Text="Force delete (" /><Run Text="{Binding ForceCandidateCount, Mode=OneWay}" /><Run Text=")" />
-        </TextBlock>
-      </Button>
+      <Button Content="Delete selected" Command="{Binding DeleteSelectedCommand}"
+              ToolTip.Tip="Stops a matching server first if one is still restarting, and forces the delete automatically if session records are still attached." />
       <Button Content="Open log" Command="{Binding OpenLogCommand}" />
       <CheckBox Content="Show non-bridge environments" IsChecked="{Binding ShowUnrelated}" Margin="12,0,0,0"
                 VerticalAlignment="Center" />
