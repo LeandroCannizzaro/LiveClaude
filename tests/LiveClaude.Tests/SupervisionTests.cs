@@ -142,6 +142,49 @@ public class ConfigStoreTests
     }
 }
 
+public class GitWorktreesTests
+{
+    [Fact]
+    public void PlainRepositoryYieldsOneWorktree()
+    {
+        var worktrees = GitWorktrees.Parse(
+            "worktree /repos/api\n" +
+            "HEAD abcdef1234567890abcdef1234567890abcdef12\n" +
+            "branch refs/heads/main\n");
+
+        var worktree = Assert.Single(worktrees);
+        Assert.Equal("/repos/api", worktree.Path);
+        Assert.Equal("main", worktree.Branch);
+    }
+
+    [Fact]
+    public void LinkedWorktreesAndDetachedHeadsAreParsed()
+    {
+        var worktrees = GitWorktrees.Parse(
+            "worktree /repos/api\n" +
+            "HEAD abcdef1234567890abcdef1234567890abcdef12\n" +
+            "branch refs/heads/main\n" +
+            "\n" +
+            "worktree /repos/api-worktrees/feature-x\n" +
+            "HEAD 1234567890abcdef1234567890abcdef12345678\n" +
+            "branch refs/heads/feature-x\n" +
+            "\n" +
+            "worktree /repos/api-worktrees/scratch\n" +
+            "HEAD 7890abcdef1234567890abcdef1234567890abcd\n" +
+            "detached\n");
+
+        Assert.Equal(3, worktrees.Count);
+        Assert.Equal(["main", "feature-x", null], worktrees.Select(w => w.Branch));
+        Assert.Equal(
+            ["/repos/api", "/repos/api-worktrees/feature-x", "/repos/api-worktrees/scratch"],
+            worktrees.Select(w => w.Path));
+    }
+
+    [Fact]
+    public void EmptyOutputYieldsNoWorktrees() =>
+        Assert.Empty(GitWorktrees.Parse(""));
+}
+
 public class SessionValidationTests
 {
     [Fact]

@@ -89,6 +89,20 @@ public sealed class InstanceViewModel : ObservableObject
 
     public bool HasMessage => !string.IsNullOrWhiteSpace(Message);
 
+    public IReadOnlyList<WorktreeInfo> Worktrees => _snapshot.Worktrees;
+
+    public int BranchCount => Worktrees
+        .Select(w => w.Branch)
+        .Where(b => !string.IsNullOrEmpty(b))
+        .Distinct(StringComparer.Ordinal)
+        .Count();
+
+    /// <summary>A plain single-branch checkout carries nothing worth showing.</summary>
+    public bool HasMultipleWorktrees => Worktrees.Count > 1;
+
+    public string WorktreeSummary =>
+        $"{Worktrees.Count} worktrees · {BranchCount} branch{(BranchCount == 1 ? "" : "es")}";
+
     public bool CanStart => _snapshot.State is InstanceState.Stopped or InstanceState.Failed or InstanceState.Disabled;
 
     public bool CanStop => _snapshot.State is not InstanceState.Stopped and not InstanceState.Disabled;
@@ -107,6 +121,10 @@ public sealed class InstanceViewModel : ObservableObject
         OnPropertyChanged(nameof(HasSessionUrl));
         OnPropertyChanged(nameof(Message));
         OnPropertyChanged(nameof(HasMessage));
+        OnPropertyChanged(nameof(Worktrees));
+        OnPropertyChanged(nameof(BranchCount));
+        OnPropertyChanged(nameof(HasMultipleWorktrees));
+        OnPropertyChanged(nameof(WorktreeSummary));
         OnPropertyChanged(nameof(CanStart));
         OnPropertyChanged(nameof(CanStop));
         OnPropertyChanged(nameof(Snapshot));

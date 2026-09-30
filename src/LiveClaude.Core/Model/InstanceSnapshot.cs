@@ -27,6 +27,15 @@ public enum InstanceState
     Failed
 }
 
+/// <summary>One entry from <c>git worktree list</c>: a checkout and the branch it has out.</summary>
+public sealed class WorktreeInfo
+{
+    public string Path { get; set; } = "";
+
+    /// <summary>Branch name, or null when the worktree is on a detached HEAD.</summary>
+    public string? Branch { get; set; }
+}
+
 /// <summary>Point-in-time view of one supervised instance, shipped to the desktop app over IPC.</summary>
 public sealed class InstanceSnapshot
 {
@@ -57,6 +66,13 @@ public sealed class InstanceSnapshot
     public string? AttentionReason { get; set; }
 
     public string? LastError { get; set; }
+
+    /// <summary>
+    /// Result of <c>git worktree list</c> for <see cref="Directory"/>, refreshed periodically while
+    /// the instance runs. Empty when the directory is not a git repository; one entry for a plain
+    /// repository with no linked worktrees.
+    /// </summary>
+    public List<WorktreeInfo> Worktrees { get; set; } = new();
 
     public TimeSpan? Uptime => StartedUtc is { } s && State is InstanceState.Running or InstanceState.Starting or InstanceState.NeedsAttention
         ? DateTimeOffset.UtcNow - s

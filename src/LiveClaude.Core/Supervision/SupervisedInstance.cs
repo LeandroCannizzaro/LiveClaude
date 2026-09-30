@@ -46,6 +46,7 @@ public sealed class SupervisedInstance : IAsyncDisposable
     private int _restartCount;
     private string? _environmentId;
     private int _environmentLookupStarted;
+    private List<WorktreeInfo> _worktrees = new();
 
     public SupervisedInstance(
         SessionConfig config,
@@ -104,7 +105,8 @@ public sealed class SupervisedInstance : IAsyncDisposable
                 EnvironmentId = _environmentId,
                 LastOutput = _lastOutput,
                 AttentionReason = _attentionReason,
-                LastError = _lastError
+                LastError = _lastError,
+                Worktrees = _worktrees
             };
         }
     }
@@ -374,6 +376,7 @@ public sealed class SupervisedInstance : IAsyncDisposable
             _sessionUrl = null;
             _environmentId = null;
             _environmentLookupStarted = 0;
+            _worktrees = new();
             _recentOutput.Clear();
         }
 
@@ -386,6 +389,8 @@ public sealed class SupervisedInstance : IAsyncDisposable
             var startedUtc = DateTimeOffset.UtcNow;
             _ = Task.Run(() => ResolveEnvironmentAsync(startedUtc, ct), CancellationToken.None);
         }
+
+        _ = Task.Run(() => WatchWorktreesAsync(ct), CancellationToken.None);
 
         var reader = Task.Run(() => PumpOutputAsync(pty), CancellationToken.None);
 
@@ -515,6 +520,66 @@ public sealed class SupervisedInstance : IAsyncDisposable
                 _log.Write($"[supervisor] could not resolve the bridge environment: {ex.Message}");
             }
         }
+    }
+
+    /// <summary>
+    /// Keeps <see cref="_worktrees"/> in sync with <c>git worktree list</c> for as long as the
+    /// instance runs, so the dashboard reflects worktrees a remote session creates or removes on
+    /// demand rather than only what existed when the server started.
+    /// </summary>
+    private async Task WatchWorktreesAsync(CancellationToken ct)
+    {
+        var interval = TimeSpan.FromSeconds(Math.Max(5, _appConfig.HealthCheckSeconds));
+
+        while (!ct.IsCancellationRequested)
+        {
+            try
+            {
+                var worktrees = await GitWorktrees.ListAsync(Config.Directory, ct).ConfigureAwait(false);
+
+                bool changed;
+                lock (_gate)
+                {
+                    changed = !WorktreesEqual(_worktrees, worktrees);
+                    _worktrees = worktrees;
+                }
+
+                if (changed)
+                    Notify();
+            }
+            catch (OperationCanceledException)
+            {
+                return;
+            }
+            catch (Exception ex)
+            {
+                _log.Write($"[supervisor] could not list git worktrees: {ex.Message}");
+            }
+
+            try
+            {
+                await Task.Delay(interval, ct).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException)
+            {
+                return;
+            }
+        }
+    }
+
+    private static bool WorktreesEqual(IReadOnlyList<WorktreeInfo> a, IReadOnlyList<WorktreeInfo> b)
+    {
+        if (a.Count != b.Count)
+            return false;
+
+        for (var i = 0; i < a.Count; i++)
+        {
+            if (!string.Equals(a[i].Path, b[i].Path, StringComparison.Ordinal) ||
+                !string.Equals(a[i].Branch, b[i].Branch, StringComparison.Ordinal))
+                return false;
+        }
+
+        return true;
     }
 
     private async Task PumpOutputAsync(IPtyProcess pty)
