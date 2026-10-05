@@ -8,6 +8,8 @@ namespace LiveClaude.Tests.Platform;
 /// pinning: how an argument vector is rendered, where things live, and whether the seam itself is
 /// wired up the way the loader expects.
 /// </summary>
+// Serialised: PlatformContractTests rewrites LIVECLAUDE_ROOT, which changes the unit text.
+[Collection("LiveClaudeRootOverride")]
 public class PlatformContractTests
 {
     [Fact]

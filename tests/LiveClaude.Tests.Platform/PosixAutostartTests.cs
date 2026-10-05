@@ -13,6 +13,8 @@ namespace LiveClaude.Tests.Platform;
 /// point of a unit file being wrong is that you find out at the next reboot, and a test that only
 /// runs on the machine that would have caught it is no help.
 /// </summary>
+// Serialised: PlatformContractTests rewrites LIVECLAUDE_ROOT, which changes the unit text.
+[Collection("LiveClaudeRootOverride")]
 public class PosixAutostartTests
 {
     private static readonly SupervisorCommand Command =
