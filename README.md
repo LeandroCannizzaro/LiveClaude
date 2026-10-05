@@ -379,8 +379,9 @@ and on macOS. A directory other users cannot traverse is what protects the socke
 **Windows keeps one machine-wide root** so a service running under another account reads the same
 configuration the app writes. POSIX has no equivalent that both a daemon and a desktop user can
 reach, so Linux and macOS are per-user. A system-scope daemon opts into a shared root through
-`LIVECLAUDE_ROOT`, which every platform honours — the systemd system unit sets it to
-`/var/lib/liveclaude` for exactly this reason.
+`LIVECLAUDE_ROOT`, which every platform honours. The systemd system unit pins it to
+`/var/lib/liveclaude` (created by `StateDirectory=`) only when it runs as root; with a named account
+it uses that account's home, the same configuration the app writes.
 
 ## Troubleshooting
 

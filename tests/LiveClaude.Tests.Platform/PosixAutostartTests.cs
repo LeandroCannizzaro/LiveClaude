@@ -74,16 +74,24 @@ public class PosixAutostartTests
     }
 
     /// <summary>
-    /// A system unit runs outside any login session, so the per-user configuration root would resolve
-    /// against root's home directory rather than the one the app writes to. Pinning it is what keeps
-    /// the daemon and the desktop app looking at the same sessions.
+    /// With a named account systemd sets HOME, so the default root is the one the app writes to; a
+    /// pinned /var/lib path would be unwritable for that account and a different configuration.
     /// </summary>
     [Fact]
-    public void TheSystemUnitPinsTheConfigurationRoot()
+    public void ANamedAccountKeepsItsOwnConfigurationRoot()
     {
         var unit = Build(SystemUnit(), new AutostartOptions { UserName = "leandro" });
 
+        Assert.DoesNotContain(PathLayout.RootOverrideVariable, unit);
+    }
+
+    [Fact]
+    public void ARootUnitPinsASharedRootThatSystemdCreates()
+    {
+        var unit = Build(SystemUnit(), new AutostartOptions());
+
         Assert.Contains($"Environment={PathLayout.RootOverrideVariable}=/var/lib/liveclaude", unit);
+        Assert.Contains("StateDirectory=liveclaude", unit);
     }
 
     [Fact]

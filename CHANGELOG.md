@@ -4,6 +4,15 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project uses
 [semantic versioning](https://semver.org/).
 
+## [2.1.1] - 2026-10-05
+
+### Fixed
+
+- The Linux systemd system unit no longer crashes at startup when it names an account. It used to pin
+  `LIVECLAUDE_ROOT` to `/var/lib/liveclaude`, which that account cannot create, and would have read a
+  different configuration from the app. A named account now uses its own home; only a root unit pins
+  the shared root, and `StateDirectory=` creates it.
+
 ## [2.1.0] - 2026-10-05
 
 ### Added
