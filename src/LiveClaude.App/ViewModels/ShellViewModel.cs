@@ -35,7 +35,8 @@ public sealed class ShellViewModel : ObservableObject, IAsyncDisposable
         Hosting = new HostingViewModel();
         Environments = new EnvironmentsViewModel(
             () => Instances.Select(i => i.Snapshot).ToList(),
-            () => _config.Sessions);
+            () => _config.Sessions,
+            id => _api?.StopInstanceAsync(id) ?? Task.CompletedTask);
 
         RefreshCommand = new RelayCommand(_ => RefreshAsync());
         ReconnectCommand = new RelayCommand(_ => ConnectAsync(force: true));

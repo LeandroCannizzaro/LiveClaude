@@ -95,9 +95,9 @@ public sealed class EnvironmentsViewModel : ObservableObject
 {
     private readonly Func<IReadOnlyList<InstanceSnapshot>> _instances;
     private readonly Func<IReadOnlyList<SessionConfig>> _sessions;
+    private readonly Func<string, Task> _stopInstanceAsync;
     private readonly RollingLogWriter _log;
     private readonly Dictionary<string, string> _lastErrors = new(StringComparer.Ordinal);
-    private readonly HashSet<string> _forceCandidates = new(StringComparer.Ordinal);
 
     private string _statusMessage = "Not loaded yet.";
     private string _failureSummary = "";
@@ -106,10 +106,12 @@ public sealed class EnvironmentsViewModel : ObservableObject
 
     public EnvironmentsViewModel(
         Func<IReadOnlyList<InstanceSnapshot>> instances,
-        Func<IReadOnlyList<SessionConfig>> sessions)
+        Func<IReadOnlyList<SessionConfig>> sessions,
+        Func<string, Task> stopInstanceAsync)
     {
         _instances = instances;
         _sessions = sessions;
+        _stopInstanceAsync = stopInstanceAsync;
 
         ConfigStore.EnsureDirectories();
         _log = new RollingLogWriter(Path.Combine(ConfigStore.LogDirectory, "environments.log"), maxSizeMb: 4);
@@ -149,8 +151,7 @@ public sealed class EnvironmentsViewModel : ObservableObject
             UpdateCounts();
         });
 
-        DeleteSelectedCommand = new RelayCommand(_ => DeleteSelectedAsync(force: false));
-        ForceDeleteCommand = new RelayCommand(_ => DeleteSelectedAsync(force: true), _ => CanForce);
+        DeleteSelectedCommand = new RelayCommand(_ => DeleteSelectedAsync());
         OpenLogCommand = new RelayCommand(_ => ShellViewModel.OpenUrl(_log.Path));
     }
 
@@ -161,7 +162,6 @@ public sealed class EnvironmentsViewModel : ObservableObject
     public RelayCommand SelectDuplicatesCommand { get; }
     public RelayCommand ClearSelectionCommand { get; }
     public RelayCommand DeleteSelectedCommand { get; }
-    public RelayCommand ForceDeleteCommand { get; }
     public RelayCommand OpenLogCommand { get; }
 
     public string StatusMessage
@@ -188,11 +188,6 @@ public sealed class EnvironmentsViewModel : ObservableObject
         get => _busy;
         private set => SetProperty(ref _busy, value);
     }
-
-    /// <summary>True when at least one failure said the environment still has session records.</summary>
-    public bool CanForce => _forceCandidates.Count > 0;
-
-    public int ForceCandidateCount => _forceCandidates.Count;
 
     /// <summary>
     /// Bridge environments are always listed — they are the ones that pile up. Cloud and default
@@ -251,8 +246,6 @@ public sealed class EnvironmentsViewModel : ObservableObject
             // Environments that are gone no longer need their error kept around.
             foreach (var id in _lastErrors.Keys.Where(id => Items.All(i => i.Id != id)).ToList())
                 _lastErrors.Remove(id);
-            foreach (var id in _forceCandidates.Where(id => Items.All(i => i.Id != id)).ToList())
-                _forceCandidates.Remove(id);
 
             UpdateCounts();
             var hidden = ordered.Count - Items.Count;
@@ -279,15 +272,13 @@ public sealed class EnvironmentsViewModel : ObservableObject
         }
     }
 
-    private async Task DeleteSelectedAsync(bool force)
+    private async Task DeleteSelectedAsync()
     {
-        var selected = force
-            ? Items.Where(i => _forceCandidates.Contains(i.Id) && i.CanSelect).ToList()
-            : Items.Where(i => i.IsSelected && i.CanSelect).ToList();
+        var selected = Items.Where(i => i.IsSelected && i.CanSelect).ToList();
 
         if (selected.Count == 0)
         {
-            StatusMessage = force ? "Nothing to force." : "Nothing selected.";
+            StatusMessage = "Nothing selected.";
             return;
         }
 
@@ -295,34 +286,35 @@ public sealed class EnvironmentsViewModel : ObservableObject
         if (selected.Count > 12)
             names += $"{Environment.NewLine}  … and {selected.Count - 12} more";
 
-        var question = force
-            ? $"Force-delete {selected.Count} environment(s)?{Environment.NewLine}{Environment.NewLine}{names}" +
-              $"{Environment.NewLine}{Environment.NewLine}They still have session records attached — servers that were killed rather than stopped. " +
-              "Forcing deletes those sessions together with the environment. This cannot be undone."
-            : $"Permanently delete {selected.Count} environment(s) from your Claude account?{Environment.NewLine}{Environment.NewLine}{names}" +
-              $"{Environment.NewLine}{Environment.NewLine}This cannot be undone. Servers running right now are never included.";
+        var question =
+            $"Permanently delete {selected.Count} environment(s) from your Claude account?{Environment.NewLine}{Environment.NewLine}{names}" +
+            $"{Environment.NewLine}{Environment.NewLine}This cannot be undone. Servers running right now are never included. " +
+            "If one still has session records attached, or a matching server keeps restarting in the background, this " +
+            "stops it and forces the delete automatically.";
 
-        if (!await Dialogs.ConfirmAsync(question, force ? "Force delete" : "Delete environments"))
+        if (!await Dialogs.ConfirmAsync(question, "Delete environments"))
             return;
 
         Busy = true;
         var deleted = 0;
         var failures = new List<string>();
 
-        Log($"--- delete run: {selected.Count} environment(s), force={force}");
+        Log($"--- delete run: {selected.Count} environment(s)");
 
         try
         {
             using var client = new EnvironmentsClient(log: Log);
+            var instances = _instances();
 
             foreach (var item in selected)
             {
+                await StopMatchingInstanceAsync(item, instances);
+
                 try
                 {
-                    await client.DeleteAsync(item.Id, force);
+                    await DeleteWithAutoForceAsync(client, item);
                     deleted++;
                     _lastErrors.Remove(item.Id);
-                    _forceCandidates.Remove(item.Id);
                     item.LastError = null;
                 }
                 catch (EnvironmentsApiException ex)
@@ -331,11 +323,6 @@ public sealed class EnvironmentsViewModel : ObservableObject
                     failures.Add($"{item.Name}: {detail}");
                     _lastErrors[item.Id] = detail;
                     item.LastError = detail;
-
-                    if (ex.RequiresForce)
-                        _forceCandidates.Add(item.Id);
-                    else
-                        _forceCandidates.Remove(item.Id);
                 }
                 catch (Exception ex)
                 {
@@ -380,6 +367,56 @@ public sealed class EnvironmentsViewModel : ObservableObject
         UpdateCounts();
     }
 
+    /// <summary>
+    /// Stops whatever LiveClaude is running for this environment's directory first.
+    ///
+    /// A directory a server keeps restarting for re-registers a bridge environment moments after it
+    /// is deleted — the "came back" case below — so deleting one for real means stopping that server
+    /// first, not just after the fact. Best effort: a directory nothing is running for, or a server
+    /// this account cannot reach, is not a reason to abandon the delete.
+    /// </summary>
+    private async Task StopMatchingInstanceAsync(EnvironmentViewModel item, IReadOnlyList<InstanceSnapshot> instances)
+    {
+        var directory = item.Environment.Directory;
+        if (string.IsNullOrWhiteSpace(directory))
+            return;
+
+        var owner = instances.FirstOrDefault(i =>
+            i.State is not (InstanceState.Stopped or InstanceState.Disabled) &&
+            EnvironmentClassifier.SamePath(i.Directory, directory));
+
+        if (owner is null)
+            return;
+
+        try
+        {
+            await _stopInstanceAsync(owner.Id);
+            Log($"stopped '{owner.Name}' ({owner.Id}) before deleting {item.Name}, so it cannot re-register");
+        }
+        catch (Exception ex)
+        {
+            Log($"could not stop '{owner.Name}' before deleting {item.Name}: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// Deletes without force first, and immediately retries with force when the API says the
+    /// environment still has session records — one click, not a normal delete followed by a
+    /// separate force button once it fails.
+    /// </summary>
+    private async Task DeleteWithAutoForceAsync(EnvironmentsClient client, EnvironmentViewModel item)
+    {
+        try
+        {
+            await client.DeleteAsync(item.Id, force: false);
+        }
+        catch (EnvironmentsApiException ex) when (ex.RequiresForce)
+        {
+            Log($"{item.Name} needs force ({Decorate(ex)}); retrying with force=true");
+            await client.DeleteAsync(item.Id, force: true);
+        }
+    }
+
     private static string Decorate(EnvironmentsApiException ex) =>
         ex.RequestId is null ? ex.Message : $"{ex.Message} (request-id {ex.RequestId})";
 
@@ -393,7 +430,5 @@ public sealed class EnvironmentsViewModel : ObservableObject
     {
         OnPropertyChanged(nameof(StaleCount));
         OnPropertyChanged(nameof(SelectedCount));
-        OnPropertyChanged(nameof(CanForce));
-        OnPropertyChanged(nameof(ForceCandidateCount));
     }
 }
