@@ -4,6 +4,21 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project uses
 [semantic versioning](https://semver.org/).
 
+## [2.1.0] - 2026-10-05
+
+### Added
+
+- **Multiple agent products.** Sessions now pick a product: Claude Code Remote Control or Cursor
+  My Machines (`agent worker start`). Each product lives in its own late-loaded assembly
+  (`LiveClaude.Product.Claude`, `LiveClaude.Product.Cursor`) behind `IAgentProduct`. See
+  [#6](https://github.com/LeandroCannizzaro/LiveClaude/issues/6).
+- **Windows better-sqlite3 auto-patch** for the Cursor agent (ABI 127 vs 137), with a setting to disable it.
+- Settings → Products section; the Environments tab shows only for products that support it.
+
+### Changed
+
+- `AppConfig.ClaudePath` migrates to `Products.Claude.Path`; existing sessions become `ProductId = "claude"`.
+
 ## [2.0.0] - 2026-09-17
 
 The first cross-platform release. 1.x was a Windows program; 2.x is the same program on Windows,
