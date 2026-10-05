@@ -4,6 +4,12 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project uses
 [semantic versioning](https://semver.org/).
 
+## [2.1.2] - 2026-10-05
+
+2.1.1 was tagged but never published: a test that depends on `LIVECLAUDE_ROOT` raced another test on
+macOS and failed the release build. 2.1.2 carries the same fix with the tests serialised; its changes
+are those listed under 2.1.1.
+
 ## [2.1.1] - 2026-10-05
 
 ### Fixed
