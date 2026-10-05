@@ -134,18 +134,22 @@ public sealed class SystemdSystemProvider : SystemdProvider
 
     /// <summary>
     /// A system unit runs outside any login session, so it has no D-Bus session, no keyring and no
-    /// XDG_RUNTIME_DIR. The configuration root is pinned to a shared path for the same reason: the
-    /// per-user default would point at root's home directory, not at the one the app writes to.
+    /// XDG_RUNTIME_DIR. With a named account systemd sets HOME for it, so the per-user default
+    /// resolves to the very directory the desktop app writes to — pinning a root there would make the
+    /// daemon read a different configuration, and /var/lib is not writable by that account anyway.
+    /// Without one the unit runs as root, whose home is not where the app writes; the root is then
+    /// pinned to a shared path, and StateDirectory has systemd create it.
     /// </summary>
     protected override string BuildUnit(SupervisorCommand command, AutostartOptions options)
     {
         var unit = base.BuildUnit(command, options);
 
-        if (!unit.Contains(PathLayout.RootOverrideVariable, StringComparison.Ordinal))
+        if (string.IsNullOrWhiteSpace(options.UserName) &&
+            !unit.Contains(PathLayout.RootOverrideVariable, StringComparison.Ordinal))
         {
             unit = unit.Replace(
                 "Restart=always",
-                $"Environment={PathLayout.RootOverrideVariable}=/var/lib/liveclaude\nRestart=always",
+                $"Environment={PathLayout.RootOverrideVariable}=/var/lib/liveclaude\nStateDirectory=liveclaude\nRestart=always",
                 StringComparison.Ordinal);
         }
 
