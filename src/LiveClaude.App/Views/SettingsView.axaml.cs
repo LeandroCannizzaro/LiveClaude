@@ -100,9 +100,15 @@ public partial class SettingsView : UserControl
             await host.StopAsync();
     }
 
-    private void OnUseInstall(object? sender, RoutedEventArgs e)
+    private void OnUseClaudeInstall(object? sender, RoutedEventArgs e)
     {
         if (Shell is not null && sender is Button { Tag: string path })
             Shell.ClaudePath = path;
+    }
+
+    private void OnUseCursorInstall(object? sender, RoutedEventArgs e)
+    {
+        if (Shell is not null && sender is Button { Tag: string path })
+            Shell.CursorPath = path;
     }
 }

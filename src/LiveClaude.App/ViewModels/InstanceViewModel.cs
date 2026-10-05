@@ -50,11 +50,18 @@ public sealed class InstanceViewModel : ObservableObject
         _ => new ImmutableSolidColorBrush(Color.FromRgb(0x6B, 0x72, 0x80))
     };
 
+    public string ProductBadge =>
+        string.IsNullOrWhiteSpace(_snapshot.ProductDisplayName)
+            ? _snapshot.ProductId
+            : _snapshot.ProductDisplayName;
+
     public string Details
     {
         get
         {
             var parts = new List<string>();
+
+            parts.Add(ProductBadge);
 
             if (_snapshot.ProcessId is { } pid)
                 parts.Add($"pid {pid}");
@@ -65,7 +72,8 @@ public sealed class InstanceViewModel : ObservableObject
             if (_snapshot.RestartCount > 0)
                 parts.Add($"{_snapshot.RestartCount} restart(s)");
 
-            if (_config is not null)
+            if (_config is not null &&
+                string.Equals(_config.ProductId, "claude", StringComparison.OrdinalIgnoreCase))
             {
                 var spawn = _config.Spawn switch
                 {
@@ -75,6 +83,12 @@ public sealed class InstanceViewModel : ObservableObject
                 };
 
                 parts.Add($"{spawn} · capacity {_config.Capacity} · {_config.PermissionMode}");
+            }
+            else if (_config is not null &&
+                     string.Equals(_config.ProductId, "cursor", StringComparison.OrdinalIgnoreCase))
+            {
+                var dirs = 1 + _config.Cursor.ExtraWorkerDirs.Count;
+                parts.Add($"{dirs} worker-dir(s)");
             }
 
             return string.Join("   ·   ", parts);
@@ -89,6 +103,20 @@ public sealed class InstanceViewModel : ObservableObject
 
     public bool HasMessage => !string.IsNullOrWhiteSpace(Message);
 
+    public IReadOnlyList<WorktreeInfo> Worktrees => _snapshot.Worktrees;
+
+    public int BranchCount => Worktrees
+        .Select(w => w.Branch)
+        .Where(b => !string.IsNullOrEmpty(b))
+        .Distinct(StringComparer.Ordinal)
+        .Count();
+
+    /// <summary>A plain single-branch checkout carries nothing worth showing.</summary>
+    public bool HasMultipleWorktrees => Worktrees.Count > 1;
+
+    public string WorktreeSummary =>
+        $"{Worktrees.Count} worktrees · {BranchCount} branch{(BranchCount == 1 ? "" : "es")}";
+
     public bool CanStart => _snapshot.State is InstanceState.Stopped or InstanceState.Failed or InstanceState.Disabled;
 
     public bool CanStop => _snapshot.State is not InstanceState.Stopped and not InstanceState.Disabled;
@@ -99,6 +127,7 @@ public sealed class InstanceViewModel : ObservableObject
         _config = config;
         OnPropertyChanged(nameof(Name));
         OnPropertyChanged(nameof(Directory));
+        OnPropertyChanged(nameof(ProductBadge));
         OnPropertyChanged(nameof(State));
         OnPropertyChanged(nameof(StateText));
         OnPropertyChanged(nameof(StateBrush));
@@ -107,6 +136,10 @@ public sealed class InstanceViewModel : ObservableObject
         OnPropertyChanged(nameof(HasSessionUrl));
         OnPropertyChanged(nameof(Message));
         OnPropertyChanged(nameof(HasMessage));
+        OnPropertyChanged(nameof(Worktrees));
+        OnPropertyChanged(nameof(BranchCount));
+        OnPropertyChanged(nameof(HasMultipleWorktrees));
+        OnPropertyChanged(nameof(WorktreeSummary));
         OnPropertyChanged(nameof(CanStart));
         OnPropertyChanged(nameof(CanStop));
         OnPropertyChanged(nameof(Snapshot));

@@ -2,8 +2,10 @@ using Avalonia.Controls;
 using Avalonia.Interactivity;
 using Avalonia.Threading;
 using LiveClaude.App.ViewModels;
-using LiveClaude.Core.Claude;
+using LiveClaude.Core.Model;
+using LiveClaude.Core.Products;
 using LiveClaude.Terminal.Controls;
+using Path = System.IO.Path;
 
 namespace LiveClaude.App.Views;
 
@@ -81,18 +83,24 @@ public partial class TerminalPane : UserControl
         StatusText.Text = "Not attached.";
     }
 
-    /// <summary>Runs the CLI locally in this window: the workspace-trust and confirmation flows.</summary>
-    public async void StartLocal(string directory, string[] arguments)
+    /// <summary>Runs a CLI locally in this window: trust, login, and confirmation flows.</summary>
+    public async void StartLocal(string directory, string[] arguments, string? executablePath = null)
     {
         await DetachAsync();
         StopLocal();
         WireTerminal();
 
         var config = Shell?.Config;
-        var install = ClaudeLocator.Locate(config?.ClaudePath);
-        if (install is null)
+        var path = executablePath;
+        if (string.IsNullOrWhiteSpace(path))
         {
-            Terminal.Write("\r\n\x1b[31mClaude CLI not found. Set its path in the 'Service & startup' tab.\x1b[0m\r\n");
+            var claude = ProductHost.TryGet(ProductIds.Claude);
+            path = claude?.ResolveExecutable(config ?? new AppConfig());
+        }
+
+        if (string.IsNullOrWhiteSpace(path))
+        {
+            Terminal.Write("\r\n\x1b[31mCLI not found. Set its path in Settings → Products.\x1b[0m\r\n");
             return;
         }
 
@@ -101,11 +109,11 @@ public partial class TerminalPane : UserControl
 
         _local = new LocalTerminalSession(Terminal);
         _local.Exited += _ => Dispatcher.UIThread.Post(() => StatusText.Text = "Local process exited.");
-        _local.Start(install.Path, arguments, directory);
+        _local.Start(path, arguments, directory);
 
         StatusText.Text = arguments.Length == 0
             ? $"Running the CLI in {directory} — accept the trust prompt, then type /exit."
-            : $"Running 'claude {string.Join(' ', arguments)}' in {directory}.";
+            : $"Running '{Path.GetFileNameWithoutExtension(path)} {string.Join(' ', arguments)}' in {directory}.";
 
         Terminal.Focus();
     }

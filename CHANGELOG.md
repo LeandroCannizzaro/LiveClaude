@@ -4,7 +4,30 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project uses
 [semantic versioning](https://semver.org/).
 
-## [Unreleased]
+## [2.1.0] - 2026-10-05
+
+### Added
+
+- **Multiple agent products.** Sessions now pick a product: Claude Code Remote Control or Cursor
+  My Machines (`agent worker start`). Each product lives in its own late-loaded assembly
+  (`LiveClaude.Product.Claude`, `LiveClaude.Product.Cursor`) behind `IAgentProduct`. See
+  [#6](https://github.com/LeandroCannizzaro/LiveClaude/issues/6).
+- **Windows better-sqlite3 auto-patch** for the Cursor agent (ABI 127 vs 137), with a setting to disable it.
+- Settings → Products section; the Environments tab shows only for products that support it.
+
+### Changed
+
+- `AppConfig.ClaudePath` migrates to `Products.Claude.Path`; existing sessions become `ProductId = "claude"`.
+
+## [2.0.0] - 2026-09-17
+
+The first cross-platform release. 1.x was a Windows program; 2.x is the same program on Windows,
+Linux and macOS, and the version was bumped to 2.0.0 because the shape of the project changed rather
+than because the features did.
+
+**1.0.15 stays where it is.** Its tag, its release assets and its ClickOnce channel
+(`/clickonce/`) are untouched and keep working. 2.x publishes to `/clickonce/v2/`, a channel of its
+own, so no 1.0.15 installation is carried onto a different application by an update check.
 
 ### Added
 
@@ -22,6 +45,12 @@ All notable changes to this project are documented here. The format follows
   `--scope user|system`. `install-task` and `install-service` remain as aliases.
 - `LIVECLAUDE_ROOT` overrides the configuration root on any platform. The systemd system unit uses it
   to point a daemon at a shared location instead of root's home directory.
+- One-line installers:
+  `curl -fsSL https://leandrocannizzaro.github.io/LiveClaude/install.sh | sh` on Linux, which picks
+  the right package for the machine, and `install-macos.sh` on macOS, which also clears the
+  quarantine flag so the first launch is not refused.
+- CI builds the ClickOnce package on every run. It used to be produced only during a release, so a
+  change that broke it — the move off WPF, for one — would have surfaced as a failed public release.
 
 ### Changed
 
@@ -45,6 +74,11 @@ All notable changes to this project are documented here. The format follows
 - Listening on the IPC endpoint twice inside one process now fails on Windows as it already did on
   POSIX. Windows is happy to let a process open many instances of its own named pipe — that is how
   one serves several clients — so a duplicate supervisor in a single process went unnoticed there.
+- The supervisor socket on macOS no longer exceeds the 104-byte limit a Unix domain socket path has
+  there. It lived under `~/Library/Application Support/LiveClaude/run/`, which fit for a short user
+  name and failed for a long one; it now sits in a short per-user directory created 0700
+  (`/tmp/liveclaude-<uid>/`). An over-long path is reported with its own length instead of as an
+  `ArgumentOutOfRangeException` naming a parameter.
 
 ## [1.0.15] - 2026-09-15
 

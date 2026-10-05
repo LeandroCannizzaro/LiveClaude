@@ -1,0 +1,24 @@
+# Line endings, decided here rather than left to each contributor's core.autocrlf.
+#
+# The shell scripts matter most: they are the install path for Linux and macOS, and a script
+# committed with CRLF fails on the first line with "bad interpreter: /bin/sh^M" — on the user's
+# machine, not on the machine that committed it. Someone working on Windows with autocrlf=false
+# would produce exactly that, silently.
+
+* text=auto
+
+*.sh text eol=lf
+*.bash text eol=lf
+
+# The unit files and property lists these produce are read by systemd and launchd, which are no
+# happier about carriage returns.
+packaging/linux/** text eol=lf
+packaging/macos/** text eol=lf
+
+*.ps1 text eol=crlf
+*.cmd text eol=crlf
+*.bat text eol=crlf
+
+*.png binary
+*.ico binary
+*.icns binary

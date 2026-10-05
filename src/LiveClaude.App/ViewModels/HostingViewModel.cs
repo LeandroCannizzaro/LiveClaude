@@ -360,6 +360,25 @@ public sealed class HostingViewModel : ObservableObject
     public string SupervisorPath => _supervisorPath ??= Platform.Deployment.Deploy().ExecutablePath;
 
     /// <summary>
+    /// The executable to actually run elevated for an install/uninstall/start/stop verb.
+    ///
+    /// Not the same as <see cref="SupervisorPath"/>: that one is always the supervisor executable, for
+    /// display and for registering the long-running host once elevation has already happened. This one
+    /// has to start on its own right now, in the elevated process, so it goes through the same
+    /// can-it-actually-run check as the registered command — a ClickOnce install ships the supervisor
+    /// without its runtime configuration, and elevating it directly is exactly the ".NET Desktop
+    /// Runtime is required" dialog instead of the install this was supposed to perform.
+    /// </summary>
+    private string ElevatorPath
+    {
+        get
+        {
+            var directory = Path.GetDirectoryName(SupervisorPath)!;
+            return Platform.Deployment.ResolveCommand(directory, AutostartScope.User).ExecutablePath;
+        }
+    }
+
+    /// <summary>
     /// The build sitting in the deployed copy — the one a registration actually runs. Shown always,
     /// because a copy left behind by a locked file is invisible otherwise.
     /// </summary>
@@ -449,7 +468,7 @@ public sealed class HostingViewModel : ObservableObject
     /// </summary>
     internal async Task<int> RunElevatedVerbAsync(string[] arguments)
     {
-        var elevator = SupervisorPath;
+        var elevator = ElevatorPath;
 
         try
         {

@@ -1,8 +1,8 @@
 using System.Collections.Concurrent;
 using LiveClaude.Abstractions;
-using LiveClaude.Core.Claude;
 using LiveClaude.Core.Config;
 using LiveClaude.Core.Model;
+using LiveClaude.Core.Products;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 
@@ -42,7 +42,6 @@ public sealed class Supervisor : IAsyncDisposable
     private readonly SemaphoreSlim _reconcileLock = new(1, 1);
 
     private AppConfig _config;
-    private ClaudeInstall? _claude;
 
     public Supervisor(ConfigStore? store = null, ILogger<Supervisor>? logger = null, string host = "app")
     {
@@ -65,33 +64,46 @@ public sealed class Supervisor : IAsyncDisposable
 
     public event Action<string, string>? TerminalOutput;
 
-    public SupervisorStatus GetStatus() => new()
+    public SupervisorStatus GetStatus()
     {
-        Host = Host,
-        Version = typeof(Supervisor).Assembly.GetName().Version?.ToString(3) ?? "1.0.0",
-        ClaudePath = _claude?.Path,
-        ClaudeVersion = _claude?.Version,
-        Platform = PlatformLoader.Current.DisplayName,
-        PseudoConsoleSupported = PlatformLoader.Current.Pty.IsSupported,
-        HostOwnsConsole = PlatformLoader.Current.Pty.HostOwnsConsole,
-        StartedUtc = StartedUtc,
-        Instances = _instances.Values
-            .Select(i => i.Snapshot())
-            .OrderBy(i => i.Name, StringComparer.OrdinalIgnoreCase)
-            .ToList()
-    };
+        var claude = ProductHost.TryGet(ProductIds.Claude);
+        var claudePath = claude?.ResolveExecutable(_config);
+        var claudeVersion = claudePath is null
+            ? null
+            : claude?.ListInstalls(_config).FirstOrDefault(i =>
+                string.Equals(i.Path, claudePath, StringComparison.OrdinalIgnoreCase))?.Version;
+
+        return new SupervisorStatus
+        {
+            Host = Host,
+            Version = typeof(Supervisor).Assembly.GetName().Version?.ToString(3) ?? "1.0.0",
+            ClaudePath = claudePath,
+            ClaudeVersion = claudeVersion,
+            Platform = PlatformLoader.Current.DisplayName,
+            PseudoConsoleSupported = PlatformLoader.Current.Pty.IsSupported,
+            HostOwnsConsole = PlatformLoader.Current.Pty.HostOwnsConsole,
+            StartedUtc = StartedUtc,
+            Instances = _instances.Values
+                .Select(i => i.Snapshot())
+                .OrderBy(i => i.Name, StringComparer.OrdinalIgnoreCase)
+                .ToList()
+        };
+    }
 
     /// <summary>Loads the configuration, creates every instance and starts the ones marked auto-start.</summary>
     public async Task StartAsync(CancellationToken ct = default)
     {
         ConfigStore.EnsureDirectories();
         _config = _store.Load();
-        _claude = ClaudeLocator.Locate(_config.ClaudePath);
 
-        if (_claude is null)
-            _logger.LogWarning("Claude CLI not found. Set 'ClaudePath' in the configuration or install the native build.");
-        else
-            _logger.LogInformation("Using Claude CLI at {Path} ({Version}).", _claude.Path, _claude.Version ?? "unknown version");
+        foreach (var product in ProductHost.All)
+        {
+            var path = product.ResolveExecutable(_config);
+            if (path is null)
+                _logger.LogWarning("{Product} CLI not found. Set the path in Settings → Products.", product.DisplayName);
+            else
+                _logger.LogInformation("Using {Product} CLI at {Path}.", product.DisplayName, path);
+        }
 
         await ReconcileAsync(_config, startAutoStart: true, ct).ConfigureAwait(false);
     }
@@ -111,14 +123,12 @@ public sealed class Supervisor : IAsyncDisposable
         try
         {
             _config = config;
-            _claude = ClaudeLocator.Locate(config.ClaudePath);
-            var claudePath = _claude?.Path ?? config.ClaudePath ?? ClaudeLocator.FallbackExecutableName;
 
             foreach (var session in config.Sessions)
             {
                 if (_instances.TryGetValue(session.Id, out var existing))
                 {
-                    existing.UpdateRuntime(config, claudePath);
+                    existing.UpdateRuntime(config);
                     var needsRestart = existing.UpdateConfig(session);
 
                     if (!session.Enabled)
@@ -130,7 +140,7 @@ public sealed class Supervisor : IAsyncDisposable
                 }
                 else
                 {
-                    var instance = new SupervisedInstance(session, config, claudePath, _logger);
+                    var instance = new SupervisedInstance(session, config, _logger);
                     instance.Changed += _ => RaiseStatus();
                     instance.Output += (id, data) => TerminalOutput?.Invoke(id, data);
                     _instances[session.Id] = instance;
@@ -189,12 +199,14 @@ public sealed class Supervisor : IAsyncDisposable
     public async Task SaveSettingsAsync(AppConfig config, CancellationToken ct = default)
     {
         var current = _store.Load();
-        current.ClaudePath = config.ClaudePath;
+        current.Products = config.Products.Clone();
         current.HealthCheckSeconds = config.HealthCheckSeconds;
         current.LogTailLines = config.LogTailLines;
         current.LogMaxSizeMb = config.LogMaxSizeMb;
         current.UsePseudoConsole = config.UsePseudoConsole;
+        current.GracefulStopSeconds = config.GracefulStopSeconds;
         current.Backoff = config.Backoff;
+        current.Version = ConfigMigration.CurrentVersion;
         _store.Save(current);
         await ReconcileAsync(current, startAutoStart: false, ct).ConfigureAwait(false);
     }

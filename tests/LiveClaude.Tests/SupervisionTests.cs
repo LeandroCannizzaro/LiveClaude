@@ -1,8 +1,10 @@
 using System.IO;
+using LiveClaude.Abstractions;
 using LiveClaude.Core.Claude;
 using LiveClaude.Core.Config;
 using LiveClaude.Core.Model;
 using LiveClaude.Core.Supervision;
+using LiveClaude.Product.Claude;
 using Xunit;
 
 namespace LiveClaude.Tests;
@@ -59,14 +61,16 @@ public class BackoffPolicyTests
 
 public class OutputInterpreterTests
 {
+    private readonly ClaudeOutputInterpreter _interpreter = new();
+
     [Fact]
     public void AnsiSequencesAreStripped() =>
-        Assert.Equal("hello world", OutputInterpreter.StripAnsi("\u001b[1;32mhello\u001b[0m world"));
+        Assert.Equal("hello world", _interpreter.StripAnsi("\u001b[1;32mhello\u001b[0m world"));
 
     [Fact]
     public void TheSessionUrlIsExtracted()
     {
-        var url = OutputInterpreter.FindSessionUrl("Session: \u001b[4mhttps://claude.ai/code/abc123XYZ\u001b[0m ready");
+        var url = _interpreter.FindSessionUrl("Session: \u001b[4mhttps://claude.ai/code/abc123XYZ\u001b[0m ready");
         Assert.Equal("https://claude.ai/code/abc123XYZ", url);
     }
 
@@ -77,7 +81,7 @@ public class OutputInterpreterTests
     [InlineData("Please run /login to sign in", OutputSignal.LoginRequired)]
     [InlineData("just some output", OutputSignal.None)]
     public void SignalsAreClassified(string text, OutputSignal expected) =>
-        Assert.Equal(expected, OutputInterpreter.Classify(text));
+        Assert.Equal(expected, _interpreter.Classify(text));
 }
 
 public class ConfigStoreTests
@@ -142,6 +146,49 @@ public class ConfigStoreTests
     }
 }
 
+public class GitWorktreesTests
+{
+    [Fact]
+    public void PlainRepositoryYieldsOneWorktree()
+    {
+        var worktrees = GitWorktrees.Parse(
+            "worktree /repos/api\n" +
+            "HEAD abcdef1234567890abcdef1234567890abcdef12\n" +
+            "branch refs/heads/main\n");
+
+        var worktree = Assert.Single(worktrees);
+        Assert.Equal("/repos/api", worktree.Path);
+        Assert.Equal("main", worktree.Branch);
+    }
+
+    [Fact]
+    public void LinkedWorktreesAndDetachedHeadsAreParsed()
+    {
+        var worktrees = GitWorktrees.Parse(
+            "worktree /repos/api\n" +
+            "HEAD abcdef1234567890abcdef1234567890abcdef12\n" +
+            "branch refs/heads/main\n" +
+            "\n" +
+            "worktree /repos/api-worktrees/feature-x\n" +
+            "HEAD 1234567890abcdef1234567890abcdef12345678\n" +
+            "branch refs/heads/feature-x\n" +
+            "\n" +
+            "worktree /repos/api-worktrees/scratch\n" +
+            "HEAD 7890abcdef1234567890abcdef1234567890abcd\n" +
+            "detached\n");
+
+        Assert.Equal(3, worktrees.Count);
+        Assert.Equal(["main", "feature-x", null], worktrees.Select(w => w.Branch));
+        Assert.Equal(
+            ["/repos/api", "/repos/api-worktrees/feature-x", "/repos/api-worktrees/scratch"],
+            worktrees.Select(w => w.Path));
+    }
+
+    [Fact]
+    public void EmptyOutputYieldsNoWorktrees() =>
+        Assert.Empty(GitWorktrees.Parse(""));
+}
+
 public class SessionValidationTests
 {
     [Fact]
@@ -156,5 +203,12 @@ public class SessionValidationTests
     {
         var session = new SessionConfig { Name = "x", Directory = Path.GetTempPath() };
         Assert.Null(session.Validate());
+    }
+
+    [Fact]
+    public void ClaudeOptionsRejectInvalidCapacity()
+    {
+        var session = new SessionConfig { Name = "x", Directory = Path.GetTempPath(), Capacity = 0 };
+        Assert.Contains("Capacity", session.ValidateClaudeOptions());
     }
 }

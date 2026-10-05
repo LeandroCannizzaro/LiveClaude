@@ -1,33 +1,13 @@
 using System.Text;
 using System.Text.RegularExpressions;
+using LiveClaude.Abstractions;
 
-namespace LiveClaude.Core.Claude;
-
-public enum OutputSignal
-{
-    None,
-
-    /// <summary>The server reported itself ready / connected.</summary>
-    Ready,
-
-    /// <summary>The CLI is asking the workspace-trust question.</summary>
-    TrustPrompt,
-
-    /// <summary>The CLI is asking the one-time "Enable Remote Control? (y/n)" question.</summary>
-    RemoteControlConfirmation,
-
-    /// <summary>Authentication is missing or expired.</summary>
-    LoginRequired,
-
-    /// <summary>A fatal configuration error that a restart will not fix.</summary>
-    FatalError
-}
+namespace LiveClaude.Product.Claude;
 
 /// <summary>
-/// Turns raw CLI output into the few signals the supervisor and the UI care about: is the server up,
-/// is it blocked on a human, did it print a session URL.
+/// Turns raw Claude CLI output into the few signals the supervisor and the UI care about.
 /// </summary>
-public static class OutputInterpreter
+public sealed class ClaudeOutputInterpreter : IOutputInterpreter
 {
     private static readonly Regex AnsiPattern = new(
         @"\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~]|\][^\x07\x1B]*(?:\x07|\x1B\\)|[PX^_][^\x1B]*\x1B\\)",
@@ -37,17 +17,16 @@ public static class OutputInterpreter
         @"https://claude\.ai/code/[A-Za-z0-9\-_]+",
         RegexOptions.Compiled | RegexOptions.IgnoreCase);
 
-    public static string StripAnsi(string text) =>
+    public string StripAnsi(string text) =>
         AnsiPattern.Replace(text, string.Empty).Replace("\r", string.Empty);
 
-    /// <summary>Extracts the claude.ai session URL from a chunk of output, if present.</summary>
-    public static string? FindSessionUrl(string text)
+    public string? FindSessionUrl(string text)
     {
         var match = SessionUrlPattern.Match(StripAnsi(text));
         return match.Success ? match.Value : null;
     }
 
-    public static OutputSignal Classify(string text)
+    public OutputSignal Classify(string text)
     {
         var clean = StripAnsi(text);
 
@@ -82,7 +61,7 @@ public static class OutputInterpreter
         return OutputSignal.None;
     }
 
-    public static string Describe(OutputSignal signal) => signal switch
+    public string Describe(OutputSignal signal) => signal switch
     {
         OutputSignal.TrustPrompt => "Workspace trust must be accepted once for this directory. Open the Terminal tab and answer the prompt.",
         OutputSignal.RemoteControlConfirmation => "Remote Control asks for a one-time confirmation (y/n). Open the Terminal tab and answer it.",
@@ -91,8 +70,7 @@ public static class OutputInterpreter
         _ => ""
     };
 
-    /// <summary>Splits a chunk into printable lines for the log file, dropping empty noise.</summary>
-    public static IEnumerable<string> ToLogLines(string chunk)
+    public IEnumerable<string> ToLogLines(string chunk)
     {
         foreach (var raw in StripAnsi(chunk).Split('\n'))
         {

@@ -1,4 +1,5 @@
 using LiveClaude.Abstractions;
+using LiveClaude.Platform.Posix;
 
 namespace LiveClaude.Platform.Linux;
 
@@ -30,8 +31,10 @@ public sealed class LinuxPathLayout : IPathLayout
 
     /// <summary>
     /// $XDG_RUNTIME_DIR is a tmpfs the login session owns, already mode 0700 and cleared at logout —
-    /// the right home for a socket that must not be reachable by other users. It is unset under a
-    /// system unit and in some ssh sessions, hence the fallback.
+    /// the right home for a socket that must not be reachable by other users, and short
+    /// (/run/user/1000/liveclaude), which matters because a socket path may be at most ~104
+    /// characters. It is unset under a system unit and in some ssh sessions; the fallback is the same
+    /// short per-user directory macOS uses, not the state directory, which can be arbitrarily long.
     /// </summary>
     public string RuntimeDirectory
     {
@@ -43,7 +46,7 @@ public sealed class LinuxPathLayout : IPathLayout
             var runtime = Environment.GetEnvironmentVariable("XDG_RUNTIME_DIR");
 
             return string.IsNullOrWhiteSpace(runtime)
-                ? Path.Combine(StateHome, "liveclaude", "run")
+                ? PosixRuntimeDirectory.Shared
                 : Path.Combine(runtime, "liveclaude");
         }
     }

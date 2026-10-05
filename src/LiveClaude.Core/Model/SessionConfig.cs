@@ -1,4 +1,5 @@
 using System.Text.Json.Serialization;
+using LiveClaude.Core.Products;
 
 namespace LiveClaude.Core.Model;
 
@@ -28,15 +29,24 @@ public enum PermissionMode
     Plan
 }
 
-/// <summary>A supervised <c>claude remote-control</c> server instance, one per project directory.</summary>
+/// <summary>A supervised agent instance — one long-lived CLI process per entry.</summary>
 public sealed class SessionConfig
 {
     public string Id { get; set; } = Guid.NewGuid().ToString("n");
 
-    /// <summary>Display name, surfaced at claude.ai/code (<c>--name</c>).</summary>
+    /// <summary>
+    /// Which agent product runs this session (<see cref="ProductIds.Claude"/>,
+    /// <see cref="ProductIds.Cursor"/>, …).
+    /// </summary>
+    public string ProductId { get; set; } = ProductIds.Claude;
+
+    /// <summary>Display name (<c>--name</c> for both Claude and Cursor workers).</summary>
     public string Name { get; set; } = "";
 
-    /// <summary>Working directory the server runs in.</summary>
+    /// <summary>
+    /// Primary working directory. For Claude this is the process cwd; for Cursor it is the first
+    /// <c>--worker-dir</c> (assignment identity).
+    /// </summary>
     public string Directory { get; set; } = "";
 
     /// <summary>When false the supervisor ignores this entry entirely.</summary>
@@ -44,6 +54,8 @@ public sealed class SessionConfig
 
     /// <summary>Start together with the supervisor (service or scheduled task).</summary>
     public bool AutoStart { get; set; } = true;
+
+    // --- Claude remote-control options (used when ProductId == claude) ---
 
     public SpawnMode Spawn { get; set; } = SpawnMode.SameDir;
 
@@ -74,6 +86,10 @@ public sealed class SessionConfig
     /// <summary>Reattach to one specific session id (<c>--session-id</c>). Wins over <see cref="ContinuePrevious"/>.</summary>
     public string? SessionId { get; set; }
 
+    // --- Cursor My Machines options (used when ProductId == cursor) ---
+
+    public CursorSessionOptions Cursor { get; set; } = new();
+
     /// <summary>Raw extra arguments appended verbatim.</summary>
     public string ExtraArgs { get; set; } = "";
 
@@ -84,10 +100,14 @@ public sealed class SessionConfig
     {
         var clone = (SessionConfig)MemberwiseClone();
         clone.Environment = new Dictionary<string, string>(Environment, StringComparer.OrdinalIgnoreCase);
+        clone.Cursor = Cursor.Clone();
         return clone;
     }
 
-    /// <summary>Returns a human readable validation error, or null when the entry is usable.</summary>
+    /// <summary>
+    /// Common validation shared by every product. Product-specific rules run through
+    /// <see cref="IAgentProduct.Validate"/>.
+    /// </summary>
     public string? Validate()
     {
         if (string.IsNullOrWhiteSpace(Name))
@@ -96,6 +116,14 @@ public sealed class SessionConfig
             return "Directory is required.";
         if (!System.IO.Directory.Exists(Directory))
             return $"Directory not found: {Directory}";
+        if (string.IsNullOrWhiteSpace(ProductId))
+            return "Product is required.";
+        return null;
+    }
+
+    /// <summary>Claude-specific validation kept for tests and the Claude product.</summary>
+    public string? ValidateClaudeOptions()
+    {
         if (Capacity is < 1 or > 32)
             return "Capacity must be between 1 and 32.";
         if (Spawn == SpawnMode.Session && !CreateSessionInDir)

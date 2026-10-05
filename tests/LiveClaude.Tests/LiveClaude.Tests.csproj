@@ -14,6 +14,8 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\LiveClaude.Abstractions\LiveClaude.Abstractions.csproj" />
     <ProjectReference Include="..\..\src\LiveClaude.Core\LiveClaude.Core.csproj" />
+    <ProjectReference Include="..\..\src\LiveClaude.Product.Claude\LiveClaude.Product.Claude.csproj" />
+    <ProjectReference Include="..\..\src\LiveClaude.Product.Cursor\LiveClaude.Product.Cursor.csproj" />
     <ProjectReference Include="..\..\src\LiveClaude.Vt\LiveClaude.Vt.csproj" />
   </ItemGroup>
 
@@ -23,5 +25,6 @@
     cannot load one would fail for a reason that has nothing to do with what it is testing.
   -->
   <Import Project="..\..\build\PlatformAssemblies.props" />
+  <Import Project="..\..\build\ProductAssemblies.props" />
 
 </Project>

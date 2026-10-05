@@ -42,10 +42,10 @@ public partial class MainWindow : Window
     /// Opens the Terminal tab and runs the CLI interactively in <paramref name="directory"/>, which is
     /// how the one-time workspace trust prompt and the Remote Control confirmation get answered.
     /// </summary>
-    public void OpenInteractiveTerminal(string directory, string[]? arguments = null)
+    public void OpenInteractiveTerminal(string directory, string[]? arguments = null, string? executablePath = null)
     {
         Shell.SelectedTabIndex = 2;
-        TerminalTab.StartLocal(directory, arguments ?? []);
+        TerminalTab.StartLocal(directory, arguments ?? [], executablePath);
     }
 
     /// <summary>Opens the Terminal tab attached to a supervised instance's live pseudo terminal.</summary>

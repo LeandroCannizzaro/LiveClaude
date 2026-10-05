@@ -28,16 +28,18 @@
 
 LiveClaude turns that into infrastructure:
 
-- **One `claude remote-control` server per project directory**, each with its own spawn mode, permission mode and capacity.
-- **A supervisor** that restarts a server when it dies (exponential backoff), at sign-in, and after a reboot — hosted by whatever your operating system offers: a **Scheduled Task** or a **Windows Service**, a **systemd** user or system unit, a **LaunchAgent** or a **LaunchDaemon**.
+- **Multiple agent products** — Claude Code Remote Control and Cursor My Machines workers today, each behind its own late-loaded assembly with product-specific session options.
+- **One long-lived process per session entry**, with product-native flags (Claude spawn/capacity/permission; Cursor `--name` / `--worker-dir` / auth).
+- **A supervisor** that restarts a process when it dies (exponential backoff), at sign-in, and after a reboot — hosted by whatever your operating system offers: a **Scheduled Task** or a **Windows Service**, a **systemd** user or system unit, a **LaunchAgent** or a **LaunchDaemon**.
 - **A desktop app** to create, edit and remove sessions, watch their state live, read their logs, and install or remove the supervisor. One Avalonia application, the same on all three systems.
-- **An embedded terminal** — a real pseudo terminal (ConPTY on Windows, a pty pair elsewhere) rendered by a VT emulator written from scratch in C# — so the one-time flows that need a terminal (workspace trust, the Remote Control confirmation, `/login`) happen inside the app, and so you can attach to a running server and type into it.
+- **An embedded terminal** — a real pseudo terminal (ConPTY on Windows, a pty pair elsewhere) rendered by a VT emulator written from scratch in C# — so the one-time flows that need a terminal (workspace trust, Remote Control confirmation, `agent login`) happen inside the app, and so you can attach to a running process and type into it.
 
 Everything is C#. No Node, no Python, no tmux, no browser control.
 
 Everything that has to differ between operating systems — the pseudo terminal, autostart, elevation,
 the IPC transport, where files live — sits behind one contract and lives in its own assembly, loaded
-by name at run time. `LiveClaude.Core` has no idea which system it is on.
+by name at run time. Agent products (`LiveClaude.Product.Claude`, `LiveClaude.Product.Cursor`) ship
+the same way. `LiveClaude.Core` has no compile-time dependency on either.
 
 <div align="center">
 <img src="docs/assets/terminal.png" alt="The embedded terminal running Claude Code" width="900" />
@@ -62,29 +64,45 @@ The `-selfcontained` zip has no prerequisites. The plain zip needs the [.NET 10 
 
 ### Windows — ClickOnce (auto-updating)
 
-Open [LiveClaude.application](https://leandrocannizzaro.github.io/LiveClaude/clickonce/LiveClaude.application) — it installs for the current user and checks for updates on every launch. The manifests are unsigned, so SmartScreen asks once.
+Open [LiveClaude.application](https://leandrocannizzaro.github.io/LiveClaude/clickonce/v2/LiveClaude.application) — it installs for the current user and checks for updates on every launch. The manifests are unsigned, so SmartScreen asks once.
+
+> **Already running 1.x?** That channel is
+> [frozen at 1.0.15](https://leandrocannizzaro.github.io/LiveClaude/clickonce/LiveClaude.application)
+> and keeps working. 2.0 is published to a channel of its own, so a 1.0.15 install is never carried
+> onto it by an update check — install 2.0 alongside, and remove 1.x once you are happy. They are
+> different applications underneath: 1.x is the Windows-only WPF program, 2.x is the cross-platform
+> one.
 
 ### Linux
 
 ```bash
-# Debian, Ubuntu and derivatives
-sudo dpkg -i liveclaude_<version>_amd64.deb
-
-# Fedora, RHEL, openSUSE
-sudo rpm -i liveclaude-<version>-1.x86_64.rpm
-
-# anything else
-tar -xzf LiveClaude-<version>-linux-x64.tar.gz -C ~/liveclaude && ~/liveclaude/LiveClaude
+curl -fsSL https://leandrocannizzaro.github.io/LiveClaude/install.sh | sh
 ```
 
-The packages are self-contained — no .NET runtime needed — and install to `/opt/liveclaude`, with
-`liveclaude` and `liveclaude-supervisor` on your PATH and a desktop entry.
+Picks the `.deb`, `.rpm` or tarball for your machine, installs to `/opt/liveclaude`, and puts
+`liveclaude` and `liveclaude-supervisor` on your PATH with a desktop entry. x86_64 and arm64,
+self-contained — no .NET runtime needed.
+
+By hand, if you prefer:
+
+```bash
+sudo apt install ./liveclaude_<version>_amd64.deb      # Debian, Ubuntu
+sudo dnf install ./liveclaude-<version>-1.x86_64.rpm   # Fedora, RHEL, openSUSE
+tar -xzf LiveClaude-<version>-linux-x64.tar.gz -C ~/liveclaude
+```
 
 ### macOS
 
-Download `LiveClaude-<version>-osx-arm64.dmg` (or `-osx-x64` on Intel), drag the app to Applications,
-then **right-click it and choose Open** the first time: the app is not notarised yet, so Gatekeeper
-refuses a normal double-click. Every later launch works as usual.
+```bash
+curl -fsSL https://leandrocannizzaro.github.io/LiveClaude/install-macos.sh | sh
+```
+
+Downloads the `.dmg` for your Mac, copies the app to `/Applications` and clears the quarantine flag.
+Apple silicon and Intel.
+
+Installing the `.dmg` by hand works too, but the app is **not notarised yet**: Gatekeeper refuses a
+normal double-click, so right-click the app and choose **Open** the first time. Clearing that flag is
+the only reason the script above is worth having.
 
 ### From source
 
@@ -193,7 +211,7 @@ the `.app` bundle — so nothing is copied there.
 The app talks to whichever supervisor is running over the platform's own channel, so you can close the
 window and the servers keep running — and reopen it later to find them. On Windows that is a named
 pipe (`\.\pipe\LiveClaude.v1`), shared across the machine. On Linux and macOS it is a Unix domain
-socket in your runtime directory, created mode 0700 — which makes the "only one supervisor" rule
+socket in a private per-user directory, created mode 0700 — which makes the "only one supervisor" rule
 per-user there, the right answer on a machine two people share.
 
 ## Dead entries in the session picker
@@ -345,11 +363,18 @@ environments in the session picker.
 | Configuration | `%ProgramData%\LiveClaude\config.json` | `~/.config/liveclaude/config.json` | `~/Library/Application Support/LiveClaude/config.json` |
 | Logs | `%ProgramData%\LiveClaude\logs\` | `~/.local/state/liveclaude/logs/` | `~/Library/Logs/LiveClaude/` |
 | Reattach state | `%ProgramData%\LiveClaude\state\` | `~/.local/state/liveclaude/state/` | `~/Library/Application Support/LiveClaude/state/` |
-| IPC endpoint | `\\.\pipe\LiveClaude.v1` | `$XDG_RUNTIME_DIR/liveclaude/` | `…/LiveClaude/run/` |
+| IPC endpoint | `\\.\pipe\LiveClaude.v1` | `$XDG_RUNTIME_DIR/liveclaude/` | `/tmp/liveclaude-<uid>/` |
 | App errors | `%LOCALAPPDATA%\LiveClaude\app-errors.log` | `~/.local/share/LiveClaude/app-errors.log` | `~/.local/share/LiveClaude/app-errors.log` |
 
 Inside the log directory: `<name>-<id>.log` per instance, `supervisor.log`, and `install.log` —
 which is what the elevated install commands printed, since they run in a window nobody sees.
+
+**Why the socket is not with everything else.** A Unix domain socket path is limited to 104 bytes on
+macOS and 108 on Linux, terminator included — and
+`/Users/<you>/Library/Application Support/LiveClaude/run/` spends more than half of that before the
+file name. So the socket goes in a short per-user directory created 0700, the way tmux does it:
+`$XDG_RUNTIME_DIR/liveclaude/` on Linux when the session has one, `/tmp/liveclaude-<uid>/` otherwise
+and on macOS. A directory other users cannot traverse is what protects the socket.
 
 **Windows keeps one machine-wide root** so a service running under another account reads the same
 configuration the app writes. POSIX has no equivalent that both a daemon and a desktop user can
@@ -382,7 +407,7 @@ sleep — on Windows you can also enable *Wake the computer to run this task* on
 
 ```bash
 dotnet build                 # build everything for this machine
-dotnet test                  # 115 tests, no network needed
+dotnet test                  # 117 tests, no network needed
 dotnet run --project src/LiveClaude.App
 dotnet run --project src/LiveClaude.Service -- status
 ```

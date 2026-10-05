@@ -76,7 +76,9 @@ public sealed class WindowsElevator : IPrivilegeElevator
         {
             UseShellExecute = true,
             Verb = "runas",
-            CreateNoWindow = false
+            // ShellExecuteEx ignores CreateNoWindow — WindowStyle is what actually hides the console
+            // this re-launches (install/uninstall/start/stop), so it does not flash on screen.
+            WindowStyle = ProcessWindowStyle.Hidden
         };
 
         foreach (var argument in arguments)

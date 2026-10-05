@@ -1,7 +1,8 @@
-using System.Text;
+using LiveClaude.Abstractions;
 using LiveClaude.Core.Model;
+using LiveClaude.Core.Products;
 
-namespace LiveClaude.Core.Claude;
+namespace LiveClaude.Product.Claude;
 
 /// <summary>Builds the command line for <c>claude remote-control</c> from a session entry.</summary>
 public static class ClaudeArgs
@@ -78,7 +79,7 @@ public static class ClaudeArgs
             args.Add("--verbose");
 
         if (!string.IsNullOrWhiteSpace(s.ExtraArgs))
-            args.AddRange(SplitArguments(s.ExtraArgs));
+            args.AddRange(CliArguments.Split(s.ExtraArgs));
 
         return args;
     }
@@ -99,31 +100,5 @@ public static class ClaudeArgs
     }
 
     /// <summary>Splits a raw extra-arguments string, honouring double quotes.</summary>
-    public static IReadOnlyList<string> SplitArguments(string input)
-    {
-        var result = new List<string>();
-        var current = new StringBuilder();
-        var inQuotes = false;
-
-        foreach (var c in input)
-        {
-            if (c == '"')
-                inQuotes = !inQuotes;
-            else if (char.IsWhiteSpace(c) && !inQuotes)
-            {
-                if (current.Length > 0)
-                {
-                    result.Add(current.ToString());
-                    current.Clear();
-                }
-            }
-            else
-                current.Append(c);
-        }
-
-        if (current.Length > 0)
-            result.Add(current.ToString());
-
-        return result;
-    }
+    public static IReadOnlyList<string> SplitArguments(string input) => CliArguments.Split(input);
 }

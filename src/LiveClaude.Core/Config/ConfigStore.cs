@@ -54,7 +54,16 @@ public sealed class ConfigStore
                 if (string.IsNullOrWhiteSpace(json))
                     return new AppConfig();
 
-                return JsonSerializer.Deserialize<AppConfig>(json, JsonOptions) ?? new AppConfig();
+                var config = JsonSerializer.Deserialize<AppConfig>(json, JsonOptions) ?? new AppConfig();
+                if (ConfigMigration.Apply(config, json))
+                {
+                    // Persist the migrated shape so the next load does not re-read v1 aliases.
+                    var tmp = Path + ".tmp";
+                    File.WriteAllText(tmp, JsonSerializer.Serialize(config, JsonOptions));
+                    File.Move(tmp, Path, overwrite: true);
+                }
+
+                return config;
             }
             catch (Exception ex) when (ex is JsonException or IOException)
             {

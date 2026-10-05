@@ -45,5 +45,6 @@
     ships exactly one of them.
   -->
   <Import Project="..\..\build\PlatformAssemblies.props" />
+  <Import Project="..\..\build\ProductAssemblies.props" />
 
 </Project>
