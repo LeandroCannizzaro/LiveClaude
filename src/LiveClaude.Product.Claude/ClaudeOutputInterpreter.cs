@@ -45,6 +45,9 @@ public sealed class ClaudeOutputInterpreter : IOutputInterpreter
         if (Contains(clean, "Invalid API key") || Contains(clean, "OAuth token has expired") || Contains(clean, "Please run /login"))
             return OutputSignal.LoginRequired;
 
+        if (Contains(clean, "is already served by"))
+            return OutputSignal.FolderInUse;
+
         if (Contains(clean, "not carried over to the sessions") ||
             Contains(clean, "unknown option") ||
             Contains(clean, "Remote Control is not available") ||
@@ -67,6 +70,7 @@ public sealed class ClaudeOutputInterpreter : IOutputInterpreter
         OutputSignal.RemoteControlConfirmation => "Remote Control asks for a one-time confirmation (y/n). Open the Terminal tab and answer it.",
         OutputSignal.LoginRequired => "Claude Code is not signed in. Run 'claude /login' (or 'claude setup-token') as this Windows user.",
         OutputSignal.FatalError => "The CLI refused to start with the current configuration.",
+        OutputSignal.FolderInUse => "Another claude remote-control on this machine already serves this folder (another LiveClaude supervisor, or a terminal). It is retried automatically; stop the other one to start sooner.",
         _ => ""
     };
 
