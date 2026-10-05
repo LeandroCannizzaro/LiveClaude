@@ -41,7 +41,7 @@
       <TabItem Header="Logs">
         <views:LogsView />
       </TabItem>
-      <TabItem Header="Environments">
+      <TabItem Header="Environments" IsVisible="{Binding ShowEnvironmentsTab}">
         <views:EnvironmentsView />
       </TabItem>
       <TabItem Header="Service &amp; startup">

@@ -1,3 +1,5 @@
+using System.Text.Json.Serialization;
+
 namespace LiveClaude.Core.Model;
 
 /// <summary>Restart policy applied to every supervised instance.</summary>
@@ -14,13 +16,27 @@ public sealed class BackoffSettings
     public int MaxRestarts { get; set; }
 }
 
-/// <summary>The whole LiveClaude configuration, persisted as JSON under %ProgramData%\LiveClaude.</summary>
+/// <summary>The whole LiveClaude configuration, persisted as JSON under the platform config root.</summary>
 public sealed class AppConfig
 {
-    public int Version { get; set; } = 1;
+    /// <summary>
+    /// Schema version. 1 = Claude-only flat fields; 2 = Products section + session ProductId.
+    /// </summary>
+    public int Version { get; set; } = 2;
 
-    /// <summary>Explicit path to claude.exe. When null the locator discovers it.</summary>
-    public string? ClaudePath { get; set; }
+    /// <summary>Per-product CLI paths and product-wide toggles.</summary>
+    public ProductsConfig Products { get; set; } = new();
+
+    /// <summary>
+    /// Explicit path to claude.exe. Alias of <see cref="ClaudeProductSettings.Path"/> for older
+    /// callers; prefer <c>Products.Claude.Path</c>. Not written to JSON (Products owns the value).
+    /// </summary>
+    [JsonIgnore]
+    public string? ClaudePath
+    {
+        get => Products.Claude.Path;
+        set => Products.Claude.Path = value;
+    }
 
     /// <summary>Health probe interval, in seconds.</summary>
     public int HealthCheckSeconds { get; set; } = 30;
@@ -41,10 +57,15 @@ public sealed class AppConfig
     public int GracefulStopSeconds { get; set; } = 12;
 
     /// <summary>
-    /// Ask the API which bridge environment a server registered, so the Environments tab can tell
-    /// the live one from the leftovers. Turn off to keep LiveClaude entirely offline.
+    /// Ask the API which bridge environment a server registered. Alias of
+    /// <see cref="ClaudeProductSettings.TrackEnvironments"/>.
     /// </summary>
-    public bool TrackEnvironments { get; set; } = true;
+    [JsonIgnore]
+    public bool TrackEnvironments
+    {
+        get => Products.Claude.TrackEnvironments;
+        set => Products.Claude.TrackEnvironments = value;
+    }
 
     public BackoffSettings Backoff { get; set; } = new();
 
@@ -56,13 +77,12 @@ public sealed class AppConfig
     public AppConfig Clone() => new()
     {
         Version = Version,
-        ClaudePath = ClaudePath,
+        Products = Products.Clone(),
         HealthCheckSeconds = HealthCheckSeconds,
         LogTailLines = LogTailLines,
         LogMaxSizeMb = LogMaxSizeMb,
         UsePseudoConsole = UsePseudoConsole,
         GracefulStopSeconds = GracefulStopSeconds,
-        TrackEnvironments = TrackEnvironments,
         Backoff = new BackoffSettings
         {
             InitialSeconds = Backoff.InitialSeconds,

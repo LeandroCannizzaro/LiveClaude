@@ -2,11 +2,11 @@ using System.Collections.ObjectModel;
 using System.Diagnostics;
 using System.IO;
 using Avalonia.Threading;
-using LiveClaude.Core.Claude;
 using LiveClaude.Abstractions;
 using LiveClaude.Core.Config;
 using LiveClaude.Core.Ipc;
 using LiveClaude.Core.Model;
+using LiveClaude.Core.Products;
 using LiveClaude.Core.Supervision;
 
 namespace LiveClaude.App.ViewModels;
@@ -126,12 +126,48 @@ public sealed class ShellViewModel : ObservableObject, IAsyncDisposable
 
     public string ClaudePath
     {
-        get => _config.ClaudePath ?? "";
+        get => _config.Products.Claude.Path ?? "";
         set
         {
-            _config.ClaudePath = string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+            _config.Products.Claude.Path = string.IsNullOrWhiteSpace(value) ? null : value.Trim();
             OnPropertyChanged();
         }
+    }
+
+    public string CursorPath
+    {
+        get => _config.Products.Cursor.Path ?? "";
+        set
+        {
+            _config.Products.Cursor.Path = string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+            OnPropertyChanged();
+        }
+    }
+
+    public string CursorApiKeyPath
+    {
+        get => _config.Products.Cursor.ApiKeyPath ?? "";
+        set
+        {
+            _config.Products.Cursor.ApiKeyPath = string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+            OnPropertyChanged();
+        }
+    }
+
+    public string CursorAuthTokenFile
+    {
+        get => _config.Products.Cursor.AuthTokenFile ?? "";
+        set
+        {
+            _config.Products.Cursor.AuthTokenFile = string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+            OnPropertyChanged();
+        }
+    }
+
+    public bool CursorAutoPatchWindowsSqlite
+    {
+        get => _config.Products.Cursor.AutoPatchWindowsSqlite;
+        set { _config.Products.Cursor.AutoPatchWindowsSqlite = value; OnPropertyChanged(); }
     }
 
     public int BackoffInitialSeconds
@@ -166,11 +202,18 @@ public sealed class ShellViewModel : ObservableObject, IAsyncDisposable
 
     public bool TrackEnvironments
     {
-        get => _config.TrackEnvironments;
-        set { _config.TrackEnvironments = value; OnPropertyChanged(); }
+        get => _config.Products.Claude.TrackEnvironments;
+        set { _config.Products.Claude.TrackEnvironments = value; OnPropertyChanged(); OnPropertyChanged(nameof(ShowEnvironmentsTab)); }
     }
 
-    public IReadOnlyList<ClaudeInstall> DetectedInstalls { get; private set; } = [];
+    /// <summary>Environments API is Claude-only; hide the tab when nothing Claude-related is configured.</summary>
+    public bool ShowEnvironmentsTab =>
+        _config.Products.Claude.TrackEnvironments ||
+        _config.Sessions.Any(s => string.Equals(s.ProductId, ProductIds.Claude, StringComparison.OrdinalIgnoreCase));
+
+    public IReadOnlyList<DiscoveredCli> DetectedClaudeInstalls { get; private set; } = [];
+
+    public IReadOnlyList<DiscoveredCli> DetectedCursorInstalls { get; private set; } = [];
 
     #endregion
 
@@ -278,19 +321,26 @@ public sealed class ShellViewModel : ObservableObject, IAsyncDisposable
             return;
 
         _config = await _api.GetConfigAsync();
-        DetectedInstalls = ClaudeLocator.FindAll(_config.ClaudePath);
+        DetectedClaudeInstalls = ProductHost.TryGet(ProductIds.Claude)?.ListInstalls(_config) ?? [];
+        DetectedCursorInstalls = ProductHost.TryGet(ProductIds.Cursor)?.ListInstalls(_config) ?? [];
 
         var status = await _api.GetStatusAsync();
         OnStatusChanged(status);
 
         OnPropertyChanged(nameof(ClaudePath));
+        OnPropertyChanged(nameof(CursorPath));
+        OnPropertyChanged(nameof(CursorApiKeyPath));
+        OnPropertyChanged(nameof(CursorAuthTokenFile));
+        OnPropertyChanged(nameof(CursorAutoPatchWindowsSqlite));
         OnPropertyChanged(nameof(BackoffInitialSeconds));
         OnPropertyChanged(nameof(BackoffMaxSeconds));
         OnPropertyChanged(nameof(BackoffMaxRestarts));
         OnPropertyChanged(nameof(LogMaxSizeMb));
         OnPropertyChanged(nameof(GracefulStopSeconds));
         OnPropertyChanged(nameof(TrackEnvironments));
-        OnPropertyChanged(nameof(DetectedInstalls));
+        OnPropertyChanged(nameof(ShowEnvironmentsTab));
+        OnPropertyChanged(nameof(DetectedClaudeInstalls));
+        OnPropertyChanged(nameof(DetectedCursorInstalls));
     }
 
     private void OnStatusChanged(SupervisorStatus status) => Dispatcher.UIThread.Post(() =>
@@ -331,7 +381,8 @@ public sealed class ShellViewModel : ObservableObject, IAsyncDisposable
             return;
 
         var session = Editor.ToConfig();
-        var error = session.Validate();
+        var error = session.Validate()
+                    ?? ProductHost.TryGet(session.ProductId)?.Validate(session, _config);
         if (error is not null)
         {
             await Dialogs.ShowWarningAsync(error, "Session not saved");

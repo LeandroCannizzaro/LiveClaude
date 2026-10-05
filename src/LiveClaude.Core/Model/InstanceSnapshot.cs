@@ -42,6 +42,13 @@ public sealed class InstanceSnapshot
     public string Id { get; set; } = "";
     public string Name { get; set; } = "";
     public string Directory { get; set; } = "";
+
+    /// <summary>Product id (<c>claude</c>, <c>cursor</c>, …).</summary>
+    public string ProductId { get; set; } = "claude";
+
+    /// <summary>Human-readable product name for badges.</summary>
+    public string ProductDisplayName { get; set; } = "Claude Code";
+
     public InstanceState State { get; set; } = InstanceState.Stopped;
     public int? ProcessId { get; set; }
     public DateTimeOffset? StartedUtc { get; set; }

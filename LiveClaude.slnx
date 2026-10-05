@@ -13,6 +13,10 @@
     <Project Path="src/LiveClaude.Platform.Posix/LiveClaude.Platform.Posix.csproj" />
     <Project Path="src/LiveClaude.Platform.Windows/LiveClaude.Platform.Windows.csproj" />
   </Folder>
+  <Folder Name="/src/products/">
+    <Project Path="src/LiveClaude.Product.Claude/LiveClaude.Product.Claude.csproj" />
+    <Project Path="src/LiveClaude.Product.Cursor/LiveClaude.Product.Cursor.csproj" />
+  </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/LiveClaude.Tests/LiveClaude.Tests.csproj" />
     <Project Path="tests/LiveClaude.Tests.Platform/LiveClaude.Tests.Platform.csproj" />

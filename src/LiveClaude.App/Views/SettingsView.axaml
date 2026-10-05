@@ -77,18 +77,21 @@
         </StackPanel>
       </Border>
 
-      <!-- Claude CLI -->
+      <!-- Products -->
       <Border Classes="card">
         <StackPanel>
-          <TextBlock Text="Claude Code CLI" FontSize="15" FontWeight="SemiBold" />
+          <TextBlock Text="Products" FontSize="15" FontWeight="SemiBold" />
           <TextBlock Classes="subheading" Margin="0,8,0,0"
-                     Text="Prefer a stable native install: the copy bundled with the Claude desktop app lives in a versioned folder whose path changes on every update." />
+                     Text="CLI paths and product-wide options. Each supervised session picks a product and its own worker options." />
 
+          <TextBlock Text="Claude Code CLI" Classes="field" Margin="0,16,0,0" FontWeight="SemiBold" />
+          <TextBlock Classes="mono" FontSize="11" Margin="0,0,0,6" TextWrapping="Wrap"
+                     Text="Prefer a stable native install: the copy bundled with the Claude desktop app lives in a versioned folder whose path changes on every update." />
           <TextBlock Text="Path (leave empty to auto-detect)" Classes="field" />
           <TextBox Text="{Binding ClaudePath}" />
 
-          <TextBlock Text="Detected installs" Classes="field" />
-          <ItemsControl ItemsSource="{Binding DetectedInstalls}">
+          <TextBlock Text="Detected Claude installs" Classes="field" />
+          <ItemsControl ItemsSource="{Binding DetectedClaudeInstalls}">
             <ItemsControl.ItemTemplate>
               <DataTemplate>
                 <Grid Margin="0,0,0,6" ColumnDefinitions="*,Auto">
@@ -100,11 +103,46 @@
                       <Run Text="{Binding Source}" />
                     </TextBlock>
                   </StackPanel>
-                  <Button Grid.Column="1" Content="Use" Click="OnUseInstall" Tag="{Binding Path}" Classes="small" Margin="0" />
+                  <Button Grid.Column="1" Content="Use" Click="OnUseClaudeInstall" Tag="{Binding Path}" Classes="small" Margin="0" />
                 </Grid>
               </DataTemplate>
             </ItemsControl.ItemTemplate>
           </ItemsControl>
+
+          <CheckBox Content="Track which environment each Claude server registers (needs the Anthropic API)"
+                    IsChecked="{Binding TrackEnvironments}" Margin="0,8,0,0" />
+
+          <TextBlock Text="Cursor Agent CLI" Classes="field" Margin="0,20,0,0" FontWeight="SemiBold" />
+          <TextBlock Classes="mono" FontSize="11" Margin="0,0,0,6" TextWrapping="Wrap"
+                     Text="My Machines worker (`agent worker start`). Auth: existing agent login, API key file, or auth token file. Sessions can also run `agent login` in the terminal." />
+          <TextBlock Text="Path (leave empty to auto-detect)" Classes="field" />
+          <TextBox Text="{Binding CursorPath}" />
+
+          <TextBlock Text="Detected Cursor installs" Classes="field" />
+          <ItemsControl ItemsSource="{Binding DetectedCursorInstalls}">
+            <ItemsControl.ItemTemplate>
+              <DataTemplate>
+                <Grid Margin="0,0,0,6" ColumnDefinitions="*,Auto">
+                  <StackPanel Grid.Column="0">
+                    <TextBlock Text="{Binding Path}" Classes="mono" Foreground="{StaticResource TextBrush}" />
+                    <TextBlock Classes="mono" FontSize="11">
+                      <Run Text="{Binding Version}" />
+                      <Run Text=" — " />
+                      <Run Text="{Binding Source}" />
+                    </TextBlock>
+                  </StackPanel>
+                  <Button Grid.Column="1" Content="Use" Click="OnUseCursorInstall" Tag="{Binding Path}" Classes="small" Margin="0" />
+                </Grid>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+
+          <TextBlock Text="API key file (optional)" Classes="field" />
+          <TextBox Text="{Binding CursorApiKeyPath}" />
+          <TextBlock Text="Auth token file (optional)" Classes="field" />
+          <TextBox Text="{Binding CursorAuthTokenFile}" />
+          <CheckBox Content="Auto-patch Windows better-sqlite3 before starting a worker"
+                    IsChecked="{Binding CursorAutoPatchWindowsSqlite}" Margin="0,8,0,0" />
         </StackPanel>
       </Border>
 
@@ -139,9 +177,7 @@
 
             <StackPanel Grid.Column="1" Margin="10,0,0,0" VerticalAlignment="Bottom">
               <TextBlock Classes="mono" FontSize="11" TextWrapping="Wrap" Margin="0,0,0,6"
-                         Text="Stopping sends Ctrl+C and waits this long before terminating. The CLI uses that window to deregister its bridge environment — a hard kill is what leaves dead entries in the session picker." />
-              <CheckBox Content="Track which environment each server registers (needs the Anthropic API)"
-                        IsChecked="{Binding TrackEnvironments}" />
+                         Text="Stopping sends Ctrl+C and waits this long before terminating. The CLI uses that window to deregister itself — a hard kill is what leaves dead entries behind." />
             </StackPanel>
           </Grid>
 

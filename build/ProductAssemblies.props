@@ -1,0 +1,53 @@
+<Project>
+
+  <!--
+    Puts every LiveClaude.Product.*.dll next to the output, without referencing them from Core.
+    Mirrors PlatformAssemblies.props: build ordering only, then copy by GetTargetPath.
+  -->
+
+  <PropertyGroup>
+    <_LiveClaudeSrc>$(MSBuildThisFileDirectory)..\src\</_LiveClaudeSrc>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <LiveClaudeProductProject Include="$(_LiveClaudeSrc)LiveClaude.Product.Claude\LiveClaude.Product.Claude.csproj" />
+    <LiveClaudeProductProject Include="$(_LiveClaudeSrc)LiveClaude.Product.Cursor\LiveClaude.Product.Cursor.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="@(LiveClaudeProductProject)"
+                      ReferenceOutputAssembly="false"
+                      SkipGetTargetFrameworkProperties="true"
+                      UndefineProperties="TargetFramework;RuntimeIdentifier;SelfContained;PublishDir;PublishSingleFile;PublishReadyToRun"
+                      Private="false" />
+  </ItemGroup>
+
+  <Target Name="ResolveLiveClaudeProductAssemblies"
+          Condition="'@(LiveClaudeProductProject)' != ''">
+    <MSBuild Projects="@(LiveClaudeProductProject)"
+             Targets="GetTargetPath"
+             Properties="Configuration=$(Configuration)"
+             RemoveProperties="TargetFramework;RuntimeIdentifier;SelfContained;PublishDir;PublishSingleFile;PublishReadyToRun">
+      <Output TaskParameter="TargetOutputs" ItemName="LiveClaudeProductAssembly" />
+    </MSBuild>
+  </Target>
+
+  <Target Name="CopyLiveClaudeProductAssemblies"
+          AfterTargets="Build"
+          DependsOnTargets="ResolveLiveClaudeProductAssemblies"
+          Condition="'@(LiveClaudeProductProject)' != ''">
+    <Copy SourceFiles="@(LiveClaudeProductAssembly)"
+          DestinationFolder="$(OutDir)"
+          SkipUnchangedFiles="true" />
+  </Target>
+
+  <Target Name="PublishLiveClaudeProductAssemblies"
+          AfterTargets="Publish"
+          DependsOnTargets="ResolveLiveClaudeProductAssemblies"
+          Condition="'@(LiveClaudeProductProject)' != ''">
+    <Copy SourceFiles="@(LiveClaudeProductAssembly)"
+          DestinationFolder="$(PublishDir)"
+          SkipUnchangedFiles="true" />
+  </Target>
+
+</Project>

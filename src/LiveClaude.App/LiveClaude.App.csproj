@@ -31,5 +31,6 @@
   </ItemGroup>
 
   <Import Project="..\..\build\PlatformAssemblies.props" />
+  <Import Project="..\..\build\ProductAssemblies.props" />
 
 </Project>

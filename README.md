@@ -28,16 +28,18 @@
 
 LiveClaude turns that into infrastructure:
 
-- **One `claude remote-control` server per project directory**, each with its own spawn mode, permission mode and capacity.
-- **A supervisor** that restarts a server when it dies (exponential backoff), at sign-in, and after a reboot — hosted by whatever your operating system offers: a **Scheduled Task** or a **Windows Service**, a **systemd** user or system unit, a **LaunchAgent** or a **LaunchDaemon**.
+- **Multiple agent products** — Claude Code Remote Control and Cursor My Machines workers today, each behind its own late-loaded assembly with product-specific session options.
+- **One long-lived process per session entry**, with product-native flags (Claude spawn/capacity/permission; Cursor `--name` / `--worker-dir` / auth).
+- **A supervisor** that restarts a process when it dies (exponential backoff), at sign-in, and after a reboot — hosted by whatever your operating system offers: a **Scheduled Task** or a **Windows Service**, a **systemd** user or system unit, a **LaunchAgent** or a **LaunchDaemon**.
 - **A desktop app** to create, edit and remove sessions, watch their state live, read their logs, and install or remove the supervisor. One Avalonia application, the same on all three systems.
-- **An embedded terminal** — a real pseudo terminal (ConPTY on Windows, a pty pair elsewhere) rendered by a VT emulator written from scratch in C# — so the one-time flows that need a terminal (workspace trust, the Remote Control confirmation, `/login`) happen inside the app, and so you can attach to a running server and type into it.
+- **An embedded terminal** — a real pseudo terminal (ConPTY on Windows, a pty pair elsewhere) rendered by a VT emulator written from scratch in C# — so the one-time flows that need a terminal (workspace trust, Remote Control confirmation, `agent login`) happen inside the app, and so you can attach to a running process and type into it.
 
 Everything is C#. No Node, no Python, no tmux, no browser control.
 
 Everything that has to differ between operating systems — the pseudo terminal, autostart, elevation,
 the IPC transport, where files live — sits behind one contract and lives in its own assembly, loaded
-by name at run time. `LiveClaude.Core` has no idea which system it is on.
+by name at run time. Agent products (`LiveClaude.Product.Claude`, `LiveClaude.Product.Cursor`) ship
+the same way. `LiveClaude.Core` has no compile-time dependency on either.
 
 <div align="center">
 <img src="docs/assets/terminal.png" alt="The embedded terminal running Claude Code" width="900" />

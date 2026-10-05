@@ -1,8 +1,10 @@
 using System.IO;
+using LiveClaude.Abstractions;
 using LiveClaude.Core.Claude;
 using LiveClaude.Core.Config;
 using LiveClaude.Core.Model;
 using LiveClaude.Core.Supervision;
+using LiveClaude.Product.Claude;
 using Xunit;
 
 namespace LiveClaude.Tests;
@@ -59,14 +61,16 @@ public class BackoffPolicyTests
 
 public class OutputInterpreterTests
 {
+    private readonly ClaudeOutputInterpreter _interpreter = new();
+
     [Fact]
     public void AnsiSequencesAreStripped() =>
-        Assert.Equal("hello world", OutputInterpreter.StripAnsi("\u001b[1;32mhello\u001b[0m world"));
+        Assert.Equal("hello world", _interpreter.StripAnsi("\u001b[1;32mhello\u001b[0m world"));
 
     [Fact]
     public void TheSessionUrlIsExtracted()
     {
-        var url = OutputInterpreter.FindSessionUrl("Session: \u001b[4mhttps://claude.ai/code/abc123XYZ\u001b[0m ready");
+        var url = _interpreter.FindSessionUrl("Session: \u001b[4mhttps://claude.ai/code/abc123XYZ\u001b[0m ready");
         Assert.Equal("https://claude.ai/code/abc123XYZ", url);
     }
 
@@ -77,7 +81,7 @@ public class OutputInterpreterTests
     [InlineData("Please run /login to sign in", OutputSignal.LoginRequired)]
     [InlineData("just some output", OutputSignal.None)]
     public void SignalsAreClassified(string text, OutputSignal expected) =>
-        Assert.Equal(expected, OutputInterpreter.Classify(text));
+        Assert.Equal(expected, _interpreter.Classify(text));
 }
 
 public class ConfigStoreTests
@@ -199,5 +203,12 @@ public class SessionValidationTests
     {
         var session = new SessionConfig { Name = "x", Directory = Path.GetTempPath() };
         Assert.Null(session.Validate());
+    }
+
+    [Fact]
+    public void ClaudeOptionsRejectInvalidCapacity()
+    {
+        var session = new SessionConfig { Name = "x", Directory = Path.GetTempPath(), Capacity = 0 };
+        Assert.Contains("Capacity", session.ValidateClaudeOptions());
     }
 }

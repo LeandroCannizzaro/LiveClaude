@@ -4,13 +4,15 @@ using LiveClaude.Core.Claude;
 using LiveClaude.Core.Config;
 using LiveClaude.Core.Logging;
 using LiveClaude.Core.Model;
+using LiveClaude.Core.Products;
 using Microsoft.Extensions.Logging;
 
 namespace LiveClaude.Core.Supervision;
 
 /// <summary>
-/// One supervised <c>claude remote-control</c> server: owns its pseudo console, restarts it with
-/// backoff when it dies, and exposes both the live terminal stream and a stripped log tail.
+/// One supervised agent process: owns its pseudo console, restarts it with backoff when it dies,
+/// and exposes both the live terminal stream and a stripped log tail. Product-specific launch and
+/// output interpretation come from <see cref="IAgentProduct"/>.
 /// </summary>
 public sealed class SupervisedInstance : IAsyncDisposable
 {
@@ -23,7 +25,8 @@ public sealed class SupervisedInstance : IAsyncDisposable
 
     private AppConfig _appConfig;
     private SessionConfig _config;
-    private string _claudePath;
+    private IAgentProduct _product;
+    private IOutputInterpreter _interpreter;
     private BackoffPolicy _backoff;
     private PersistedInstanceState _state;
 
@@ -51,13 +54,13 @@ public sealed class SupervisedInstance : IAsyncDisposable
     public SupervisedInstance(
         SessionConfig config,
         AppConfig appConfig,
-        string claudePath,
         ILogger logger,
         InstanceStateStore? stateStore = null)
     {
         _config = config;
         _appConfig = appConfig;
-        _claudePath = claudePath;
+        _product = ProductHost.Get(config.ProductId);
+        _interpreter = _product.CreateOutputInterpreter();
         _logger = logger;
         _stateStore = stateStore ?? new InstanceStateStore();
         _state = _stateStore.Load(config.Id);
@@ -94,6 +97,8 @@ public sealed class SupervisedInstance : IAsyncDisposable
                 Id = _config.Id,
                 Name = _config.Name,
                 Directory = _config.Directory,
+                ProductId = _config.ProductId,
+                ProductDisplayName = _product.DisplayName,
                 State = _stateValue,
                 ProcessId = _pty is { HasExited: false } p ? p.ProcessId : null,
                 StartedUtc = _startedUtc,
@@ -128,12 +133,11 @@ public sealed class SupervisedInstance : IAsyncDisposable
         get { lock (_gate) return _recentOutput.ToString(); }
     }
 
-    public void UpdateRuntime(AppConfig appConfig, string claudePath)
+    public void UpdateRuntime(AppConfig appConfig)
     {
         lock (_gate)
         {
             _appConfig = appConfig;
-            _claudePath = claudePath;
             _backoff = new BackoffPolicy(appConfig.Backoff);
         }
     }
@@ -145,6 +149,8 @@ public sealed class SupervisedInstance : IAsyncDisposable
         {
             var needsRestart = RequiresRestart(_config, config);
             _config = config;
+            _product = ProductHost.Get(config.ProductId);
+            _interpreter = _product.CreateOutputInterpreter();
             if (!config.Enabled)
                 _stateValue = InstanceState.Disabled;
             else if (_stateValue == InstanceState.Disabled)
@@ -254,18 +260,18 @@ public sealed class SupervisedInstance : IAsyncDisposable
     {
         while (!ct.IsCancellationRequested)
         {
-            var validationError = Config.Validate();
+            var validationError = Config.Validate()
+                                  ?? _product.Validate(Config, _appConfig);
             if (validationError is not null)
             {
                 SetFailed(validationError);
                 return;
             }
 
-            // Executable, not merely present: on POSIX ~/.local/bin/claude is often a dangling
-            // symlink left behind by an uninstall, and File.Exists is happy with that.
-            if (!PlatformLoader.Current.Claude.IsExecutable(_claudePath))
+            var executable = _product.ResolveExecutable(_appConfig);
+            if (executable is null)
             {
-                SetFailed($"Claude CLI not found at '{_claudePath}'. Set the path in Settings.");
+                SetFailed($"No {_product.DisplayName} CLI found. Set the path in Settings → Products.");
                 return;
             }
 
@@ -347,21 +353,22 @@ public sealed class SupervisedInstance : IAsyncDisposable
     private async Task<int> RunOnceAsync(CancellationToken ct)
     {
         var config = Config;
-        var args = ClaudeArgs.BuildRemoteControl(config, _state.LastStopUtc);
-        var commandLine = PlatformLoader.Current.Processes.FormatCommandLine(_claudePath, args);
+        var product = _product;
+        var appConfig = _appConfig;
 
-        _log.Write($"[supervisor] starting: {commandLine} (cwd: {config.Directory})");
+        await product.EnsureReadyAsync(config, appConfig, _logger, ct).ConfigureAwait(false);
 
-        var environment = new Dictionary<string, string>(config.Environment, StringComparer.OrdinalIgnoreCase);
-        if (!string.IsNullOrWhiteSpace(config.Model))
-            environment["ANTHROPIC_MODEL"] = config.Model!;
+        var plan = product.BuildLaunch(config, appConfig, new LaunchContext(_state.LastStopUtc));
+        var commandLine = PlatformLoader.Current.Processes.FormatCommandLine(plan.ExecutablePath, plan.Arguments);
+
+        _log.Write($"[supervisor] starting ({product.Id}): {commandLine} (cwd: {plan.WorkingDirectory})");
 
         var pty = PlatformLoader.Current.Pty.Start(new PtyOptions
         {
-            ExecutablePath = _claudePath,
-            Arguments = args,
-            WorkingDirectory = config.Directory,
-            Environment = environment,
+            ExecutablePath = plan.ExecutablePath,
+            Arguments = plan.Arguments,
+            WorkingDirectory = plan.WorkingDirectory,
+            Environment = plan.Environment,
             Columns = _columns,
             Rows = _rows
         });
@@ -378,19 +385,20 @@ public sealed class SupervisedInstance : IAsyncDisposable
             _environmentLookupStarted = 0;
             _worktrees = new();
             _recentOutput.Clear();
+            _interpreter = product.CreateOutputInterpreter();
         }
 
         Notify();
 
-        // Start resolving the bridge environment straight away: waiting for a "ready" line in the
-        // output made this depend on matching the CLI's wording, and it sometimes never fired.
-        if (Interlocked.Exchange(ref _environmentLookupStarted, 1) == 0)
+        if (product.SupportsEnvironments && appConfig.TrackEnvironments &&
+            Interlocked.Exchange(ref _environmentLookupStarted, 1) == 0)
         {
             var startedUtc = DateTimeOffset.UtcNow;
             _ = Task.Run(() => ResolveEnvironmentAsync(startedUtc, ct), CancellationToken.None);
         }
 
-        _ = Task.Run(() => WatchWorktreesAsync(ct), CancellationToken.None);
+        if (product.SupportsWorktrees)
+            _ = Task.Run(() => WatchWorktreesAsync(ct), CancellationToken.None);
 
         var reader = Task.Run(() => PumpOutputAsync(pty), CancellationToken.None);
 
@@ -623,7 +631,7 @@ public sealed class SupervisedInstance : IAsyncDisposable
                 _recentOutput.Remove(0, _recentOutput.Length - 64 * 1024);
         }
 
-        foreach (var line in OutputInterpreter.ToLogLines(chunk))
+        foreach (var line in _interpreter.ToLogLines(chunk))
         {
             _log.Write(line);
             lock (_gate)
@@ -637,7 +645,7 @@ public sealed class SupervisedInstance : IAsyncDisposable
             stateChanged = true;
         }
 
-        var url = OutputInterpreter.FindSessionUrl(chunk);
+        var url = _interpreter.FindSessionUrl(chunk);
         if (url is not null)
         {
             lock (_gate)
@@ -650,7 +658,7 @@ public sealed class SupervisedInstance : IAsyncDisposable
             stateChanged = true;
         }
 
-        switch (OutputInterpreter.Classify(chunk))
+        switch (_interpreter.Classify(chunk))
         {
             case OutputSignal.Ready:
                 lock (_gate)
@@ -671,7 +679,7 @@ public sealed class SupervisedInstance : IAsyncDisposable
                 lock (_gate)
                 {
                     _stateValue = InstanceState.NeedsAttention;
-                    _attentionReason = OutputInterpreter.Describe(OutputInterpreter.Classify(chunk));
+                    _attentionReason = _interpreter.Describe(_interpreter.Classify(chunk));
                     stateChanged = true;
                 }
 
@@ -708,6 +716,7 @@ public sealed class SupervisedInstance : IAsyncDisposable
     private void Notify() => Changed?.Invoke(this);
 
     private static bool RequiresRestart(SessionConfig a, SessionConfig b) =>
+        !string.Equals(a.ProductId, b.ProductId, StringComparison.OrdinalIgnoreCase) ||
         !string.Equals(a.Directory, b.Directory, StringComparison.OrdinalIgnoreCase) ||
         !string.Equals(a.Name, b.Name, StringComparison.Ordinal) ||
         a.Spawn != b.Spawn ||
@@ -720,7 +729,16 @@ public sealed class SupervisedInstance : IAsyncDisposable
         a.SessionId != b.SessionId ||
         a.SessionNamePrefix != b.SessionNamePrefix ||
         a.ExtraArgs != b.ExtraArgs ||
-        a.Enabled != b.Enabled;
+        a.Enabled != b.Enabled ||
+        !CursorOptionsEqual(a.Cursor, b.Cursor);
+
+    private static bool CursorOptionsEqual(CursorSessionOptions a, CursorSessionOptions b) =>
+        a.Verbose == b.Verbose &&
+        a.Debug == b.Debug &&
+        a.RunLoginInTerminal == b.RunLoginInTerminal &&
+        string.Equals(a.ApiKeyPath, b.ApiKeyPath, StringComparison.OrdinalIgnoreCase) &&
+        string.Equals(a.AuthTokenFile, b.AuthTokenFile, StringComparison.OrdinalIgnoreCase) &&
+        a.ExtraWorkerDirs.SequenceEqual(b.ExtraWorkerDirs, StringComparer.OrdinalIgnoreCase);
 
     private static string Sanitize(string name)
     {

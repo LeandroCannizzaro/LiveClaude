@@ -1,5 +1,6 @@
-using LiveClaude.Core.Claude;
+using LiveClaude.Abstractions;
 using LiveClaude.Core.Model;
+using LiveClaude.Product.Claude;
 using Xunit;
 
 namespace LiveClaude.Tests;

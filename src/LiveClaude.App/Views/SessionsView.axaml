@@ -19,6 +19,7 @@
                 <Ellipse Width="8" Height="8" Fill="{Binding StateBrush}" VerticalAlignment="Center" Margin="0,0,8,0" />
                 <TextBlock Text="{Binding Name}" FontWeight="SemiBold" />
               </StackPanel>
+              <TextBlock Text="{Binding ProductBadge}" Classes="mono" FontSize="11" Margin="16,2,0,0" />
               <TextBlock Text="{Binding Directory}" Classes="mono" FontSize="11" Margin="16,3,0,0"
                          TextTrimming="CharacterEllipsis" />
             </StackPanel>
@@ -31,15 +32,25 @@
     <ScrollViewer Grid.Column="1" VerticalScrollBarVisibility="Auto" DataContext="{Binding Editor}">
       <StackPanel>
         <TextBlock Text="Session parameters" Classes="heading" />
-        <TextBlock Classes="subheading"
-                   Text="These map one-to-one onto the flags of claude remote-control. The command preview at the bottom shows exactly what the supervisor will run." />
+        <TextBlock Classes="subheading" Text="{Binding ProductHelpText}" TextWrapping="Wrap" />
 
         <Border Classes="card">
           <StackPanel>
-            <TextBlock Text="Name (shown at claude.ai/code)" Classes="field" />
+            <TextBlock Text="Product" Classes="field" />
+            <ComboBox ItemsSource="{Binding AvailableProducts}"
+                      SelectedItem="{Binding SelectedProduct}"
+                      HorizontalAlignment="Stretch">
+              <ComboBox.ItemTemplate>
+                <DataTemplate>
+                  <TextBlock Text="{Binding DisplayName}" />
+                </DataTemplate>
+              </ComboBox.ItemTemplate>
+            </ComboBox>
+
+            <TextBlock Text="{Binding NameLabel}" Classes="field" />
             <TextBox Text="{Binding Name}" />
 
-            <TextBlock Text="Project directory" Classes="field" />
+            <TextBlock Text="{Binding DirectoryLabel}" Classes="field" />
             <Grid ColumnDefinitions="*,Auto">
               <TextBox Grid.Column="0" Text="{Binding Directory}" />
               <Button Grid.Column="1" Content="Browse…" Click="OnBrowse" Margin="8,0,0,0" />
@@ -48,12 +59,14 @@
             <WrapPanel>
               <CheckBox Content="Enabled" IsChecked="{Binding Enabled}" Margin="0,10,20,0" />
               <CheckBox Content="Start with the supervisor" IsChecked="{Binding AutoStart}" Margin="0,10,20,0" />
-              <CheckBox Content="Pre-create a session in this directory" IsChecked="{Binding CreateSessionInDir}" Margin="0,10,20,0" />
+              <CheckBox Content="Pre-create a session in this directory" IsChecked="{Binding CreateSessionInDir}"
+                        IsVisible="{Binding IsClaudeProduct}" Margin="0,10,20,0" />
             </WrapPanel>
           </StackPanel>
         </Border>
 
-        <Border Classes="card">
+        <!-- Claude remote-control options -->
+        <Border Classes="card" IsVisible="{Binding IsClaudeProduct}">
           <Grid ColumnDefinitions="*,*" RowDefinitions="Auto,Auto,Auto,Auto">
 
             <StackPanel Grid.Row="0" Grid.Column="0" Margin="0,0,10,0">
@@ -110,6 +123,33 @@
           </Grid>
         </Border>
 
+        <!-- Cursor My Machines options -->
+        <Border Classes="card" IsVisible="{Binding IsCursorProduct}">
+          <StackPanel>
+            <TextBlock Text="Extra worker directories (one per line)" Classes="field" />
+            <TextBox Text="{Binding ExtraWorkerDirs}" AcceptsReturn="True" MinHeight="72"
+                     TextWrapping="Wrap" />
+            <TextBlock Classes="mono" FontSize="11" Margin="0,4,0,0" TextWrapping="Wrap"
+                       Text="Each path becomes an additional --worker-dir (up to 20 total including the primary directory). Routing uses each checkout's git remote." />
+
+            <TextBlock Text="API key file (optional)" Classes="field" />
+            <TextBox Text="{Binding CursorApiKeyPath}" Watermark="Falls back to Settings → Products" />
+
+            <TextBlock Text="Auth token file (optional)" Classes="field" />
+            <TextBox Text="{Binding CursorAuthTokenFile}" Watermark="Falls back to Settings → Products" />
+
+            <TextBlock Text="Extra arguments (appended verbatim)" Classes="field" />
+            <TextBox Text="{Binding ExtraArgs}" />
+
+            <WrapPanel>
+              <CheckBox Content="Verbose" IsChecked="{Binding CursorVerbose}" Margin="0,12,20,0" />
+              <CheckBox Content="Debug" IsChecked="{Binding CursorDebug}" Margin="0,12,20,0" />
+              <CheckBox Content="Run agent login in terminal when no key/token is set"
+                        IsChecked="{Binding RunLoginInTerminal}" Margin="0,12,20,0" />
+            </WrapPanel>
+          </StackPanel>
+        </Border>
+
         <Border Classes="card" Background="{StaticResource SurfaceAltBrush}">
           <StackPanel>
             <TextBlock Text="Command preview" Classes="field" Margin="0,0,0,6" />
@@ -123,8 +163,9 @@
         <StackPanel Orientation="Horizontal" Margin="0,4,0,20">
           <Button Content="Save session" Classes="primary"
                   Command="{Binding $parent[UserControl].DataContext.SaveSessionCommand}" />
-          <Button Content="Trust this directory…" Click="OnTrustDirectory" />
-          <Button Content="Run remote-control once…" Click="OnRunOnce" />
+          <Button Content="Trust this directory…" Click="OnTrustDirectory"
+                  IsVisible="{Binding IsClaudeProduct}" />
+          <Button Content="Run once in terminal…" Click="OnRunOnce" />
           <Button Content="Delete" Margin="0"
                   Command="{Binding $parent[UserControl].DataContext.DeleteSessionCommand}" />
         </StackPanel>
