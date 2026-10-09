@@ -6,6 +6,8 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [2.1.3] - 2026-10-09
+
 ### Fixed
 
 - **ClickOnce installs no longer miss Claude and Cursor.** The product assemblies
@@ -15,6 +17,10 @@ All notable changes to this project are documented here. The format follows
   `ProductHost` was empty: Settings showed no detected CLIs and the supervisor reported both as
   missing even when `claude.exe` and `cursor-agent` were on the machine. They are now added to
   `ReferenceCopyLocalPaths` before the manifest is built, and CI asserts they are present.
+- The startup warning about a missing product CLI now fires only for products some session uses,
+  instead of for every shipped product (e.g. Cursor on a machine that only runs Claude).
+- Claude's "folder already served" error is classified as `FolderInUse` and shown as a clear,
+  retryable message.
 
 ## [2.1.2] - 2026-10-05
 
