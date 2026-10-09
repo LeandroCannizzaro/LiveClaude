@@ -50,4 +50,20 @@
           SkipUnchangedFiles="true" />
   </Target>
 
+  <!--
+    Same ClickOnce trap as the platform assemblies: copying into PublishDir after Publish leaves the
+    DLLs on disk but out of the .manifest, so a ClickOnce install never fetches them. Without the
+    product assemblies ProductHost is empty, Settings shows no Claude/Cursor installs, and the
+    supervisor reports both CLIs as missing even when they are on the machine. Add them to
+    @(ReferenceCopyLocalPaths) before ClickOnce freezes its file list.
+  -->
+  <Target Name="AddLiveClaudeProductAssembliesToClickOnceManifest"
+          BeforeTargets="_DeploymentComputeClickOnceManifestInfo"
+          DependsOnTargets="ResolveLiveClaudeProductAssemblies"
+          Condition="'$(GenerateClickOnceManifests)' == 'true' and '@(LiveClaudeProductProject)' != ''">
+    <ItemGroup>
+      <ReferenceCopyLocalPaths Include="@(LiveClaudeProductAssembly)" />
+    </ItemGroup>
+  </Target>
+
 </Project>

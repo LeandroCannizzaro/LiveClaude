@@ -112,6 +112,23 @@ jobs:
           }
           Write-Host "ClickOnce deployment manifest produced: $manifest"
 
+          # Late-loaded Product.*.dll files must be in the application manifest, not only copied into
+          # PublishDir after Publish. Without them a ClickOnce install cannot discover Claude/Cursor.
+          # Avalonia/.NET publishes LiveClaude.dll.manifest (not *.exe.manifest).
+          $appManifests = Get-ChildItem "artifacts/clickonce-check" -Recurse -Filter "*.manifest"
+          if ($appManifests.Count -eq 0) {
+            Write-Error "ClickOnce produced no application manifest (*.manifest)"
+            exit 1
+          }
+          $manifestText = Get-Content $appManifests[0].FullName -Raw
+          foreach ($dll in @("LiveClaude.Product.Claude.dll", "LiveClaude.Product.Cursor.dll", "LiveClaude.Platform.Windows.dll")) {
+            if ($manifestText -notmatch [regex]::Escape($dll)) {
+              Write-Error "ClickOnce application manifest is missing $dll — it would not be installed"
+              exit 1
+            }
+            Write-Host "ClickOnce application manifest includes $dll"
+          }
+
       - name: Upload test results
         if: always()
         uses: actions/upload-artifact@v5
