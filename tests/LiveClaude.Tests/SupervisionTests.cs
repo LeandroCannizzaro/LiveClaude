@@ -79,6 +79,7 @@ public class OutputInterpreterTests
     [InlineData("Do you trust the files in this folder?", OutputSignal.TrustPrompt)]
     [InlineData("Waiting for connections...", OutputSignal.Ready)]
     [InlineData("Please run /login to sign in", OutputSignal.LoginRequired)]
+    [InlineData("Error: This folder is already served by a terminal `claude remote-control` on this device.", OutputSignal.FolderInUse)]
     [InlineData("just some output", OutputSignal.None)]
     public void SignalsAreClassified(string text, OutputSignal expected) =>
         Assert.Equal(expected, _interpreter.Classify(text));

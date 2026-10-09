@@ -99,7 +99,12 @@ public sealed class Supervisor : IAsyncDisposable
         foreach (var product in ProductHost.All)
         {
             var path = product.ResolveExecutable(_config);
-            if (path is null)
+            var used = _config.Sessions.Any(s => string.Equals(product.Id, s.ProductId, StringComparison.OrdinalIgnoreCase));
+
+            // A missing CLI only matters for a product some session actually runs.
+            if (path is null && !used)
+                _logger.LogInformation("{Product} CLI not found (no session uses it).", product.DisplayName);
+            else if (path is null)
                 _logger.LogWarning("{Product} CLI not found. Set the path in Settings → Products.", product.DisplayName);
             else
                 _logger.LogInformation("Using {Product} CLI at {Path}.", product.DisplayName, path);

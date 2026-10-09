@@ -685,6 +685,15 @@ public sealed class SupervisedInstance : IAsyncDisposable
 
                 break;
 
+            case OutputSignal.FolderInUse:
+                lock (_gate)
+                {
+                    _lastError = _interpreter.Describe(OutputSignal.FolderInUse);
+                    stateChanged = true;
+                }
+
+                break;
+
             case OutputSignal.FatalError:
                 lock (_gate)
                 {

@@ -18,7 +18,10 @@ public enum OutputSignal
     LoginRequired,
 
     /// <summary>A fatal configuration error that a restart will not fix.</summary>
-    FatalError
+    FatalError,
+
+    /// <summary>Another process on this machine already serves the same folder; a retry may succeed.</summary>
+    FolderInUse
 }
 
 /// <summary>

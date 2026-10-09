@@ -4,6 +4,24 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project uses
 [semantic versioning](https://semver.org/).
 
+## [Unreleased]
+
+## [2.1.3] - 2026-10-09
+
+### Fixed
+
+- **ClickOnce installs no longer miss Claude and Cursor.** The product assemblies
+  (`LiveClaude.Product.Claude.dll`, `LiveClaude.Product.Cursor.dll`) were copied into the publish
+  folder after ClickOnce had already frozen its file list, so they never entered the application
+  manifest. The app started (the platform assembly was already fixed the same way) but
+  `ProductHost` was empty: Settings showed no detected CLIs and the supervisor reported both as
+  missing even when `claude.exe` and `cursor-agent` were on the machine. They are now added to
+  `ReferenceCopyLocalPaths` before the manifest is built, and CI asserts they are present.
+- The startup warning about a missing product CLI now fires only for products some session uses,
+  instead of for every shipped product (e.g. Cursor on a machine that only runs Claude).
+- Claude's "folder already served" error is classified as `FolderInUse` and shown as a clear,
+  retryable message.
+
 ## [2.1.2] - 2026-10-05
 
 2.1.1 was tagged but never published: a test that depends on `LIVECLAUDE_ROOT` raced another test on
