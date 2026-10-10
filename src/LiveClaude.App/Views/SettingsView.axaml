@@ -111,10 +111,14 @@
 
           <CheckBox Content="Track which environment each Claude server registers (needs the Anthropic API)"
                     IsChecked="{Binding TrackEnvironments}" Margin="0,8,0,0" />
+          <CheckBox Content="Offer sign-in when Claude credentials are missing or expired"
+                    IsChecked="{Binding ClaudeOfferLoginWhenRequired}" Margin="0,8,0,0" />
+          <Button Content="Sign in with Claude Code…" HorizontalAlignment="Left" Margin="0,10,0,0"
+                  Click="OnSignInClaude" />
 
           <TextBlock Text="Cursor Agent CLI" Classes="field" Margin="0,20,0,0" FontWeight="SemiBold" />
           <TextBlock Classes="mono" FontSize="11" Margin="0,0,0,6" TextWrapping="Wrap"
-                     Text="My Machines worker (`agent worker start`). Auth: existing agent login, API key file, or auth token file. Sessions can also run `agent login` in the terminal." />
+                     Text="My Machines worker (`agent worker start`). Auth: existing agent login, API key file, or auth token file. Sessions can also run interactive login in the terminal." />
           <TextBlock Text="Path (leave empty to auto-detect)" Classes="field" />
           <TextBox Text="{Binding CursorPath}" />
 
@@ -143,6 +147,10 @@
           <TextBox Text="{Binding CursorAuthTokenFile}" />
           <CheckBox Content="Auto-patch Windows better-sqlite3 before starting a worker"
                     IsChecked="{Binding CursorAutoPatchWindowsSqlite}" Margin="0,8,0,0" />
+          <CheckBox Content="Offer sign-in when Cursor reports login is required"
+                    IsChecked="{Binding CursorOfferLoginWhenRequired}" Margin="0,8,0,0" />
+          <Button Content="Sign in with Cursor…" HorizontalAlignment="Left" Margin="0,10,0,0"
+                  Click="OnSignInCursor" />
         </StackPanel>
       </Border>
 

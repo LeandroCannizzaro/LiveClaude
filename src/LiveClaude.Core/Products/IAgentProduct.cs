@@ -53,3 +53,11 @@ public static class ProductIds
     public const string Claude = "claude";
     public const string Cursor = "cursor";
 }
+
+/// <summary>Helpers for optional product capabilities discovered via <see cref="ProductHost"/>.</summary>
+public static class AgentProductExtensions
+{
+    public static IAgentAuth? AsAuth(this IAgentProduct? product) => product as IAgentAuth;
+
+    public static IAgentAuth? TryGetAuth(string? productId) => ProductHost.TryGet(productId).AsAuth();
+}

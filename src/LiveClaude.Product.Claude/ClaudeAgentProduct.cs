@@ -8,7 +8,7 @@ using Microsoft.Extensions.Logging;
 namespace LiveClaude.Product.Claude;
 
 /// <summary>Claude Code <c>remote-control</c> product.</summary>
-public sealed class ClaudeAgentProduct : IAgentProduct
+public sealed class ClaudeAgentProduct : IAgentProduct, IAgentAuth
 {
     public string Id => ProductIds.Claude;
 
@@ -17,6 +17,8 @@ public sealed class ClaudeAgentProduct : IAgentProduct
     public bool SupportsEnvironments => true;
 
     public bool SupportsWorktrees => true;
+
+    public bool SupportsInteractiveLogin => true;
 
     public string? ResolveExecutable(AppConfig appConfig) =>
         ClaudeLocator.Locate(appConfig.Products.Claude.Path)?.Path;
@@ -46,5 +48,49 @@ public sealed class ClaudeAgentProduct : IAgentProduct
         return new LaunchPlan(executable, args, session.Directory, environment);
     }
 
+    public AgentAuthState GetAuthState(AppConfig appConfig)
+    {
+        var credentials = PlatformLoader.Current.Claude.LoadCredentials();
+        if (credentials is null)
+        {
+            return new AgentAuthState(
+                AgentAuthStatus.SignedOut,
+                "Claude Code is not signed in on this machine.");
+        }
+
+        if (credentials.IsExpired)
+        {
+            return new AgentAuthState(
+                AgentAuthStatus.Expired,
+                "The Claude Code token has expired. Sign in again to refresh it.");
+        }
+
+        return new AgentAuthState(AgentAuthStatus.SignedIn, null);
+    }
+
+    public bool ShouldOfferLogin(AppConfig appConfig) =>
+        appConfig.Products.Claude.OfferLoginWhenRequired;
+
+    public LaunchPlan? BuildLoginLaunch(AppConfig appConfig, string workingDirectory)
+    {
+        var executable = ResolveExecutable(appConfig);
+        if (executable is null)
+            return null;
+
+        return new LaunchPlan(
+            executable,
+            ClaudeArgs.BuildLogin(),
+            ResolveWorkingDirectory(workingDirectory),
+            new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase));
+    }
+
     public IOutputInterpreter CreateOutputInterpreter() => new ClaudeOutputInterpreter();
+
+    private static string ResolveWorkingDirectory(string workingDirectory)
+    {
+        if (!string.IsNullOrWhiteSpace(workingDirectory) && Directory.Exists(workingDirectory))
+            return workingDirectory;
+
+        return Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+    }
 }

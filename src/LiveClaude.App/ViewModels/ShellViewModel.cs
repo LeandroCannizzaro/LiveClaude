@@ -27,22 +27,30 @@ public sealed class ShellViewModel : ObservableObject, IAsyncDisposable
     private string _claudeInfo = "";
     private bool _isConnected;
     private int _selectedTabIndex;
+    private bool _loginOfferDone;
 
     public ShellViewModel()
     {
         Editor = new SessionEditorViewModel();
         Editor.LoadNew();
         Hosting = new HostingViewModel();
+        Login = new InteractiveLoginHost(
+            () => _config,
+            (directory, arguments, executable) =>
+                MainWindow.Current?.OpenInteractiveTerminal(directory, arguments, executable));
+
         Environments = new EnvironmentsViewModel(
             () => Instances.Select(i => i.Snapshot).ToList(),
             () => _config.Sessions,
-            id => _api?.StopInstanceAsync(id) ?? Task.CompletedTask);
+            id => _api?.StopInstanceAsync(id) ?? Task.CompletedTask,
+            () => Login.StartLoginAsync(ProductIds.Claude));
 
         RefreshCommand = new RelayCommand(_ => RefreshAsync());
         ReconnectCommand = new RelayCommand(_ => ConnectAsync(force: true));
         StartCommand = new RelayCommand(p => WithInstance(p, id => _api!.StartInstanceAsync(id)));
         StopCommand = new RelayCommand(p => WithInstance(p, id => _api!.StopInstanceAsync(id)));
         RestartCommand = new RelayCommand(p => WithInstance(p, id => _api!.RestartInstanceAsync(id)));
+        SignInCommand = new RelayCommand(p => SignInAsync(p));
         NewSessionCommand = new RelayCommand(_ =>
         {
             Editor.LoadNew();
@@ -81,6 +89,9 @@ public sealed class ShellViewModel : ObservableObject, IAsyncDisposable
     public HostingViewModel Hosting { get; }
 
     public EnvironmentsViewModel Environments { get; }
+
+    /// <summary>Product-agnostic interactive sign-in host.</summary>
+    public InteractiveLoginHost Login { get; }
 
     /// <summary>Shown in the footer; clicking it opens the About window.</summary>
     public string AppVersion => $"v{Views.AppInfo.Version}";
@@ -171,6 +182,18 @@ public sealed class ShellViewModel : ObservableObject, IAsyncDisposable
         set { _config.Products.Cursor.AutoPatchWindowsSqlite = value; OnPropertyChanged(); }
     }
 
+    public bool ClaudeOfferLoginWhenRequired
+    {
+        get => _config.Products.Claude.OfferLoginWhenRequired;
+        set { _config.Products.Claude.OfferLoginWhenRequired = value; OnPropertyChanged(); }
+    }
+
+    public bool CursorOfferLoginWhenRequired
+    {
+        get => _config.Products.Cursor.OfferLoginWhenRequired;
+        set { _config.Products.Cursor.OfferLoginWhenRequired = value; OnPropertyChanged(); }
+    }
+
     public int BackoffInitialSeconds
     {
         get => _config.Backoff.InitialSeconds;
@@ -233,6 +256,7 @@ public sealed class ShellViewModel : ObservableObject, IAsyncDisposable
     public RelayCommand OpenLogFolderCommand { get; }
     public RelayCommand OpenConfigCommand { get; }
     public RelayCommand SaveSettingsCommand { get; }
+    public RelayCommand SignInCommand { get; }
 
     #endregion
 
@@ -282,6 +306,25 @@ public sealed class ShellViewModel : ObservableObject, IAsyncDisposable
         IsConnected = true;
         await RefreshAsync();
         await Hosting.RefreshAsync();
+
+        if (!_loginOfferDone)
+        {
+            _loginOfferDone = true;
+            await Login.OfferPendingLoginsAsync();
+        }
+    }
+
+    /// <summary>
+    /// Starts interactive login for a product id, instance, or defaults to Claude.
+    /// </summary>
+    public Task SignInAsync(object? parameter = null)
+    {
+        return parameter switch
+        {
+            InstanceViewModel instance => Login.StartLoginAsync(instance.ProductId, instance.Directory),
+            string productId when !string.IsNullOrWhiteSpace(productId) => Login.StartLoginAsync(productId),
+            _ => Login.StartLoginAsync(ProductIds.Claude)
+        };
     }
 
     /// <summary>
@@ -333,6 +376,8 @@ public sealed class ShellViewModel : ObservableObject, IAsyncDisposable
         OnPropertyChanged(nameof(CursorApiKeyPath));
         OnPropertyChanged(nameof(CursorAuthTokenFile));
         OnPropertyChanged(nameof(CursorAutoPatchWindowsSqlite));
+        OnPropertyChanged(nameof(ClaudeOfferLoginWhenRequired));
+        OnPropertyChanged(nameof(CursorOfferLoginWhenRequired));
         OnPropertyChanged(nameof(BackoffInitialSeconds));
         OnPropertyChanged(nameof(BackoffMaxSeconds));
         OnPropertyChanged(nameof(BackoffMaxRestarts));

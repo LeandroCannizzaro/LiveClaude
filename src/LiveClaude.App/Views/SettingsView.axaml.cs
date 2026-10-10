@@ -1,6 +1,7 @@
 using Avalonia.Controls;
 using Avalonia.Interactivity;
 using LiveClaude.App.ViewModels;
+using LiveClaude.Core.Products;
 
 namespace LiveClaude.App.Views;
 
@@ -110,5 +111,17 @@ public partial class SettingsView : UserControl
     {
         if (Shell is not null && sender is Button { Tag: string path })
             Shell.CursorPath = path;
+    }
+
+    private async void OnSignInClaude(object? sender, RoutedEventArgs e)
+    {
+        if (Shell is not null)
+            await Shell.Login.StartLoginAsync(ProductIds.Claude);
+    }
+
+    private async void OnSignInCursor(object? sender, RoutedEventArgs e)
+    {
+        if (Shell is not null)
+            await Shell.Login.StartLoginAsync(ProductIds.Cursor);
     }
 }

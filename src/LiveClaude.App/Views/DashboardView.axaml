@@ -70,6 +70,10 @@
                     <Button Content="Restart"
                             Command="{Binding $parent[UserControl].DataContext.RestartCommand}"
                             CommandParameter="{Binding Id}" />
+                    <Button Content="Sign in" Classes="primary"
+                            IsVisible="{Binding NeedsSignIn}"
+                            Command="{Binding $parent[UserControl].DataContext.SignInCommand}"
+                            CommandParameter="{Binding}" />
                     <Button Content="Terminal" Click="OnAttachTerminal" Tag="{Binding Id}" />
                     <Button Content="Edit" Margin="0"
                             Command="{Binding $parent[UserControl].DataContext.EditSessionCommand}"

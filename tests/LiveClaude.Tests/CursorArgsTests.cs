@@ -27,6 +27,10 @@ public class CursorArgsTests
     }
 
     [Fact]
+    public void BuildLoginUsesLoginSubcommand() =>
+        Assert.Equal(["login"], CursorArgs.BuildLogin());
+
+    [Fact]
     public void ExtraWorkerDirsAreRepeated()
     {
         var session = new SessionConfig

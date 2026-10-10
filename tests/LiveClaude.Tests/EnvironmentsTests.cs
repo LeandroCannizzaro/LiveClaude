@@ -113,7 +113,20 @@ public class EnvironmentsFailureTests
         var failure = EnvironmentsClient.Describe(HttpStatusCode.Unauthorized, """{"error":{"message":"bad token"}}""", null);
 
         Assert.False(failure.RequiresForce);
+        Assert.True(failure.NeedsSignIn);
+        Assert.Equal(EnvironmentsAuthFailureKind.RejectedByApi, failure.AuthFailure);
         Assert.Contains("/login", failure.Message);
+    }
+
+    [Fact]
+    public async Task MissingCredentialsAreTypedAsAuthFailure()
+    {
+        using var client = new EnvironmentsClient(credentialsFactory: () => null);
+
+        var ex = await Assert.ThrowsAsync<EnvironmentsApiException>(() => client.ListAsync());
+
+        Assert.Equal(EnvironmentsAuthFailureKind.MissingCredentials, ex.AuthFailure);
+        Assert.True(ex.NeedsSignIn);
     }
 
     [Fact]

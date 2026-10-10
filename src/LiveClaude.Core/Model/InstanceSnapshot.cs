@@ -1,4 +1,5 @@
 using System.Text.Json.Serialization;
+using LiveClaude.Abstractions;
 
 namespace LiveClaude.Core.Model;
 
@@ -71,6 +72,12 @@ public sealed class InstanceSnapshot
 
     /// <summary>Why the instance needs a human, when <see cref="State"/> is NeedsAttention.</summary>
     public string? AttentionReason { get; set; }
+
+    /// <summary>
+    /// Structured attention cause (login, trust, …). Lets the UI offer Sign in without parsing
+    /// <see cref="AttentionReason"/> text.
+    /// </summary>
+    public OutputSignal AttentionSignal { get; set; } = OutputSignal.None;
 
     public string? LastError { get; set; }
 

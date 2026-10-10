@@ -45,6 +45,7 @@ public sealed class SupervisedInstance : IAsyncDisposable
     private string? _sessionUrl;
     private string? _lastOutput;
     private string? _attentionReason;
+    private OutputSignal _attentionSignal = OutputSignal.None;
     private string? _lastError;
     private int _restartCount;
     private string? _environmentId;
@@ -110,6 +111,7 @@ public sealed class SupervisedInstance : IAsyncDisposable
                 EnvironmentId = _environmentId,
                 LastOutput = _lastOutput,
                 AttentionReason = _attentionReason,
+                AttentionSignal = _attentionSignal,
                 LastError = _lastError,
                 Worktrees = _worktrees
             };
@@ -218,6 +220,7 @@ public sealed class SupervisedInstance : IAsyncDisposable
             _stateValue = _config.Enabled ? InstanceState.Stopped : InstanceState.Disabled;
             _nextRetryUtc = null;
             _attentionReason = null;
+            _attentionSignal = OutputSignal.None;
         }
 
         Notify();
@@ -379,6 +382,7 @@ public sealed class SupervisedInstance : IAsyncDisposable
             _startedUtc = DateTimeOffset.UtcNow;
             _stateValue = InstanceState.Starting;
             _attentionReason = null;
+            _attentionSignal = OutputSignal.None;
             _lastError = null;
             _sessionUrl = null;
             _environmentId = null;
@@ -667,6 +671,7 @@ public sealed class SupervisedInstance : IAsyncDisposable
                     {
                         _stateValue = InstanceState.Running;
                         _attentionReason = null;
+                        _attentionSignal = OutputSignal.None;
                         stateChanged = true;
                     }
                 }
@@ -678,8 +683,10 @@ public sealed class SupervisedInstance : IAsyncDisposable
             case OutputSignal.LoginRequired:
                 lock (_gate)
                 {
+                    var signal = _interpreter.Classify(chunk);
                     _stateValue = InstanceState.NeedsAttention;
-                    _attentionReason = _interpreter.Describe(_interpreter.Classify(chunk));
+                    _attentionSignal = signal;
+                    _attentionReason = _interpreter.Describe(signal);
                     stateChanged = true;
                 }
 

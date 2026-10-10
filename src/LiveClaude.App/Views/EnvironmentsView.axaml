@@ -29,10 +29,13 @@
             Background="#2A1E18" BorderBrush="{StaticResource DangerBrush}"
             IsVisible="{Binding HasFailures}">
       <StackPanel>
-        <TextBlock Text="The last delete did not finish" FontWeight="SemiBold" FontSize="13"
+        <TextBlock Text="{Binding FailureTitle}" FontWeight="SemiBold" FontSize="13"
                    Foreground="{StaticResource DangerBrush}" Margin="0,0,0,6" />
         <TextBlock Text="{Binding FailureSummary}" Classes="mono" TextWrapping="Wrap"
                    Foreground="{StaticResource TextBrush}" />
+        <Button Content="Sign in…" Classes="primary" Margin="0,12,0,0" HorizontalAlignment="Left"
+                IsVisible="{Binding NeedsSignIn}"
+                Command="{Binding SignInCommand}" />
       </StackPanel>
     </Border>
 

@@ -24,10 +24,16 @@ public sealed class ClaudeProductSettings
     /// </summary>
     public bool TrackEnvironments { get; set; } = true;
 
+    /// <summary>
+    /// When true, the UI may offer interactive sign-in if Claude credentials are missing or expired.
+    /// </summary>
+    public bool OfferLoginWhenRequired { get; set; } = true;
+
     public ClaudeProductSettings Clone() => new()
     {
         Path = Path,
-        TrackEnvironments = TrackEnvironments
+        TrackEnvironments = TrackEnvironments,
+        OfferLoginWhenRequired = OfferLoginWhenRequired
     };
 }
 
@@ -53,13 +59,21 @@ public sealed class CursorProductSettings
     /// </summary>
     public bool AutoPatchWindowsSqlite { get; set; } = true;
 
+    /// <summary>
+    /// When true, the UI may offer interactive <c>agent login</c> when no API key / token is configured
+    /// and the product reports a sign-in is required (e.g. NeedsAttention). Startup offers stay off
+    /// while <see cref="PreferExistingLogin"/> is set, because there is no local probe for that session.
+    /// </summary>
+    public bool OfferLoginWhenRequired { get; set; } = true;
+
     public CursorProductSettings Clone() => new()
     {
         Path = Path,
         ApiKeyPath = ApiKeyPath,
         AuthTokenFile = AuthTokenFile,
         PreferExistingLogin = PreferExistingLogin,
-        AutoPatchWindowsSqlite = AutoPatchWindowsSqlite
+        AutoPatchWindowsSqlite = AutoPatchWindowsSqlite,
+        OfferLoginWhenRequired = OfferLoginWhenRequired
     };
 }
 
