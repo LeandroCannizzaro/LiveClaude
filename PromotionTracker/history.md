@@ -275,6 +275,7 @@ Summary row **#17** added.
 - **Reddit `r/ClaudeCode` Weekly Showcase:** https://www.reddit.com/r/ClaudeCode/comments/1xrpcjt/comment/19sn90b2aqkgx/
 - **Hacker News:** https://news.ycombinator.com/item?id=50502035
 - **Peerlist (new channel — Project):** https://peerlist.io/cannizzaro/project/liveclaude
+- **Peerlist Scroll (new channel):** https://peerlist.io/scroll/post/ACTH9OB8MRGDO7EQM16LGNE8LLMAEO
+- **AlternativeTo (new channel — pending review):** https://alternativeto.net/software/liveclaude/about/
 - **Pending / Rate-limited / Blocked:**
   - Reddit (`r/ClaudeAI` megathread, `r/dotnet`, `r/opensource`, `r/macapps`): hit Reddit 19-minute rate-limit cooldown after `r/ClaudeCode` post (ready in `campaigns/2026-11-14-v2.2.8-wave.md`).
-  - AlternativeTo: requires clicking email confirmation link before submitting.
