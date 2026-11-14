@@ -247,3 +247,34 @@ Skipped idle-keepalive PSA threads (wrong problem for LiveClaude).
 
 Summary row **#17** added.
 
+
+
+---
+
+### Entry 11 — 2026-11-14T22:56:00Z (@LeandroCannizzaro)
+
+## Wave 3 (v2.2.8) — GitHub & new awesome-list PR
+
+- **GitHub Discussions #9 (v2.2.8 release update):** https://github.com/LeandroCannizzaro/LiveClaude/discussions/9#discussioncomment-19621160
+- **awesome-ai-coding-tools PR #1284 (new channel):** https://github.com/ai-for-developers/awesome-ai-coding-tools/pull/1284 (added LiveClaude to end of *Developer Productivity Tools* with author disclosure)
+- **Campaign draft created:** `PromotionTracker/campaigns/2026-11-14-v2.2.8-wave.md`
+
+
+---
+
+### Entry 12 — 2026-11-14T23:12:30Z (@LeandroCannizzaro)
+
+## Wave 3 (v2.2.8) — Social, Technical Blog, Reddit & New Channels
+
+- **Bluesky:** https://bsky.app/profile/venerandissimus.bsky.social/post/3n2cmaxtqs22m
+- **Mastodon:** https://mastodon.social/@venerandissimus/117617291884437951
+- **X (Twitter):** https://x.com/Venerando/status/2121741114097222111
+- **LinkedIn:** https://www.linkedin.com/feed/update/urn:li:activity:7515132557177466880/
+- **Dev.to:** https://dev.to/leandrocannizzaro/shipping-net-10-for-macos-12-and-net-8-for-macos-11-big-sur-in-one-avalonia-app-liveclaude-1bcc
+- **Hashnode (canonical -> Dev.to):** https://leandrocannizzaro.hashnode.dev/shipping-net-10-for-macos-12-and-net-8-for-macos-11-big-sur-in-one-avalonia-app-liveclaude-v2-2-8
+- **Reddit `r/ClaudeCode` Weekly Showcase:** https://www.reddit.com/r/ClaudeCode/comments/1xrpcjt/comment/19sn90b2aqkgx/
+- **Hacker News:** https://news.ycombinator.com/item?id=50502035
+- **Pending / Rate-limited / Blocked:**
+  - Reddit (`r/ClaudeAI` megathread, `r/dotnet`, `r/opensource`, `r/macapps`): hit Reddit 19-minute rate-limit cooldown after `r/ClaudeCode` post (ready in `campaigns/2026-11-14-v2.2.8-wave.md`).
+  - AlternativeTo: requires clicking email confirmation link before submitting.
+  - Peerlist: requires completing profile to 40% (currently 20%) before posting.
