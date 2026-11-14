@@ -10,6 +10,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <LiveClaudeProductProject Include="$(_LiveClaudeSrc)LiveClaude.Product.Antigravity\LiveClaude.Product.Antigravity.csproj" />
     <LiveClaudeProductProject Include="$(_LiveClaudeSrc)LiveClaude.Product.Claude\LiveClaude.Product.Claude.csproj" />
     <LiveClaudeProductProject Include="$(_LiveClaudeSrc)LiveClaude.Product.Cursor\LiveClaude.Product.Cursor.csproj" />
   </ItemGroup>

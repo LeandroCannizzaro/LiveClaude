@@ -1,16 +1,13 @@
-<UserControl xmlns="https://github.com/avaloniaui"
+﻿<UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:LiveClaude.App.ViewModels"
              x:Class="LiveClaude.App.Views.SessionsView"
-             Background="{StaticResource SurfaceBrush}">
-  <Grid Margin="20" ColumnDefinitions="280,*">
+             Background="{DynamicResource SurfaceBrush}">
+  <Grid Margin="20" ColumnDefinitions="260,*">
 
     <!-- List -->
     <DockPanel Grid.Column="0" Margin="0,0,20,0">
-      <TextBlock DockPanel.Dock="Top" Text="Sessions" Classes="heading" />
-      <Button DockPanel.Dock="Bottom" Content="New session" Classes="primary"
-              Command="{Binding NewSessionCommand}" Margin="0,12,0,0" HorizontalAlignment="Stretch"
-              HorizontalContentAlignment="Center" />
+      <TextBlock DockPanel.Dock="Top" Text="Sessions" Classes="heading" Margin="0,0,0,8" />
       <ListBox ItemsSource="{Binding Instances}" SelectedItem="{Binding SelectedInstance, Mode=TwoWay}">
         <ListBox.ItemTemplate>
           <DataTemplate>
@@ -28,139 +25,15 @@
       </ListBox>
     </DockPanel>
 
-    <!-- Editor -->
-    <ScrollViewer Grid.Column="1" VerticalScrollBarVisibility="Auto" DataContext="{Binding Editor}">
-      <StackPanel>
-        <TextBlock Text="Session parameters" Classes="heading" />
-        <TextBlock Classes="subheading" Text="{Binding ProductHelpText}" TextWrapping="Wrap" />
+    <!-- Editor (no scroll: top command bar + inner TabControl) -->
+    <Grid Grid.Column="1" RowDefinitions="Auto,Auto,*" DataContext="{Binding Editor}">
 
-        <Border Classes="card">
-          <StackPanel>
-            <TextBlock Text="Product" Classes="field" />
-            <ComboBox ItemsSource="{Binding AvailableProducts}"
-                      SelectedItem="{Binding SelectedProduct}"
-                      HorizontalAlignment="Stretch">
-              <ComboBox.ItemTemplate>
-                <DataTemplate>
-                  <TextBlock Text="{Binding DisplayName}" />
-                </DataTemplate>
-              </ComboBox.ItemTemplate>
-            </ComboBox>
-
-            <TextBlock Text="{Binding NameLabel}" Classes="field" />
-            <TextBox Text="{Binding Name}" />
-
-            <TextBlock Text="{Binding DirectoryLabel}" Classes="field" />
-            <Grid ColumnDefinitions="*,Auto">
-              <TextBox Grid.Column="0" Text="{Binding Directory}" />
-              <Button Grid.Column="1" Content="Browse…" Click="OnBrowse" Margin="8,0,0,0" />
-            </Grid>
-
-            <WrapPanel>
-              <CheckBox Content="Enabled" IsChecked="{Binding Enabled}" Margin="0,10,20,0" />
-              <CheckBox Content="Start with the supervisor" IsChecked="{Binding AutoStart}" Margin="0,10,20,0" />
-              <CheckBox Content="Pre-create a session in this directory" IsChecked="{Binding CreateSessionInDir}"
-                        IsVisible="{Binding IsClaudeProduct}" Margin="0,10,20,0" />
-            </WrapPanel>
-          </StackPanel>
-        </Border>
-
-        <!-- Claude remote-control options -->
-        <Border Classes="card" IsVisible="{Binding IsClaudeProduct}">
-          <Grid ColumnDefinitions="*,*" RowDefinitions="Auto,Auto,Auto,Auto">
-
-            <StackPanel Grid.Row="0" Grid.Column="0" Margin="0,0,10,0">
-              <TextBlock Text="Spawn mode" Classes="field" />
-              <ComboBox ItemsSource="{x:Static vm:SessionEditorViewModel.SpawnModes}"
-                        SelectedItem="{Binding Spawn}"
-                        ItemTemplate="{StaticResource CliLabelTemplate}"
-                        HorizontalAlignment="Stretch" />
-              <TextBlock Classes="mono" FontSize="11" Margin="0,4,0,0" TextWrapping="Wrap"
-                         Text="same-dir: every session shares this folder · worktree: each remote session gets its own git worktree · session: exactly one session" />
-            </StackPanel>
-
-            <StackPanel Grid.Row="0" Grid.Column="1" Margin="10,0,0,0">
-              <TextBlock Text="Permission mode" Classes="field" />
-              <ComboBox ItemsSource="{x:Static vm:SessionEditorViewModel.PermissionModes}"
-                        SelectedItem="{Binding PermissionMode}"
-                        ItemTemplate="{StaticResource CliLabelTemplate}"
-                        HorizontalAlignment="Stretch" />
-              <TextBlock Classes="mono" FontSize="11" Margin="0,4,0,0" TextWrapping="Wrap"
-                         Text="acceptEdits or auto keep the server moving when nobody is at the keyboard." />
-            </StackPanel>
-
-            <StackPanel Grid.Row="1" Grid.Column="0" Margin="0,0,10,0">
-              <TextBlock Text="Capacity (max concurrent sessions)" Classes="field" />
-              <TextBox Text="{Binding Capacity}" />
-            </StackPanel>
-
-            <StackPanel Grid.Row="1" Grid.Column="1" Margin="10,0,0,0">
-              <TextBlock Text="Model override (optional)" Classes="field" />
-              <TextBox Text="{Binding Model}" />
-            </StackPanel>
-
-            <StackPanel Grid.Row="2" Grid.Column="0" Margin="0,0,10,0">
-              <TextBlock Text="Session name prefix (optional)" Classes="field" />
-              <TextBox Text="{Binding SessionNamePrefix}" />
-            </StackPanel>
-
-            <StackPanel Grid.Row="2" Grid.Column="1" Margin="10,0,0,0">
-              <TextBlock Text="Fixed session id (optional)" Classes="field" />
-              <TextBox Text="{Binding SessionId}" />
-            </StackPanel>
-
-            <StackPanel Grid.Row="3" Grid.Column="0" Grid.ColumnSpan="2">
-              <TextBlock Text="Extra arguments (appended verbatim)" Classes="field" />
-              <TextBox Text="{Binding ExtraArgs}" />
-
-              <WrapPanel>
-                <CheckBox Content="Reattach to the previous session after a restart (--continue)"
-                          IsChecked="{Binding ContinuePrevious}" Margin="0,12,20,0" />
-                <CheckBox Content="Sandbox" IsChecked="{Binding Sandbox}" Margin="0,12,20,0" />
-                <CheckBox Content="Verbose" IsChecked="{Binding Verbose}" Margin="0,12,20,0" />
-              </WrapPanel>
-            </StackPanel>
-          </Grid>
-        </Border>
-
-        <!-- Cursor My Machines options -->
-        <Border Classes="card" IsVisible="{Binding IsCursorProduct}">
-          <StackPanel>
-            <TextBlock Text="Extra worker directories (one per line)" Classes="field" />
-            <TextBox Text="{Binding ExtraWorkerDirs}" AcceptsReturn="True" MinHeight="72"
-                     TextWrapping="Wrap" />
-            <TextBlock Classes="mono" FontSize="11" Margin="0,4,0,0" TextWrapping="Wrap"
-                       Text="Each path becomes an additional --worker-dir (up to 20 total including the primary directory). Routing uses each checkout's git remote." />
-
-            <TextBlock Text="API key file (optional)" Classes="field" />
-            <TextBox Text="{Binding CursorApiKeyPath}" Watermark="Falls back to Settings → Products" />
-
-            <TextBlock Text="Auth token file (optional)" Classes="field" />
-            <TextBox Text="{Binding CursorAuthTokenFile}" Watermark="Falls back to Settings → Products" />
-
-            <TextBlock Text="Extra arguments (appended verbatim)" Classes="field" />
-            <TextBox Text="{Binding ExtraArgs}" />
-
-            <WrapPanel>
-              <CheckBox Content="Verbose" IsChecked="{Binding CursorVerbose}" Margin="0,12,20,0" />
-              <CheckBox Content="Debug" IsChecked="{Binding CursorDebug}" Margin="0,12,20,0" />
-              <CheckBox Content="Run agent login in terminal when no key/token is set"
-                        IsChecked="{Binding RunLoginInTerminal}" Margin="0,12,20,0" />
-            </WrapPanel>
-          </StackPanel>
-        </Border>
-
-        <Border Classes="card" Background="{StaticResource SurfaceAltBrush}">
-          <StackPanel>
-            <TextBlock Text="Command preview" Classes="field" Margin="0,0,0,6" />
-            <TextBlock Text="{Binding CommandPreview}" Classes="mono" TextWrapping="Wrap"
-                       Foreground="{StaticResource TextBrush}" />
-            <Button Content="Update preview" Click="OnUpdatePreview" HorizontalAlignment="Left" Margin="0,10,0,0"
-                    Classes="small" />
-          </StackPanel>
-        </Border>
-
-        <StackPanel Orientation="Horizontal" Margin="0,4,0,20">
+      <!-- Top command bar -->
+      <Grid Grid.Row="0" ColumnDefinitions="*,Auto" Margin="0,0,0,6">
+        <TextBlock Grid.Column="0" Text="Session parameters" Classes="heading" VerticalAlignment="Center" />
+        <StackPanel Grid.Column="1" Orientation="Horizontal">
+          <Button Content="New session"
+                  Command="{Binding $parent[UserControl].DataContext.NewSessionCommand}" />
           <Button Content="Save session" Classes="primary"
                   Command="{Binding $parent[UserControl].DataContext.SaveSessionCommand}" />
           <Button Content="Trust this directory…" Click="OnTrustDirectory"
@@ -169,7 +42,198 @@
           <Button Content="Delete" Margin="0"
                   Command="{Binding $parent[UserControl].DataContext.DeleteSessionCommand}" />
         </StackPanel>
-      </StackPanel>
-    </ScrollViewer>
+      </Grid>
+
+      <TextBlock Grid.Row="1" Classes="subheading" Text="{Binding ProductHelpText}" TextWrapping="Wrap" Margin="0,0,0,10" />
+
+      <TabControl Grid.Row="2">
+
+        <!-- Tab 1: General & Product -->
+        <TabItem Header="General &amp; Product">
+          <Border Classes="card" Margin="0,12,0,0" VerticalAlignment="Top">
+            <StackPanel>
+              <TextBlock Text="Product" Classes="field" />
+              <ComboBox ItemsSource="{Binding AvailableProducts}"
+                        SelectedItem="{Binding SelectedProduct}"
+                        HorizontalAlignment="Stretch">
+                <ComboBox.ItemTemplate>
+                  <DataTemplate>
+                    <TextBlock Text="{Binding DisplayName}" />
+                  </DataTemplate>
+                </ComboBox.ItemTemplate>
+              </ComboBox>
+
+              <TextBlock Text="{Binding NameLabel}" Classes="field" />
+              <TextBox Text="{Binding Name}" />
+
+              <TextBlock Text="{Binding DirectoryLabel}" Classes="field" />
+              <Grid ColumnDefinitions="*,Auto">
+                <TextBox Grid.Column="0" Text="{Binding Directory}" />
+                <Button Grid.Column="1" Content="Browse…" Click="OnBrowse" Margin="8,0,0,0" />
+              </Grid>
+
+              <WrapPanel Margin="0,6,0,0">
+                <CheckBox Content="Enabled" IsChecked="{Binding Enabled}" Margin="0,10,20,0" />
+                <CheckBox Content="Start with the supervisor" IsChecked="{Binding AutoStart}" Margin="0,10,20,0" />
+                <CheckBox Content="Pre-create a session in this directory" IsChecked="{Binding CreateSessionInDir}"
+                          IsVisible="{Binding IsClaudeProduct}" Margin="0,10,20,0" />
+              </WrapPanel>
+            </StackPanel>
+          </Border>
+        </TabItem>
+
+        <!-- Tab 2: Product Options -->
+        <TabItem Header="Product Options">
+          <Panel Margin="0,12,0,0">
+
+            <!-- Claude remote-control options -->
+            <Border Classes="card" IsVisible="{Binding IsClaudeProduct}" VerticalAlignment="Top">
+              <Grid ColumnDefinitions="*,16,*" RowDefinitions="Auto,Auto,Auto,Auto">
+
+                <StackPanel Grid.Row="0" Grid.Column="0">
+                  <TextBlock Text="Spawn mode" Classes="field" />
+                  <ComboBox ItemsSource="{x:Static vm:SessionEditorViewModel.SpawnModes}"
+                            SelectedItem="{Binding Spawn}"
+                            ItemTemplate="{StaticResource CliLabelTemplate}"
+                            HorizontalAlignment="Stretch" />
+                  <TextBlock Classes="mono" FontSize="11" Margin="0,4,0,0" TextWrapping="Wrap"
+                             Text="same-dir: shared folder · worktree: git worktree per session · session: single session" />
+                </StackPanel>
+
+                <StackPanel Grid.Row="0" Grid.Column="2">
+                  <TextBlock Text="Permission mode" Classes="field" />
+                  <ComboBox ItemsSource="{x:Static vm:SessionEditorViewModel.PermissionModes}"
+                            SelectedItem="{Binding PermissionMode}"
+                            ItemTemplate="{StaticResource CliLabelTemplate}"
+                            HorizontalAlignment="Stretch" />
+                  <TextBlock Classes="mono" FontSize="11" Margin="0,4,0,0" TextWrapping="Wrap"
+                             Text="acceptEdits or auto keep the server moving when nobody is at the keyboard." />
+                </StackPanel>
+
+                <StackPanel Grid.Row="1" Grid.Column="0">
+                  <TextBlock Text="Capacity (max concurrent sessions)" Classes="field" />
+                  <TextBox Text="{Binding Capacity}" />
+                </StackPanel>
+
+                <StackPanel Grid.Row="1" Grid.Column="2">
+                  <TextBlock Text="Model override (optional)" Classes="field" />
+                  <TextBox Text="{Binding Model}" />
+                </StackPanel>
+
+                <StackPanel Grid.Row="2" Grid.Column="0">
+                  <TextBlock Text="Session name prefix (optional)" Classes="field" />
+                  <TextBox Text="{Binding SessionNamePrefix}" />
+                </StackPanel>
+
+                <StackPanel Grid.Row="2" Grid.Column="2">
+                  <TextBlock Text="Fixed session id (optional)" Classes="field" />
+                  <TextBox Text="{Binding SessionId}" />
+                </StackPanel>
+
+                <StackPanel Grid.Row="3" Grid.Column="0" Grid.ColumnSpan="3">
+                  <TextBlock Text="Extra arguments (appended verbatim)" Classes="field" />
+                  <TextBox Text="{Binding ExtraArgs}" />
+
+                  <WrapPanel>
+                    <CheckBox Content="Reattach to the previous session after a restart (--continue)"
+                              IsChecked="{Binding ContinuePrevious}" Margin="0,12,20,0" />
+                    <CheckBox Content="Sandbox" IsChecked="{Binding Sandbox}" Margin="0,12,20,0" />
+                    <CheckBox Content="Verbose" IsChecked="{Binding Verbose}" Margin="0,12,20,0" />
+                  </WrapPanel>
+                </StackPanel>
+              </Grid>
+            </Border>
+
+            <!-- Cursor My Machines options -->
+            <Border Classes="card" IsVisible="{Binding IsCursorProduct}" VerticalAlignment="Top">
+              <Grid ColumnDefinitions="*,16,*">
+                <StackPanel Grid.Column="0">
+                  <TextBlock Text="Extra worker directories (one per line)" Classes="field" />
+                  <TextBox Text="{Binding ExtraWorkerDirs}" AcceptsReturn="True" MinHeight="96"
+                           TextWrapping="Wrap" />
+                  <TextBlock Classes="mono" FontSize="11" Margin="0,4,0,0" TextWrapping="Wrap"
+                             Text="Each path becomes an additional --worker-dir (up to 20 total including the primary directory)." />
+                </StackPanel>
+
+                <StackPanel Grid.Column="2">
+                  <TextBlock Text="API key file (optional)" Classes="field" />
+                  <TextBox Text="{Binding CursorApiKeyPath}" Watermark="Falls back to Settings → Products" />
+
+                  <TextBlock Text="Auth token file (optional)" Classes="field" />
+                  <TextBox Text="{Binding CursorAuthTokenFile}" Watermark="Falls back to Settings → Products" />
+
+                  <TextBlock Text="Extra arguments (appended verbatim)" Classes="field" />
+                  <TextBox Text="{Binding ExtraArgs}" />
+
+                  <WrapPanel>
+                    <CheckBox Content="Verbose" IsChecked="{Binding CursorVerbose}" Margin="0,12,20,0" />
+                    <CheckBox Content="Debug" IsChecked="{Binding CursorDebug}" Margin="0,12,20,0" />
+                    <CheckBox Content="Run agent login in terminal when no key/token is set"
+                              IsChecked="{Binding RunLoginInTerminal}" Margin="0,12,20,0" />
+                  </WrapPanel>
+                </StackPanel>
+              </Grid>
+            </Border>
+
+            <!-- Antigravity Remote Control options -->
+            <Border Classes="card" IsVisible="{Binding IsAntigravityProduct}" VerticalAlignment="Top">
+              <Grid ColumnDefinitions="*,16,*">
+                <StackPanel Grid.Column="0">
+                  <TextBlock Text="Execution mode (--mode)" Classes="field" />
+                  <ComboBox ItemsSource="{Binding AntigravityModes}" SelectedItem="{Binding AntigravityMode}" HorizontalAlignment="Stretch" />
+
+                  <TextBlock Text="Reasoning effort (--effort)" Classes="field" />
+                  <ComboBox ItemsSource="{Binding AntigravityEfforts}" SelectedItem="{Binding AntigravityEffort}" HorizontalAlignment="Stretch" />
+
+                  <TextBlock Text="Model override (--model)" Classes="field" />
+                  <TextBox Text="{Binding AntigravityModel}" Watermark="Leave empty for CLI default" />
+
+                  <TextBlock Text="Agent (--agent)" Classes="field" />
+                  <TextBox Text="{Binding AntigravityAgent}" Watermark="Optional agent name" />
+
+                  <TextBlock Text="Project (--project)" Classes="field" />
+                  <TextBox Text="{Binding AntigravityProject}" Watermark="Optional project ID or name" />
+                </StackPanel>
+
+                <StackPanel Grid.Column="2">
+                  <TextBlock Text="Additional directories (--add-dir, one per line)" Classes="field" />
+                  <TextBox Text="{Binding AntigravityExtraDirs}" AcceptsReturn="True" MinHeight="72"
+                           TextWrapping="Wrap" />
+
+                  <TextBlock Text="Conversation ID (--conversation)" Classes="field" />
+                  <TextBox Text="{Binding AntigravityConversationId}" Watermark="Optional; overrides --continue" />
+
+                  <TextBlock Text="Extra arguments (appended verbatim)" Classes="field" />
+                  <TextBox Text="{Binding ExtraArgs}" />
+
+                  <WrapPanel>
+                    <CheckBox Content="Continue most recent conversation (--continue)"
+                              IsChecked="{Binding AntigravityContinuePrevious}" Margin="0,12,20,0" />
+                    <CheckBox Content="Sandbox (--sandbox)" IsChecked="{Binding AntigravitySandbox}" Margin="0,12,20,0" />
+                    <CheckBox Content="Skip permissions (--dangerously-skip-permissions)"
+                              IsChecked="{Binding AntigravityDangerouslySkipPermissions}" Margin="0,12,20,0" />
+                  </WrapPanel>
+                </StackPanel>
+              </Grid>
+            </Border>
+
+          </Panel>
+        </TabItem>
+
+        <!-- Tab 3: Command Preview -->
+        <TabItem Header="Command Preview">
+          <Border Classes="card" Background="{DynamicResource SurfaceAltBrush}" Margin="0,12,0,0" VerticalAlignment="Top">
+            <StackPanel>
+              <TextBlock Text="Command preview" Classes="field" Margin="0,0,0,6" />
+              <TextBlock Text="{Binding CommandPreview}" Classes="mono" TextWrapping="Wrap"
+                         Foreground="{DynamicResource TextBrush}" />
+              <Button Content="Update preview" Click="OnUpdatePreview" HorizontalAlignment="Left" Margin="0,12,0,0"
+                      Classes="small" />
+            </StackPanel>
+          </Border>
+        </TabItem>
+
+      </TabControl>
+    </Grid>
   </Grid>
 </UserControl>

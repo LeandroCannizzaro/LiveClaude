@@ -152,8 +152,10 @@
     <span class="name">LiveClaude</span>
     <nav>
       <a href="#features">Features</a>
+      <a href="#products">Products</a>
       <a href="#install">Install</a>
-      <a href="#how">How it works</a>
+      <a href="#manual">User Manual</a>
+      <a href="release-notes.html">Release Notes</a>
       <a href="https://github.com/LeandroCannizzaro/LiveClaude">GitHub</a>
     </nav>
   </div>
@@ -162,13 +164,20 @@
 <div class="wrap hero">
   <h1>Your machine stays <span>reachable</span>.</h1>
   <p class="lead">
-    LiveClaude keeps Claude Code Remote Control servers running on Windows, Linux and macOS — one per project directory,
-    restarted after a crash, at logon and after a reboot. Plus a desktop app with a real terminal inside it.
+    LiveClaude keeps Remote Control and worker agent sessions running on Windows, Linux, and macOS —
+    supporting <strong>Claude Code</strong>, <strong>Cursor My Machines</strong>, and <strong>Antigravity</strong>,
+    restarted automatically across crashes, sign-ins, and reboots.
   </p>
   <div class="cta">
-    <a class="btn primary" href="https://github.com/LeandroCannizzaro/LiveClaude/releases/latest">Download</a>
+    <a class="btn primary" href="https://github.com/LeandroCannizzaro/LiveClaude/releases/latest">Download MSI / Packages</a>
+    <a class="btn" href="release-notes.html">Release Notes</a>
     <a class="btn" href="https://github.com/LeandroCannizzaro/LiveClaude">View on GitHub</a>
   </div>
+  <p id="installations" style="margin-top:20px">
+    <a href="https://hits.sh/leandrocannizzaro.github.io/liveclaude/installations/" target="_blank" rel="noopener noreferrer">
+      <img src="https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fhits.sh%2Fapi%2Furns%2Fleandrocannizzaro.github.io%2Fliveclaude%2Finstallations&amp;query=%24.total&amp;label=Completed%20installations&amp;color=d97757&amp;cacheSeconds=300" alt="Completed installations total" referrerpolicy="no-referrer" />
+    </a>
+  </p>
 </div>
 
 <div class="wrap">
@@ -233,17 +242,53 @@
   </figure>
 </div>
 
+<section id="products" class="wrap">
+  <h2>Supported Agent Products</h2>
+  <p class="sub">
+    Each product runs as an isolated plugin assembly. Pick a product per session and configure its CLI path in <strong>Settings → Products</strong>.
+  </p>
+  <div class="grid">
+    <div class="card">
+      <span class="tag">Claude Code</span>
+      <h3><code>claude remote-control</code></h3>
+      <p>Supports <code>same-dir</code>, <code>worktree</code>, and <code>session</code> spawn modes, permission modes, capacity limits, bridge environment cleanup, and automatic <code>--continue</code> reattachment.</p>
+    </div>
+    <div class="card">
+      <span class="tag">Cursor</span>
+      <h3><code>agent worker start</code></h3>
+      <p>Supervises Cursor My Machines workers with multi-directory routing (<code>--worker-dir</code>), API key or token file authentication, and automatic Windows <code>better-sqlite3</code> ABI patching.</p>
+    </div>
+    <div class="card">
+      <span class="tag">Antigravity</span>
+      <h3><code>agy --remote-control</code></h3>
+      <p>Runs Google Antigravity CLI in foreground Remote Control mode with configurable execution mode, reasoning effort, model override, agent, project, sandbox, and conversation resume.</p>
+    </div>
+  </div>
+</section>
+
 <section id="install" class="wrap">
   <h2>Install</h2>
-  <p class="sub">Windows 10 1809+, Linux with systemd, or macOS 12+ — and a Claude Code sign-in on a Pro, Max, Team or Enterprise plan.</p>
+  <p class="sub">Windows 10 1809+, Linux with systemd, or macOS 12+.</p>
 
   <div class="tabs" role="tablist">
-    <button role="tab" aria-selected="true" aria-controls="p-clickonce" id="t-clickonce">Windows · ClickOnce</button>
+    <button role="tab" aria-selected="true" aria-controls="p-msi" id="t-msi">Windows · MSI (Recommended)</button>
+    <button role="tab" aria-selected="false" aria-controls="p-zip" id="t-zip">Windows · Portable ZIP</button>
     <button role="tab" aria-selected="false" aria-controls="p-winget" id="t-winget">Windows · winget</button>
-    <button role="tab" aria-selected="false" aria-controls="p-zip" id="t-zip">Windows · Zip</button>
     <button role="tab" aria-selected="false" aria-controls="p-linux" id="t-linux">Linux</button>
     <button role="tab" aria-selected="false" aria-controls="p-macos" id="t-macos">macOS</button>
     <button role="tab" aria-selected="false" aria-controls="p-source" id="t-source">From source</button>
+  </div>
+
+  <div class="panel" id="p-msi" role="tabpanel" aria-labelledby="t-msi">
+    <p>
+      Download <code>LiveClaude-&lt;version&gt;-x64.msi</code> from the
+      <a href="https://github.com/LeandroCannizzaro/LiveClaude/releases/latest">latest release</a> and run it.
+    </p>
+    <p>
+      Installs self-contained to <code>Program Files\LiveClaude</code>, preserves your configuration across upgrades,
+      stops/restarts the Windows service cleanly if registered, and enables one-click in-app auto-updates.
+      To skip the anonymous installation counter during silent deployment: <code>msiexec /i LiveClaude.msi INSTALLCOUNTER=0</code>.
+    </p>
   </div>
 
   <div class="panel" id="p-winget" role="tabpanel" aria-labelledby="t-winget" hidden>
@@ -262,7 +307,7 @@
     <p><a href="https://github.com/LeandroCannizzaro/LiveClaude/releases/latest">Download the latest zip →</a></p>
   </div>
 
-  <div class="panel" id="p-clickonce" role="tabpanel" aria-labelledby="t-clickonce">
+  <div class="panel" id="p-clickonce" role="tabpanel" aria-labelledby="t-clickonce" hidden>
     <p>Installs for the current user and checks for updates on every launch.</p>
     <p><a class="btn primary" href="clickonce/v2/LiveClaude.application">Install LiveClaude 2</a></p>
     <p>
@@ -319,45 +364,41 @@ dotnet run --project src/LiveClaude.App</pre>
   </div>
 </section>
 
-<section id="how" class="wrap">
-  <h2>How it works</h2>
+<section id="manual" class="wrap">
+  <h2>User Manual</h2>
   <p class="sub">
-    The supervisor owns one <code>claude remote-control</code> server per directory, each inside its own
-    pseudo terminal. The app talks to it over a named pipe on Windows and a Unix socket elsewhere, so you can
-    close the window and the servers keep going.
+    The supervisor owns one foreground CLI process per configured session, each inside its own pseudo terminal.
+    The desktop app connects over a named pipe on Windows and a Unix socket elsewhere, so you can close the window and your sessions keep running.
   </p>
 
   <table>
     <tr>
-      <th>Step</th>
-      <th>What happens</th>
+      <th>Area</th>
+      <th>How to use it</th>
     </tr>
     <tr>
-      <td>Add a session</td>
-      <td>A directory, a name and the flags you want. Saved to <code>%ProgramData%\LiveClaude\config.json</code>,
-          which the supervisor watches.</td>
+      <td><strong>Sessions</strong></td>
+      <td>Use the top toolbar (<code>New session</code>, <code>Save session</code>, <code>Trust this directory…</code>, <code>Run once in terminal…</code>, <code>Delete</code>) and the three tabs (<em>General &amp; Product</em>, <em>Product Options</em>, <em>Command Preview</em>) without scrolling.</td>
     </tr>
     <tr>
-      <td>Trust once</td>
-      <td>Claude Code asks for workspace trust the first time it runs in a folder, and again for the one-time
-          Remote Control confirmation. Both are answered in the app's terminal tab.</td>
+      <td><strong>Service &amp; startup</strong></td>
+      <td>Choose between the <em>User session host</em> (Scheduled Task / systemd user / LaunchAgent — recommended) and the <em>System-wide host</em> (Windows Service / systemd system / LaunchDaemon).</td>
     </tr>
     <tr>
-      <td>Supervise</td>
-      <td>The server is started windowless in a ConPTY. Output is parsed for the session URL and for the
-          states that need you, and written to a rolling log.</td>
+      <td><strong>Settings &amp; Themes</strong></td>
+      <td>Configure supervisor intervals, backoff policy, config/log folders, per-product CLI paths, and UI themes. Pick a built-in preset (<em>Default Dark</em>, <em>Light</em>, <em>Midnight Blue</em>, <em>Forest Dark</em>, <em>High Contrast</em>) or customize any color live with the built-in Color Picker.</td>
     </tr>
     <tr>
-      <td>Recover</td>
-      <td>On exit: backoff, restart, and <code>--continue</code> when the previous session can still be
-          reattached. At logon and after a reboot: the task or the service brings everything back.</td>
+      <td><strong>Auto-Update</strong></td>
+      <td>When a new version is published, an <strong>Update to vX.Y.Z</strong> button appears in the top-right header. LiveClaude verifies the SHA-256 checksum, runs the MSI or ZIP updater, and restarts automatically.</td>
     </tr>
   </table>
 
-  <p style="margin-top:28px" class="note">
-    <strong>Remote Control's four-hour window.</strong> A stopped server's sessions can only be brought back for
-    about four hours. LiveClaude reattaches while it can and starts a fresh session afterwards — the conversations
-    themselves stay resumable locally with <code>claude --resume</code>.
+  <p id="privacy" style="margin-top:28px" class="note">
+    <strong>Anonymous installation counter.</strong> At the end of a successful first-time setup (MSI or portable ZIP),
+    the installer requests a single SVG image from <code>hits.sh</code> without opening a window. It sends no machine names,
+    accounts, tokens, or personal data (only the standard HTTPS network connection). Uninstalls, repairs, and normal app launches
+    never ping the counter. You can opt out with <code>INSTALLCOUNTER=0</code> (MSI) or <code>-NoInstallCounter</code> (<code>install.ps1</code>).
   </p>
 </section>
 

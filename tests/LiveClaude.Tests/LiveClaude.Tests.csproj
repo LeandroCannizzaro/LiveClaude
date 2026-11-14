@@ -13,7 +13,9 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\LiveClaude.Abstractions\LiveClaude.Abstractions.csproj" />
+    <ProjectReference Include="..\..\src\LiveClaude.App\LiveClaude.App.csproj" />
     <ProjectReference Include="..\..\src\LiveClaude.Core\LiveClaude.Core.csproj" />
+    <ProjectReference Include="..\..\src\LiveClaude.Product.Antigravity\LiveClaude.Product.Antigravity.csproj" />
     <ProjectReference Include="..\..\src\LiveClaude.Product.Claude\LiveClaude.Product.Claude.csproj" />
     <ProjectReference Include="..\..\src\LiveClaude.Product.Cursor\LiveClaude.Product.Cursor.csproj" />
     <ProjectReference Include="..\..\src\LiveClaude.Vt\LiveClaude.Vt.csproj" />

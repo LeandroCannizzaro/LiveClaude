@@ -52,6 +52,7 @@ public static class ProductIds
 {
     public const string Claude = "claude";
     public const string Cursor = "cursor";
+    public const string Antigravity = "antigravity";
 }
 
 /// <summary>Helpers for optional product capabilities discovered via <see cref="ProductHost"/>.</summary>

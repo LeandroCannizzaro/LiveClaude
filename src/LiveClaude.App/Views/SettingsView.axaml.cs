@@ -113,6 +113,12 @@ public partial class SettingsView : UserControl
             Shell.CursorPath = path;
     }
 
+    private void OnUseAntigravityInstall(object? sender, RoutedEventArgs e)
+    {
+        if (Shell is not null && sender is Button { Tag: string path })
+            Shell.AntigravityPath = path;
+    }
+
     private async void OnSignInClaude(object? sender, RoutedEventArgs e)
     {
         if (Shell is not null)
@@ -123,5 +129,11 @@ public partial class SettingsView : UserControl
     {
         if (Shell is not null)
             await Shell.Login.StartLoginAsync(ProductIds.Cursor);
+    }
+
+    private async void OnSignInAntigravity(object? sender, RoutedEventArgs e)
+    {
+        if (Shell is not null)
+            await Shell.Login.StartLoginAsync(ProductIds.Antigravity);
     }
 }

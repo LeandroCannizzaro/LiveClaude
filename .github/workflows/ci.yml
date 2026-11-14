@@ -121,7 +121,7 @@ jobs:
             exit 1
           }
           $manifestText = Get-Content $appManifests[0].FullName -Raw
-          foreach ($dll in @("LiveClaude.Product.Claude.dll", "LiveClaude.Product.Cursor.dll", "LiveClaude.Platform.Windows.dll")) {
+          foreach ($dll in @("LiveClaude.Product.Antigravity.dll", "LiveClaude.Product.Claude.dll", "LiveClaude.Product.Cursor.dll", "LiveClaude.Platform.Windows.dll")) {
             if ($manifestText -notmatch [regex]::Escape($dll)) {
               Write-Error "ClickOnce application manifest is missing $dll — it would not be installed"
               exit 1

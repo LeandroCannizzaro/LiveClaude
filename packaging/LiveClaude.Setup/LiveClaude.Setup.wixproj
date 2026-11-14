@@ -1,0 +1,16 @@
+<Project Sdk="WixToolset.Sdk/5.0.2" ToolsVersion="4.0">
+  <PropertyGroup>
+    <OutputName>LiveClaude</OutputName>
+    <InstallerPlatform>x64</InstallerPlatform>
+    <Cultures>en-US</Cultures>
+    <!-- Both come from packaging\build-msi.ps1: the published app folder and a numeric MSI version. -->
+    <AppSource Condition="'$(AppSource)' == ''">$(MSBuildThisFileDirectory)..\..\artifacts\package\app</AppSource>
+    <ProductVersion Condition="'$(ProductVersion)' == ''">2.1.3</ProductVersion>
+    <IconSource>$(MSBuildThisFileDirectory)..\..\src\LiveClaude.App\Assets\liveclaude.ico</IconSource>
+    <InstallCounterSource>$(MSBuildThisFileDirectory)..\count-installation.ps1</InstallCounterSource>
+    <DefineConstants>$(DefineConstants);AppSource=$(AppSource);ProductVersion=$(ProductVersion);IconSource=$(IconSource);InstallCounterSource=$(InstallCounterSource)</DefineConstants>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="WixToolset.Util.wixext" Version="5.0.2" />
+  </ItemGroup>
+</Project>

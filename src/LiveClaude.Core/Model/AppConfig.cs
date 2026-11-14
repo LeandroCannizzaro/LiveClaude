@@ -16,6 +16,20 @@ public sealed class BackoffSettings
     public int MaxRestarts { get; set; }
 }
 
+/// <summary>UI theme preset and optional per-token hex color overrides.</summary>
+public sealed class ThemeSettings
+{
+    public string PresetName { get; set; } = "Default Dark";
+
+    public Dictionary<string, string> CustomColors { get; set; } = new(StringComparer.OrdinalIgnoreCase);
+
+    public ThemeSettings Clone() => new()
+    {
+        PresetName = PresetName,
+        CustomColors = new Dictionary<string, string>(CustomColors, StringComparer.OrdinalIgnoreCase)
+    };
+}
+
 /// <summary>The whole LiveClaude configuration, persisted as JSON under the platform config root.</summary>
 public sealed class AppConfig
 {
@@ -69,6 +83,8 @@ public sealed class AppConfig
 
     public BackoffSettings Backoff { get; set; } = new();
 
+    public ThemeSettings Theme { get; set; } = new();
+
     public List<SessionConfig> Sessions { get; set; } = new();
 
     public SessionConfig? Find(string id) =>
@@ -91,6 +107,7 @@ public sealed class AppConfig
             ResetAfterHealthySeconds = Backoff.ResetAfterHealthySeconds,
             MaxRestarts = Backoff.MaxRestarts
         },
+        Theme = Theme.Clone(),
         Sessions = Sessions.Select(s => s.Clone()).ToList()
     };
 }

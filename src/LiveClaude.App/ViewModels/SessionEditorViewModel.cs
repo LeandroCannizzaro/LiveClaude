@@ -30,11 +30,25 @@ public sealed class SessionEditorViewModel : ObservableObject
     private string _cursorApiKeyPath = "";
     private string _cursorAuthTokenFile = "";
     private bool _runLoginInTerminal;
+    private string _antigravityMode = "";
+    private string _antigravityModel = "";
+    private string _antigravityEffort = "";
+    private string _antigravityAgent = "";
+    private string _antigravityProject = "";
+    private string _antigravityExtraDirs = "";
+    private bool _antigravitySandbox;
+    private bool _antigravityDangerouslySkipPermissions;
+    private bool _antigravityContinuePrevious = true;
+    private string _antigravityConversationId = "";
     private bool _isNew = true;
 
     public static IReadOnlyList<SpawnMode> SpawnModes { get; } = Enum.GetValues<SpawnMode>();
 
     public static IReadOnlyList<PermissionMode> PermissionModes { get; } = Enum.GetValues<PermissionMode>();
+
+    public static IReadOnlyList<string> AntigravityModes { get; } = ["", "accept-edits", "auto", "plan"];
+
+    public static IReadOnlyList<string> AntigravityEfforts { get; } = ["", "low", "medium", "high", "xhigh", "max"];
 
     public IReadOnlyList<IAgentProduct> AvailableProducts => ProductHost.All;
 
@@ -73,6 +87,7 @@ public sealed class SessionEditorViewModel : ObservableObject
             OnPropertyChanged(nameof(SelectedProduct));
             OnPropertyChanged(nameof(IsClaudeProduct));
             OnPropertyChanged(nameof(IsCursorProduct));
+            OnPropertyChanged(nameof(IsAntigravityProduct));
             OnPropertyChanged(nameof(ProductHelpText));
             OnPropertyChanged(nameof(NameLabel));
             OnPropertyChanged(nameof(DirectoryLabel));
@@ -86,13 +101,22 @@ public sealed class SessionEditorViewModel : ObservableObject
     public bool IsCursorProduct =>
         string.Equals(ProductId, ProductIds.Cursor, StringComparison.OrdinalIgnoreCase);
 
-    public string ProductHelpText => IsCursorProduct
-        ? "Cursor My Machines: one LiveClaude session is one long-lived worker. Name becomes --name; the project directory is the first --worker-dir."
-        : "These map one-to-one onto the flags of claude remote-control. The command preview at the bottom shows exactly what the supervisor will run.";
+    public bool IsAntigravityProduct =>
+        string.Equals(ProductId, ProductIds.Antigravity, StringComparison.OrdinalIgnoreCase);
 
-    public string NameLabel => IsCursorProduct
-        ? "Worker name (--name)"
-        : "Name (shown at claude.ai/code)";
+    public string ProductHelpText => ProductId.ToLowerInvariant() switch
+    {
+        ProductIds.Cursor => "Cursor My Machines: one LiveClaude session is one long-lived worker. Name becomes --name; the project directory is the first --worker-dir.",
+        ProductIds.Antigravity => "Antigravity Remote Control: runs `agy --remote-control` in the project directory and connects it to antigravity.google.",
+        _ => "These map one-to-one onto the flags of claude remote-control. The command preview at the bottom shows exactly what the supervisor will run."
+    };
+
+    public string NameLabel => ProductId.ToLowerInvariant() switch
+    {
+        ProductIds.Cursor => "Worker name (--name)",
+        ProductIds.Antigravity => "Session name",
+        _ => "Name (shown at claude.ai/code)"
+    };
 
     public string DirectoryLabel => IsCursorProduct
         ? "Primary worker directory (--worker-dir)"
@@ -225,6 +249,66 @@ public sealed class SessionEditorViewModel : ObservableObject
         set { if (SetProperty(ref _runLoginInTerminal, value)) OnPropertyChanged(nameof(CommandPreview)); }
     }
 
+    public string AntigravityMode
+    {
+        get => _antigravityMode;
+        set { if (SetProperty(ref _antigravityMode, value)) OnPropertyChanged(nameof(CommandPreview)); }
+    }
+
+    public string AntigravityModel
+    {
+        get => _antigravityModel;
+        set { if (SetProperty(ref _antigravityModel, value)) OnPropertyChanged(nameof(CommandPreview)); }
+    }
+
+    public string AntigravityEffort
+    {
+        get => _antigravityEffort;
+        set { if (SetProperty(ref _antigravityEffort, value)) OnPropertyChanged(nameof(CommandPreview)); }
+    }
+
+    public string AntigravityAgent
+    {
+        get => _antigravityAgent;
+        set { if (SetProperty(ref _antigravityAgent, value)) OnPropertyChanged(nameof(CommandPreview)); }
+    }
+
+    public string AntigravityProject
+    {
+        get => _antigravityProject;
+        set { if (SetProperty(ref _antigravityProject, value)) OnPropertyChanged(nameof(CommandPreview)); }
+    }
+
+    public string AntigravityExtraDirs
+    {
+        get => _antigravityExtraDirs;
+        set { if (SetProperty(ref _antigravityExtraDirs, value)) OnPropertyChanged(nameof(CommandPreview)); }
+    }
+
+    public bool AntigravitySandbox
+    {
+        get => _antigravitySandbox;
+        set { if (SetProperty(ref _antigravitySandbox, value)) OnPropertyChanged(nameof(CommandPreview)); }
+    }
+
+    public bool AntigravityDangerouslySkipPermissions
+    {
+        get => _antigravityDangerouslySkipPermissions;
+        set { if (SetProperty(ref _antigravityDangerouslySkipPermissions, value)) OnPropertyChanged(nameof(CommandPreview)); }
+    }
+
+    public bool AntigravityContinuePrevious
+    {
+        get => _antigravityContinuePrevious;
+        set { if (SetProperty(ref _antigravityContinuePrevious, value)) OnPropertyChanged(nameof(CommandPreview)); }
+    }
+
+    public string AntigravityConversationId
+    {
+        get => _antigravityConversationId;
+        set { if (SetProperty(ref _antigravityConversationId, value)) OnPropertyChanged(nameof(CommandPreview)); }
+    }
+
     public string CommandPreview
     {
         get
@@ -270,6 +354,16 @@ public sealed class SessionEditorViewModel : ObservableObject
         CursorApiKeyPath = "";
         CursorAuthTokenFile = "";
         RunLoginInTerminal = false;
+        AntigravityMode = "";
+        AntigravityModel = "";
+        AntigravityEffort = "";
+        AntigravityAgent = "";
+        AntigravityProject = "";
+        AntigravityExtraDirs = "";
+        AntigravitySandbox = false;
+        AntigravityDangerouslySkipPermissions = false;
+        AntigravityContinuePrevious = true;
+        AntigravityConversationId = "";
         OnPropertyChanged(nameof(CommandPreview));
     }
 
@@ -299,6 +393,16 @@ public sealed class SessionEditorViewModel : ObservableObject
         CursorApiKeyPath = config.Cursor.ApiKeyPath ?? "";
         CursorAuthTokenFile = config.Cursor.AuthTokenFile ?? "";
         RunLoginInTerminal = config.Cursor.RunLoginInTerminal;
+        AntigravityMode = config.Antigravity.Mode ?? "";
+        AntigravityModel = config.Antigravity.Model ?? "";
+        AntigravityEffort = config.Antigravity.Effort ?? "";
+        AntigravityAgent = config.Antigravity.Agent ?? "";
+        AntigravityProject = config.Antigravity.Project ?? "";
+        AntigravityExtraDirs = string.Join(Environment.NewLine, config.Antigravity.ExtraDirs);
+        AntigravitySandbox = config.Antigravity.Sandbox;
+        AntigravityDangerouslySkipPermissions = config.Antigravity.DangerouslySkipPermissions;
+        AntigravityContinuePrevious = config.Antigravity.ContinuePrevious;
+        AntigravityConversationId = config.Antigravity.ConversationId ?? "";
         OnPropertyChanged(nameof(CommandPreview));
     }
 
@@ -329,6 +433,19 @@ public sealed class SessionEditorViewModel : ObservableObject
             ApiKeyPath = string.IsNullOrWhiteSpace(CursorApiKeyPath) ? null : CursorApiKeyPath.Trim(),
             AuthTokenFile = string.IsNullOrWhiteSpace(CursorAuthTokenFile) ? null : CursorAuthTokenFile.Trim(),
             RunLoginInTerminal = RunLoginInTerminal
+        },
+        Antigravity = new AntigravitySessionOptions
+        {
+            Mode = string.IsNullOrWhiteSpace(AntigravityMode) ? null : AntigravityMode.Trim(),
+            Model = string.IsNullOrWhiteSpace(AntigravityModel) ? null : AntigravityModel.Trim(),
+            Effort = string.IsNullOrWhiteSpace(AntigravityEffort) ? null : AntigravityEffort.Trim(),
+            Agent = string.IsNullOrWhiteSpace(AntigravityAgent) ? null : AntigravityAgent.Trim(),
+            Project = string.IsNullOrWhiteSpace(AntigravityProject) ? null : AntigravityProject.Trim(),
+            ExtraDirs = ParseWorkerDirs(AntigravityExtraDirs),
+            Sandbox = AntigravitySandbox,
+            DangerouslySkipPermissions = AntigravityDangerouslySkipPermissions,
+            ContinuePrevious = AntigravityContinuePrevious,
+            ConversationId = string.IsNullOrWhiteSpace(AntigravityConversationId) ? null : AntigravityConversationId.Trim()
         }
     };
 

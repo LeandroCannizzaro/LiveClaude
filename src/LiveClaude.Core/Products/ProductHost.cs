@@ -86,7 +86,7 @@ public static class ProductHost
         // assemblies were bundled.
         if (products.Count == 0)
         {
-            foreach (var name in new[] { "LiveClaude.Product.Claude", "LiveClaude.Product.Cursor" })
+            foreach (var name in new[] { "LiveClaude.Product.Claude", "LiveClaude.Product.Cursor", "LiveClaude.Product.Antigravity" })
             {
                 try
                 {

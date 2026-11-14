@@ -10,6 +10,7 @@ public partial class AboutWindow : Window
 {
     private const string RepositoryUrl = "https://github.com/LeandroCannizzaro/LiveClaude";
     private const string ProductPageUrl = "https://leandrocannizzaro.github.io/LiveClaude/";
+    private const string ReleaseNotesUrl = "https://leandrocannizzaro.github.io/LiveClaude/release-notes.html";
 
     public AboutWindow()
     {
@@ -20,6 +21,8 @@ public partial class AboutWindow : Window
     private void OnOpenRepository(object? sender, RoutedEventArgs e) => ShellViewModel.OpenUrl(RepositoryUrl);
 
     private void OnOpenProductPage(object? sender, RoutedEventArgs e) => ShellViewModel.OpenUrl(ProductPageUrl);
+
+    private void OnOpenReleaseNotes(object? sender, RoutedEventArgs e) => ShellViewModel.OpenUrl(ReleaseNotesUrl);
 
     private void OnOpenLicense(object? sender, RoutedEventArgs e) => ShellViewModel.OpenUrl($"{RepositoryUrl}/blob/main/LICENSE");
 

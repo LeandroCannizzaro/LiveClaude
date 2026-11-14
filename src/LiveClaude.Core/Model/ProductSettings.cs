@@ -5,11 +5,13 @@ public sealed class ProductsConfig
 {
     public ClaudeProductSettings Claude { get; set; } = new();
     public CursorProductSettings Cursor { get; set; } = new();
+    public AntigravityProductSettings Antigravity { get; set; } = new();
 
     public ProductsConfig Clone() => new()
     {
         Claude = Claude.Clone(),
-        Cursor = Cursor.Clone()
+        Cursor = Cursor.Clone(),
+        Antigravity = Antigravity.Clone()
     };
 }
 
@@ -110,5 +112,68 @@ public sealed class CursorSessionOptions
         ApiKeyPath = ApiKeyPath,
         AuthTokenFile = AuthTokenFile,
         RunLoginInTerminal = RunLoginInTerminal
+    };
+}
+
+public sealed class AntigravityProductSettings
+{
+    /// <summary>Explicit path to the Antigravity <c>agy</c> CLI. When null the locator discovers it.</summary>
+    public string? Path { get; set; }
+
+    /// <summary>
+    /// When true, the UI may offer interactive sign-in when Antigravity reports login is required.
+    /// </summary>
+    public bool OfferLoginWhenRequired { get; set; } = true;
+
+    public AntigravityProductSettings Clone() => new()
+    {
+        Path = Path,
+        OfferLoginWhenRequired = OfferLoginWhenRequired
+    };
+}
+
+/// <summary>Antigravity CLI (<c>agy --remote-control</c>) options on a supervised session.</summary>
+public sealed class AntigravitySessionOptions
+{
+    /// <summary>Optional agent execution mode (<c>accept-edits</c>, <c>auto</c>, <c>plan</c>).</summary>
+    public string? Mode { get; set; }
+
+    /// <summary>Optional model override (<c>--model</c>).</summary>
+    public string? Model { get; set; }
+
+    /// <summary>Optional reasoning effort (<c>low</c>, <c>medium</c>, <c>high</c>, <c>xhigh</c>, <c>max</c>).</summary>
+    public string? Effort { get; set; }
+
+    /// <summary>Optional agent name (<c>--agent</c>).</summary>
+    public string? Agent { get; set; }
+
+    /// <summary>Optional project ID or name (<c>--project</c>).</summary>
+    public string? Project { get; set; }
+
+    /// <summary>Additional workspace directories (<c>--add-dir</c>, repeatable).</summary>
+    public List<string> ExtraDirs { get; set; } = new();
+
+    public bool Sandbox { get; set; }
+
+    public bool DangerouslySkipPermissions { get; set; }
+
+    /// <summary>Continue the most recent conversation (<c>--continue</c>).</summary>
+    public bool ContinuePrevious { get; set; } = true;
+
+    /// <summary>Resume a specific conversation by ID (<c>--conversation</c>). Wins over <see cref="ContinuePrevious"/>.</summary>
+    public string? ConversationId { get; set; }
+
+    public AntigravitySessionOptions Clone() => new()
+    {
+        Mode = Mode,
+        Model = Model,
+        Effort = Effort,
+        Agent = Agent,
+        Project = Project,
+        ExtraDirs = ExtraDirs.ToList(),
+        Sandbox = Sandbox,
+        DangerouslySkipPermissions = DangerouslySkipPermissions,
+        ContinuePrevious = ContinuePrevious,
+        ConversationId = ConversationId
     };
 }

@@ -100,6 +100,14 @@ public sealed class InstanceViewModel : ObservableObject
                 var dirs = 1 + _config.Cursor.ExtraWorkerDirs.Count;
                 parts.Add($"{dirs} worker-dir(s)");
             }
+            else if (_config is not null &&
+                     string.Equals(_config.ProductId, "antigravity", StringComparison.OrdinalIgnoreCase))
+            {
+                var mode = string.IsNullOrWhiteSpace(_config.Antigravity.Mode) ? "default" : _config.Antigravity.Mode;
+                parts.Add(string.IsNullOrWhiteSpace(_config.Antigravity.Model)
+                    ? $"remote-control · {mode}"
+                    : $"remote-control · {mode} · {_config.Antigravity.Model}");
+            }
 
             return string.Join("   ·   ", parts);
         }

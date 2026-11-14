@@ -1,20 +1,20 @@
-<UserControl xmlns="https://github.com/avaloniaui"
+﻿<UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:term="using:LiveClaude.Terminal.Controls"
              x:Class="LiveClaude.App.Views.TerminalPane"
-             Background="{StaticResource SurfaceBrush}">
+             Background="{DynamicResource SurfaceBrush}">
   <Grid Margin="20" RowDefinitions="Auto,Auto,*,Auto">
 
     <StackPanel Grid.Row="0">
       <TextBlock Text="Embedded terminal" Classes="heading" />
       <TextBlock Classes="subheading"
-                 Text="A real pseudo terminal inside the app. Use it to accept workspace trust for a new directory, answer the one-time Remote Control confirmation, sign in with /login — or to watch and steer a supervised server live." />
+                 Text="A real pseudo terminal inside the app. Use it to accept workspace trust for a new directory, answer the one-time Remote Control confirmation, sign in with /login â€” or to watch and steer a supervised server live." />
     </StackPanel>
 
-    <Border Grid.Row="1" Classes="card" Background="{StaticResource SurfaceAltBrush}" Padding="12">
+    <Border Grid.Row="1" Classes="card" Background="{DynamicResource SurfaceAltBrush}" Padding="12">
       <Grid ColumnDefinitions="Auto,220,Auto,*,Auto">
         <TextBlock Grid.Column="0" Text="Attach to" VerticalAlignment="Center" Margin="0,0,8,0"
-                   Foreground="{StaticResource MutedTextBrush}" FontSize="12" />
+                   Foreground="{DynamicResource MutedTextBrush}" FontSize="12" />
         <ComboBox Grid.Column="1" Name="InstancePicker" ItemsSource="{Binding Instances}"
                   SelectionChanged="OnInstancePicked" VerticalAlignment="Center" HorizontalAlignment="Stretch">
           <ComboBox.ItemTemplate>
@@ -25,12 +25,12 @@
         </ComboBox>
 
         <TextBlock Grid.Column="2" Text="Directory" VerticalAlignment="Center" Margin="16,0,8,0"
-                   Foreground="{StaticResource MutedTextBrush}" FontSize="12" />
+                   Foreground="{DynamicResource MutedTextBrush}" FontSize="12" />
         <TextBox Grid.Column="3" Name="DirectoryBox" VerticalAlignment="Center" />
 
         <StackPanel Grid.Column="4" Orientation="Horizontal" Margin="12,0,0,0">
-          <Button Content="Browse…" Click="OnBrowse" />
-          <Button Content="Sign in…" Click="OnSignIn" />
+          <Button Content="Browseâ€¦" Click="OnBrowse" />
+          <Button Content="Sign inâ€¦" Click="OnSignIn" />
           <Button Content="Open claude here" Classes="primary" Click="OnOpenClaude" Margin="0" />
         </StackPanel>
       </Grid>
