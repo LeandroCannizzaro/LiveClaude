@@ -23,14 +23,30 @@
         <TextBlock Text="{Binding ClaudeInfo}" Classes="mono" Margin="0,6,0,0" />
       </StackPanel>
 
-      <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
-        <Button Content="{Binding UpdateButtonText}" Command="{Binding UpdateCommand}"
-                Classes="primary" IsVisible="{Binding HasUpdateAvailable}" />
-        <Button Content="{Binding UpdateButtonText}" Command="{Binding UpdateCommand}"
-                IsVisible="{Binding !HasUpdateAvailable}" />
-        <Button Content="Refresh" Command="{Binding RefreshCommand}" />
-        <Button Content="About" Click="OnShowAbout" Margin="0"
-                ToolTip.Tip="About LiveClaude — version, license and credits" />
+      <StackPanel Grid.Column="1" VerticalAlignment="Center" HorizontalAlignment="Right">
+        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+          <Button Content="{Binding UpdateButtonText}" Command="{Binding UpdateCommand}"
+                  Classes="primary" IsVisible="{Binding HasUpdateAvailable}"
+                  IsEnabled="{Binding !IsInstallingUpdate}" />
+          <Button Content="{Binding UpdateButtonText}" Command="{Binding UpdateCommand}"
+                  IsVisible="{Binding !HasUpdateAvailable}"
+                  IsEnabled="{Binding !IsInstallingUpdate}" />
+          <Button Content="Refresh" Command="{Binding RefreshCommand}" />
+          <Button Content="About" Click="OnShowAbout" Margin="0"
+                  ToolTip.Tip="About LiveClaude — version, license and credits" />
+        </StackPanel>
+
+        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,6,0,0"
+                    IsVisible="{Binding UpdateStatusText, Converter={StaticResource HasText}}">
+          <TextBlock Text="{Binding UpdateStatusText}" Classes="mono" FontSize="11.5"
+                     Foreground="{DynamicResource MutedTextBrush}" VerticalAlignment="Center" Margin="0,0,8,0" />
+          <ProgressBar Width="160" Height="6" Minimum="0" Maximum="100"
+                       Value="{Binding UpdateProgress}"
+                       IsIndeterminate="{Binding IsUpdateProgressIndeterminate}"
+                       Foreground="{DynamicResource AccentBrush}"
+                       IsVisible="{Binding IsInstallingUpdate}"
+                       VerticalAlignment="Center" />
+        </StackPanel>
       </StackPanel>
     </Grid>
 
