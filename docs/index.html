@@ -3,420 +3,556 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>LiveClaude — keep Claude Code Remote Control alive</title>
-  <meta name="description" content="A supervisor and desktop app that keeps Claude Code Remote Control servers running across crashes, sign-ins and reboots, on Windows, Linux and macOS — with an embedded terminal. Written entirely in C#." />
+  <title>LiveClaude — User Manual &amp; Documentation</title>
+  <meta name="description" content="Complete user manual for LiveClaude: multi-product Remote Control &amp; worker supervisor for Claude Code, Cursor My Machines, and Antigravity across Windows, Linux, and macOS." />
+  <link rel="stylesheet" href="styles.css" />
   <link rel="icon" href="assets/favicon.ico" />
-  <meta property="og:title" content="LiveClaude" />
-  <meta property="og:description" content="Keep Claude Code Remote Control alive on Windows, Linux and macOS — many projects, one supervisor, one desktop app." />
+  <meta property="og:title" content="LiveClaude — User Manual" />
+  <meta property="og:description" content="Keep Claude Code, Cursor, and Antigravity Remote Control servers alive across crashes, sign-ins, and reboots on Windows, Linux, and macOS." />
   <meta property="og:image" content="assets/dashboard.png" />
   <meta property="og:type" content="website" />
-  <style>
-    :root {
-      --bg: #0b0d11;
-      --surface: #14181f;
-      --surface-alt: #1b212a;
-      --border: #28303b;
-      --text: #e8ebef;
-      --muted: #9aa4b2;
-      --accent: #d97757;
-      --accent-soft: rgba(217, 119, 87, 0.14);
-      --success: #4ade80;
-      --radius: 14px;
-      --max: 1120px;
-    }
-
-    * { box-sizing: border-box; }
-
-    body {
-      margin: 0;
-      background: var(--bg);
-      color: var(--text);
-      font: 16px/1.65 -apple-system, "Segoe UI", system-ui, sans-serif;
-      -webkit-font-smoothing: antialiased;
-    }
-
-    a { color: var(--accent); text-decoration: none; }
-    a:hover { text-decoration: underline; }
-
-    .wrap { max-width: var(--max); margin: 0 auto; padding: 0 24px; }
-
-    header {
-      position: sticky; top: 0; z-index: 10;
-      backdrop-filter: blur(12px);
-      background: rgba(11, 13, 17, 0.82);
-      border-bottom: 1px solid var(--border);
-    }
-    header .wrap { display: flex; align-items: center; gap: 16px; height: 64px; }
-    header img { width: 28px; height: 28px; }
-    header .name { font-weight: 700; letter-spacing: -0.2px; }
-    header nav { margin-left: auto; display: flex; gap: 22px; font-size: 14.5px; }
-    header nav a { color: var(--muted); }
-    header nav a:hover { color: var(--text); text-decoration: none; }
-
-    .hero { padding: 84px 0 56px; text-align: center; }
-    .hero h1 {
-      font-size: clamp(38px, 6vw, 62px);
-      line-height: 1.05;
-      margin: 0 0 18px;
-      letter-spacing: -1.6px;
-    }
-    .hero h1 span { color: var(--accent); }
-    .hero p.lead {
-      font-size: clamp(17px, 2.2vw, 20px);
-      color: var(--muted);
-      max-width: 720px;
-      margin: 0 auto 32px;
-    }
-
-    .cta { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
-    .btn {
-      display: inline-flex; align-items: center; gap: 8px;
-      padding: 12px 22px; border-radius: 10px;
-      border: 1px solid var(--border); background: var(--surface-alt);
-      color: var(--text); font-weight: 600; font-size: 15px;
-    }
-    .btn:hover { background: #222a35; text-decoration: none; }
-    .btn.primary { background: var(--accent); border-color: var(--accent); color: #180d08; }
-    .btn.primary:hover { background: #e68b6d; }
-
-    .shot {
-      margin: 56px auto 0; max-width: var(--max);
-      border-radius: var(--radius); overflow: hidden;
-      border: 1px solid var(--border);
-      box-shadow: 0 30px 80px rgba(0, 0, 0, 0.55);
-    }
-    .shot img { display: block; width: 100%; }
-    figcaption { color: var(--muted); font-size: 14px; text-align: center; padding: 14px 16px; background: var(--surface); }
-
-    section { padding: 72px 0; }
-    section h2 { font-size: clamp(26px, 3.4vw, 34px); letter-spacing: -0.6px; margin: 0 0 12px; }
-    section p.sub { color: var(--muted); max-width: 760px; margin: 0 0 36px; }
-
-    .grid { display: grid; gap: 18px; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); }
-    .card {
-      background: var(--surface); border: 1px solid var(--border);
-      border-radius: var(--radius); padding: 24px;
-    }
-    .card h3 { margin: 0 0 8px; font-size: 17px; }
-    .card p { margin: 0; color: var(--muted); font-size: 14.5px; }
-    .card .tag {
-      display: inline-block; font-size: 11.5px; letter-spacing: 0.4px; text-transform: uppercase;
-      color: var(--accent); background: var(--accent-soft); padding: 3px 9px; border-radius: 999px;
-      margin-bottom: 12px; font-weight: 700;
-    }
-
-    .tabs { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 18px; }
-    .tabs button {
-      font: inherit; font-size: 14.5px; font-weight: 600;
-      padding: 9px 18px; border-radius: 999px; cursor: pointer;
-      background: var(--surface); color: var(--muted);
-      border: 1px solid var(--border);
-    }
-    .tabs button[aria-selected="true"] { background: var(--accent); border-color: var(--accent); color: #180d08; }
-
-    pre {
-      background: #0a0c10; border: 1px solid var(--border); border-radius: 12px;
-      padding: 18px 20px; overflow-x: auto; margin: 0 0 14px;
-      font: 13.5px/1.7 "Cascadia Mono", Consolas, monospace; color: #d7dde5;
-    }
-    pre .c { color: #7f8a99; }
-    .panel[hidden] { display: none; }
-    .panel p { color: var(--muted); font-size: 14.5px; margin: 0 0 14px; }
-
-    table { width: 100%; border-collapse: collapse; font-size: 14.5px; }
-    th, td { text-align: left; padding: 12px 14px; border-bottom: 1px solid var(--border); vertical-align: top; }
-    th { color: var(--muted); font-weight: 600; font-size: 13px; text-transform: uppercase; letter-spacing: 0.4px; }
-    td code, p code, li code { background: var(--surface-alt); padding: 2px 6px; border-radius: 5px; font-size: 13px; }
-
-    .note {
-      border-left: 3px solid var(--accent); background: var(--accent-soft);
-      padding: 16px 20px; border-radius: 0 10px 10px 0; color: #f0d9cf; font-size: 14.5px;
-    }
-
-    footer { border-top: 1px solid var(--border); padding: 40px 0 60px; color: var(--muted); font-size: 14px; }
-    footer .wrap { display: flex; gap: 18px; flex-wrap: wrap; align-items: center; }
-    footer .spacer { margin-left: auto; }
-
-    @media (max-width: 640px) {
-      header nav { display: none; }
-      .hero { padding: 56px 0 40px; }
-      section { padding: 52px 0; }
-    }
-  </style>
 </head>
 <body>
 
-<header>
+<header class="topbar">
   <div class="wrap">
-    <img src="assets/logo.png" alt="" />
-    <span class="name">LiveClaude</span>
+    <div class="brand">
+      <img src="assets/logo.png" alt="LiveClaude" />
+      <span>LiveClaude</span>
+    </div>
     <nav>
-      <a href="#features">Features</a>
+      <a href="#overview">Overview</a>
+      <a href="#installation">Install</a>
+      <a href="#sessions">Sessions</a>
       <a href="#products">Products</a>
-      <a href="#install">Install</a>
-      <a href="#manual">User Manual</a>
+      <a href="#settings">Settings</a>
       <a href="release-notes.html">Release Notes</a>
       <a href="https://github.com/LeandroCannizzaro/LiveClaude">GitHub</a>
     </nav>
   </div>
 </header>
 
-<div class="wrap hero">
-  <h1>Your machine stays <span>reachable</span>.</h1>
-  <p class="lead">
-    LiveClaude keeps Remote Control and worker agent sessions running on Windows, Linux, and macOS —
-    supporting <strong>Claude Code</strong>, <strong>Cursor My Machines</strong>, and <strong>Antigravity</strong>,
-    restarted automatically across crashes, sign-ins, and reboots.
-  </p>
-  <div class="cta">
-    <a id="download-btn" class="btn primary" href="https://github.com/LeandroCannizzaro/LiveClaude/releases/latest">Download Latest</a>
-    <a class="btn" href="https://github.com/LeandroCannizzaro/LiveClaude/releases">Releases</a>
-    <a class="btn" href="release-notes.html">Release Notes</a>
-    <a class="btn" href="https://github.com/LeandroCannizzaro/LiveClaude">View on GitHub</a>
+<section class="hero">
+  <div class="wrap">
+    <h1>Your machine stays <span>reachable</span>.</h1>
+    <p class="lead">
+      LiveClaude supervises Remote Control and worker agent processes across crashes, sign-ins, and reboots on
+      <strong>Windows</strong>, <strong>Linux</strong>, and <strong>macOS</strong> — supporting
+      <strong>Claude Code</strong>, <strong>Cursor My Machines</strong>, and <strong>Antigravity</strong>,
+      with an embedded pseudo terminal, environment cleanup, custom themes, and cross-platform auto-updates.
+    </p>
+    <div class="cta">
+      <a id="download-btn" class="btn primary" href="https://github.com/LeandroCannizzaro/LiveClaude/releases/latest">Download Latest</a>
+      <a class="btn" href="https://github.com/LeandroCannizzaro/LiveClaude/releases">Releases</a>
+      <a class="btn" href="release-notes.html">Release Notes</a>
+      <a class="btn" href="https://github.com/LeandroCannizzaro/LiveClaude">View on GitHub</a>
+    </div>
+    <p class="download-meta">
+      Direct installer button automatically picks <code>.msi</code> (Windows x64), <code>.dmg</code> (macOS Intel / Apple Silicon),
+      or <code>.rpm</code> (Linux x64 / ARM64). Also available as <code>.deb</code>, <code>.tar.gz</code>, portable <code>.zip</code>, and <code>winget</code>.
+    </p>
+    <p id="installations" style="margin-top:18px">
+      <a href="https://hits.sh/leandrocannizzaro.github.io/liveclaude/installations/" target="_blank" rel="noopener noreferrer">
+        <img src="https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fhits.sh%2Fapi%2Furns%2Fleandrocannizzaro.github.io%2Fliveclaude%2Finstallations&amp;query=%24.total&amp;label=Completed%20installations&amp;color=d97757&amp;cacheSeconds=300" alt="Completed installations total" referrerpolicy="no-referrer" />
+      </a>
+    </p>
+    <div class="tags">
+      <span>Windows · Linux · macOS</span>
+      <span>Claude · Cursor · Antigravity</span>
+      <span>Embedded ConPTY / PTY</span>
+      <span>100% Local Config</span>
+    </div>
   </div>
-  <p id="installations" style="margin-top:20px">
-    <a href="https://hits.sh/leandrocannizzaro.github.io/liveclaude/installations/" target="_blank" rel="noopener noreferrer">
-      <img src="https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fhits.sh%2Fapi%2Furns%2Fleandrocannizzaro.github.io%2Fliveclaude%2Finstallations&amp;query=%24.total&amp;label=Completed%20installations&amp;color=d97757&amp;cacheSeconds=300" alt="Completed installations total" referrerpolicy="no-referrer" />
-    </a>
-  </p>
+</section>
+
+<div class="features">
+  <div class="feature">
+    <div class="ico">🔄</div>
+    <h3>Resilient Supervision</h3>
+    <p>Exponential backoff after crashes, configurable restart budgets, graceful Ctrl+C shutdown, and automatic session reattachment.</p>
+  </div>
+  <div class="feature">
+    <div class="ico">🧩</div>
+    <h3>Three Agent Products</h3>
+    <p>Run <code>claude remote-control</code>, Cursor <code>agent worker start</code>, and <code>agy --remote-control</code> side by side from one app.</p>
+  </div>
+  <div class="feature">
+    <div class="ico">💻</div>
+    <h3>Embedded Pseudo Terminal</h3>
+    <p>Real ConPTY / POSIX PTY inside the app for workspace trust prompts, interactive login, live steering, and session URL capture.</p>
+  </div>
+  <div class="feature">
+    <div class="ico">🎨</div>
+    <h3>Themes &amp; Auto-Update</h3>
+    <p>5 built-in themes + 12-token live Color Picker, plus SHA-256 verified in-app updates across Windows, Linux, and macOS.</p>
+  </div>
 </div>
 
-<div class="wrap">
-  <figure class="shot" style="margin-top:0">
-    <img src="assets/dashboard.png" alt="The LiveClaude dashboard listing supervised Remote Control servers" />
-    <figcaption>Every project directory, its state, its session URL and its logs — in one place.</figcaption>
+<div class="shot-wrap">
+  <figure class="shot">
+    <img src="assets/dashboard.png" alt="LiveClaude desktop application dashboard" />
+    <figcaption>Every supervised session, product badge, live state, session URL, and quick actions — in one window.</figcaption>
   </figure>
 </div>
 
-<section id="features" class="wrap">
-  <h2>What you get</h2>
-  <p class="sub">
-    Remote Control is a foreground process in a terminal: close the window, hit a crash or reboot the machine
-    and your phone loses the machine. LiveClaude turns it into infrastructure.
-  </p>
+<div class="layout">
+  <aside class="toc" aria-label="User Manual Table of Contents">
+    <strong>User Manual</strong>
+    <ol>
+      <li><a href="#overview">1. Overview &amp; Architecture</a></li>
+      <li><a href="#quick-start">2. Quick Start</a></li>
+      <li><a href="#requirements">3. System Requirements</a></li>
+      <li><a href="#installation">4. Installation &amp; Packages</a></li>
+      <li><a href="#main-window">5. Main Window &amp; Top Bar</a></li>
+      <li><a href="#dashboard">6. Dashboard</a></li>
+      <li><a href="#sessions">7. Sessions &amp; Parameters</a></li>
+      <li><a href="#products">8. Supported Products</a></li>
+      <li><a href="#terminal">9. Embedded Terminal</a></li>
+      <li><a href="#logs">10. Logs &amp; Diagnostics</a></li>
+      <li><a href="#environments">11. Environments (Claude Bridge)</a></li>
+      <li><a href="#hosting">12. Service &amp; Startup</a></li>
+      <li><a href="#settings">13. Settings &amp; Appearance</a></li>
+      <li><a href="#auto-update">14. In-App Auto-Updater</a></li>
+      <li><a href="#cli-paths">15. CLI Commands &amp; Paths</a></li>
+      <li><a href="#privacy-faq">16. Privacy, Telemetry &amp; FAQ</a></li>
+    </ol>
+  </aside>
 
-  <div class="grid">
-    <div class="card">
-      <span class="tag">Supervision</span>
-      <h3>Restarts that actually hold</h3>
-      <p>Exponential backoff after a crash, a restart budget you choose, and automatic reattachment to the
-         previous session when it is still inside Remote Control's four-hour window.</p>
-    </div>
-    <div class="card">
-      <span class="tag">Hosting</span>
-      <h3>Task, service, systemd or launchd</h3>
-      <p>A scheduled task, a systemd user unit or a LaunchAgent runs in your own session and survives
-         sign-in and boot. A Windows service, a systemd system unit or a LaunchDaemon starts before
-         anyone signs in. All of them are installed, started and removed from the app.</p>
-    </div>
-    <div class="card">
-      <span class="tag">Control</span>
-      <h3>Sessions with every parameter</h3>
-      <p>Spawn mode, permission mode, capacity, worktrees, session-name prefix, fixed session id, sandbox,
-         model, extra arguments — with a live preview of the exact command line.</p>
-    </div>
-    <div class="card">
-      <span class="tag">Terminal</span>
-      <h3>A real pseudo console, embedded</h3>
-      <p>Workspace trust, the one-time Remote Control confirmation and <code>/login</code> all need a terminal.
-         There is one in the app — and you can attach to a running server and type into it.</p>
-    </div>
-    <div class="card">
-      <span class="tag">Visibility</span>
-      <h3>State and logs, live</h3>
-      <p>Running, starting, needs attention, backing off, failed. Session URLs one click away, rolling per-instance
-         logs, and a supervisor log for the host itself.</p>
-    </div>
-    <div class="card">
-      <span class="tag">Engineering</span>
-      <h3>Entirely C#</h3>
-      <p>.NET 10 and WPF. ConPTY and the VT emulator are written from scratch — no Node, no web view, no tmux,
-         no native dependencies beyond Win32.</p>
-    </div>
-  </div>
-</section>
+  <main class="content">
 
-<div class="wrap">
-  <figure class="shot" style="margin-top:0">
-    <img src="assets/terminal.png" alt="Claude Code running inside the app's embedded terminal" />
-    <figcaption>Claude Code's real TUI, rendered by the app's own terminal — colours, diffs, prompts and all.</figcaption>
-  </figure>
+    <!-- 1. Overview -->
+    <article id="overview" class="section">
+      <div class="eyebrow">Overview</div>
+      <h2>1. Overview &amp; Architecture</h2>
+      <p>
+        Remote Control servers and worker agents normally run as foreground CLI processes inside a terminal window.
+        If you close the terminal, hit a transient crash, sign out, or reboot your machine, your remote session disappears.
+        <strong>LiveClaude</strong> turns those CLI servers into managed background infrastructure.
+      </p>
+      <p>LiveClaude is split into two cooperating components:</p>
+      <ul>
+        <li>
+          <strong>The Supervisor (<code>LiveClaude.Service</code>):</strong> a headless background daemon that reads
+          <code>config.json</code>, spawns one child CLI process per enabled session using a real pseudo console (ConPTY on Windows,
+          PTY on Linux/macOS), monitors health at a configurable interval, restarts crashed processes with exponential backoff,
+          and exposes a local IPC endpoint (named pipe on Windows, Unix domain socket on Linux/macOS).
+        </li>
+        <li>
+          <strong>The Desktop App (<code>LiveClaude</code>):</strong> an Avalonia desktop UI that connects to the running
+          supervisor (or starts an in-process/attached supervisor when needed) so you can manage sessions, attach an interactive
+          terminal, inspect rolling logs, clean up stale Claude bridge environments, configure themes, and install OS autostart hosts.
+        </li>
+      </ul>
+      <div class="tip">
+        <div>💡</div>
+        <div>
+          <b>Closing the window does not kill your sessions</b>
+          Once you install a <em>User session host</em> or <em>System-wide host</em> in <b>Service &amp; startup</b>, the supervisor
+          keeps running independently in the background even when the desktop window is closed.
+        </div>
+      </div>
+    </article>
+
+    <!-- 2. Quick Start -->
+    <article id="quick-start" class="section">
+      <div class="eyebrow">In 2 Minutes</div>
+      <h2>2. Quick Start</h2>
+      <div class="step">
+        <div class="n">1</div>
+        <div class="b"><b>Install LiveClaude</b> using the direct download button above (<code>.msi</code>, <code>.dmg</code>, or <code>.rpm</code>) or one of the platform package managers.</div>
+      </div>
+      <div class="step">
+        <div class="n">2</div>
+        <div class="b"><b>Verify your product CLI</b> in <b>Settings → Products</b> (Claude Code <code>claude</code>, Cursor <code>agent</code>, or Antigravity <code>agy</code>). Leave the path blank to auto-detect, or click <b>Use</b> on a detected installation.</div>
+      </div>
+      <div class="step">
+        <div class="n">3</div>
+        <div class="b"><b>Create a session</b> in the <b>Sessions</b> tab: click <b>New session</b>, pick a product, give it a name, select your project directory, and click <b>Save session</b>.</div>
+      </div>
+      <div class="step">
+        <div class="n">4</div>
+        <div class="b"><b>Complete first-time trust / sign-in</b> if prompted: click <b>Trust this directory…</b> (Claude), <b>Sign in</b> on the Dashboard card, or open the <b>Terminal</b> tab to answer one-time CLI prompts.</div>
+      </div>
+      <div class="step">
+        <div class="n">5</div>
+        <div class="b"><b>Enable background persistence</b> in <b>Service &amp; startup → User session host → Install / update</b> so sessions survive closing the window and logging back in.</div>
+      </div>
+    </article>
+
+    <!-- 3. Requirements -->
+    <article id="requirements" class="section">
+      <div class="eyebrow">Prerequisites</div>
+      <h2>3. System Requirements</h2>
+      <table class="ref">
+        <tr><th>Platform</th><th>Supported Architectures &amp; Notes</th></tr>
+        <tr>
+          <td><strong>Windows</strong></td>
+          <td>Windows 10 / 11 (x64 &amp; ARM64). MSI and self-contained ZIPs bundle everything; framework-dependent ZIP requires the .NET 10 Desktop Runtime.</td>
+        </tr>
+        <tr>
+          <td><strong>Linux</strong></td>
+          <td>x64 &amp; ARM64 (<code>.rpm</code>, <code>.deb</code>, <code>.tar.gz</code>). Self-contained; no .NET runtime required. Uses <code>systemd</code> for user/system autostart.</td>
+        </tr>
+        <tr>
+          <td><strong>macOS</strong></td>
+          <td>Apple Silicon (<code>osx-arm64</code>) &amp; Intel (<code>osx-x64</code>) via <code>.dmg</code>. Self-contained; uses <code>launchd</code> (LaunchAgent / LaunchDaemon).</td>
+        </tr>
+        <tr>
+          <td><strong>Agent CLIs</strong></td>
+          <td>At least one supported CLI installed and authenticated: <code>claude</code> (Claude Code), <code>agent</code> (Cursor CLI), or <code>agy</code> (Antigravity CLI).</td>
+        </tr>
+      </table>
+    </article>
+
+    <!-- 4. Installation -->
+    <article id="installation" class="section">
+      <div class="eyebrow">Setup</div>
+      <h2>4. Installation &amp; Packages</h2>
+      <p>
+        The <b>Download</b> button at the top of this page detects your OS and CPU architecture and links directly to the latest
+        <code>.msi</code>, <code>.dmg</code>, or <code>.rpm</code>. All assets for every release are also listed on the
+        <a href="https://github.com/LeandroCannizzaro/LiveClaude/releases">GitHub Releases</a> page.
+      </p>
+
+      <div class="tabs" role="tablist">
+        <button role="tab" aria-selected="true" aria-controls="inst-win">Windows</button>
+        <button role="tab" aria-selected="false" aria-controls="inst-linux">Linux</button>
+        <button role="tab" aria-selected="false" aria-controls="inst-mac">macOS</button>
+      </div>
+
+      <div id="inst-win" class="panel" role="tabpanel">
+        <ul>
+          <li><strong>MSI Installer (recommended):</strong> run <code>LiveClaude-&lt;version&gt;-x64.msi</code>. Installs per-machine under <code>Program Files\LiveClaude</code>, registers Start Menu shortcuts, and enables one-click in-app MSI upgrades.</li>
+          <li><strong>Winget:</strong> <code>winget install LeandroCannizzaro.LiveClaude</code></li>
+          <li><strong>Portable ZIP installer:</strong> extract <code>LiveClaude-&lt;version&gt;-win-x64-installer.zip</code> and run <code>install.ps1</code> (per-user in <code>%LOCALAPPDATA%\LiveClaude</code>, or <code>-AllUsers</code> for <code>Program Files</code>, plus <code>-NoInstallCounter</code> to opt out of the setup counter).</li>
+        </ul>
+      </div>
+
+      <div id="inst-linux" class="panel" role="tabpanel" hidden>
+        <p>Install automatically with the one-line script, or download <code>.rpm</code> / <code>.deb</code> / <code>.tar.gz</code> directly:</p>
+<pre><code>curl -fsSL https://leandrocannizzaro.github.io/LiveClaude/install.sh | sh</code></pre>
+        <p>Packages install to <code>/opt/liveclaude</code> and register desktop entries for <code>LiveClaude</code>.</p>
+      </div>
+
+      <div id="inst-mac" class="panel" role="tabpanel" hidden>
+        <p>Install automatically with the one-line script, or open <code>LiveClaude-&lt;version&gt;-osx-arm64.dmg</code> / <code>-osx-x64.dmg</code> and drag <code>LiveClaude.app</code> to <code>/Applications</code>:</p>
+<pre><code>curl -fsSL https://leandrocannizzaro.github.io/LiveClaude/install-macos.sh | sh</code></pre>
+        <div class="note">
+          <div>ℹ️</div>
+          <div>
+            <b>First launch on macOS</b>
+            The <code>.dmg</code> is currently unsigned/unnotarized. On first launch, right-click <code>LiveClaude.app</code> and choose <b>Open</b>,
+            or run <code>xattr -dr com.apple.quarantine /Applications/LiveClaude.app</code>.
+          </div>
+        </div>
+      </div>
+    </article>
+
+    <!-- 5. Main Window -->
+    <article id="main-window" class="section">
+      <div class="eyebrow">Interface</div>
+      <h2>5. Main Window &amp; Top Bar</h2>
+      <p>The top header is always visible and displays global status and actions:</p>
+      <table class="ref">
+        <tr><th>Element</th><th>Purpose</th></tr>
+        <tr>
+          <td><strong><code>LiveClaude (vX.Y.Z)</code></strong></td>
+          <td>Application title with the running assembly version shown in parentheses next to the name.</td>
+        </tr>
+        <tr>
+          <td><strong>Connection Pill</strong></td>
+          <td>Shows live IPC connection state to the supervisor (e.g. connected to background service or local mode) plus detected CLI summary below.</td>
+        </tr>
+        <tr>
+          <td><strong>Update / Check for updates</strong></td>
+          <td>Checks <code>update.json</code> on GitHub Releases. When a newer version exists, turns into a highlighted <b>Update to vX.Y.Z</b> button that downloads, verifies SHA-256, installs, and restarts.</td>
+        </tr>
+        <tr>
+          <td><strong>Refresh</strong></td>
+          <td>Re-queries the supervisor for live instance states, worktrees, and environment status.</td>
+        </tr>
+        <tr>
+          <td><strong>About</strong></td>
+          <td>Right-aligned button opening the <b>About LiveClaude</b> window (product logo, version, license, GitHub link, and direct link to Release Notes).</td>
+        </tr>
+      </table>
+      <p>Below the header are 7 top-level tabs: <b>Dashboard</b>, <b>Sessions</b>, <b>Terminal</b>, <b>Logs</b>, <b>Environments</b> (shown when Claude environment tracking is enabled), <b>Service &amp; startup</b>, and <b>Settings</b>.</p>
+    </article>
+
+    <!-- 6. Dashboard -->
+    <article id="dashboard" class="section">
+      <div class="eyebrow">Operations</div>
+      <h2>6. Dashboard</h2>
+      <p>
+        The <b>Dashboard</b> lists every configured session as a status card. Each card shows a color-coded state dot and label
+        (<code>Running</code>, <code>Starting</code>, <code>Backoff</code>, <code>Stopped</code>, <code>NeedsAttention</code>, <code>Failed</code>),
+        the working directory, product details/uptime/restart count, any warning message, and quick action buttons:
+      </p>
+      <ul>
+        <li><strong>Start / Stop / Restart:</strong> control the individual supervised process. Stopping sends Ctrl+C first and waits <code>GracefulStopSeconds</code> so the CLI can deregister cleanly.</li>
+        <li><strong>Sign in:</strong> appears automatically when a product reports <code>NeedsAttention</code> due to missing or expired credentials; launches the product's interactive login flow.</li>
+        <li><strong>Terminal:</strong> switches directly to the <b>Terminal</b> tab and attaches to that session's live PTY.</li>
+        <li><strong>Edit:</strong> opens the session in the <b>Sessions</b> tab for editing.</li>
+        <li><strong>Session URL button:</strong> when the CLI emits a Remote Control URL, it appears as a clickable pill on the card to open in your browser.</li>
+        <li><strong>Worktrees flyout:</strong> for Claude <code>worktree</code> sessions with active git worktrees, clicking the worktree summary pill lists each branch and worktree path.</li>
+      </ul>
+    </article>
+
+    <!-- 7. Sessions -->
+    <article id="sessions" class="section">
+      <div class="eyebrow">Configuration</div>
+      <h2>7. Sessions &amp; Parameters</h2>
+      <p>
+        The <b>Sessions</b> tab uses a master-detail layout with a session list on the left and a no-scroll tabbed editor on the right.
+      </p>
+      <h3>Top Command Toolbar</h3>
+      <ul>
+        <li><strong>New session:</strong> clears the editor to create a new session entry.</li>
+        <li><strong>Save session:</strong> validates common and product-specific fields, persists <code>config.json</code>, and notifies the supervisor.</li>
+        <li><strong>Trust this directory…:</strong> (Claude only) opens the directory in the embedded terminal to accept Claude's workspace trust prompt once.</li>
+        <li><strong>Run once in terminal…:</strong> runs the exact configured command interactively in the embedded terminal for debugging or one-time prompts.</li>
+        <li><strong>Delete:</strong> removes the selected session from configuration.</li>
+      </ul>
+      <h3>Inner Editor Tabs</h3>
+      <ol>
+        <li><strong>General &amp; Product:</strong> choose <b>Product</b> (<code>Claude Code</code>, <code>Cursor</code>, or <code>Antigravity</code>), <b>Name</b>, <b>Directory</b> (with <b>Browse…</b> picker), <b>Enabled</b>, <b>Start with the supervisor</b>, and (for Claude) <b>Pre-create a session in this directory</b>.</li>
+        <li><strong>Product Options:</strong> dynamically displays all CLI flags specific to the selected product (detailed in Section 8).</li>
+        <li><strong>Command Preview:</strong> renders the exact executable and argument vector that LiveClaude will spawn, with an <b>Update preview</b> button.</li>
+      </ol>
+    </article>
+
+    <!-- 8. Supported Products -->
+    <article id="products" class="section">
+      <div class="eyebrow">Providers</div>
+      <h2>8. Supported Products</h2>
+      <p>LiveClaude isolates each agent CLI in its own product plugin. All three can run concurrently under the same supervisor.</p>
+
+      <h3>A) Claude Code (<code>claude remote-control</code>)</h3>
+      <table class="ref">
+        <tr><th>Option</th><th>CLI Flag / Behavior</th></tr>
+        <tr><td><strong>Spawn mode</strong></td><td><code>same-dir</code> (shared folder), <code>worktree</code> (one git worktree per on-demand session), or <code>session</code> (single fixed session; requires <em>Pre-create a session</em>).</td></tr>
+        <tr><td><strong>Permission mode</strong></td><td><code>default</code>, <code>acceptEdits</code>, <code>auto</code>, <code>bypassPermissions</code>, <code>dontAsk</code>, or <code>plan</code>.</td></tr>
+        <tr><td><strong>Capacity</strong></td><td><code>--capacity</code> (1–32 concurrent sessions; ignored in <code>session</code> mode).</td></tr>
+        <tr><td><strong>Model override</strong></td><td>Optional <code>--model</code> passed to the server.</td></tr>
+        <tr><td><strong>Session name prefix</strong></td><td><code>--remote-control-session-name-prefix</code> for auto-generated session names.</td></tr>
+        <tr><td><strong>Reattach / Fixed ID</strong></td><td><code>--continue</code> reattaches to the previous session after a restart; or specify a fixed <code>--session-id</code> (only valid with <code>same-dir</code>).</td></tr>
+        <tr><td><strong>Flags</strong></td><td><code>--[no-]create-session-in-dir</code>, <code>--sandbox</code>, <code>--verbose</code>, plus raw <b>Extra arguments</b>.</td></tr>
+      </table>
+
+      <h3>B) Cursor My Machines (<code>agent worker start</code>)</h3>
+      <table class="ref">
+        <tr><th>Option</th><th>CLI Flag / Behavior</th></tr>
+        <tr><td><strong>Extra worker directories</strong></td><td>Up to 20 total <code>--worker-dir</code> roots (the primary directory is always first as the assignment identity).</td></tr>
+        <tr><td><strong>Per-session API key / auth token</strong></td><td>Optional file paths overriding the global paths in <b>Settings → Products → Cursor</b>.</td></tr>
+        <tr><td><strong>Interactive login fallback</strong></td><td><b>Run <code>agent login</code> in terminal when no key/token is set</b> launches interactive auth on first run.</td></tr>
+        <tr><td><strong>Flags &amp; Windows SQLite patch</strong></td><td><code>--verbose</code>, <code>--debug</code>, raw <b>Extra arguments</b>, and automatic Windows <code>better_sqlite3.node</code> patching (configurable in Settings).</td></tr>
+      </table>
+
+      <h3>C) Antigravity Remote Control (<code>agy --remote-control</code>)</h3>
+      <table class="ref">
+        <tr><th>Option</th><th>CLI Flag / Behavior</th></tr>
+        <tr><td><strong>Execution mode (<code>--mode</code>)</strong></td><td><code>accept-edits</code>, <code>auto</code>, <code>plan</code>, or CLI default.</td></tr>
+        <tr><td><strong>Reasoning effort (<code>--effort</code>)</strong></td><td><code>low</code>, <code>medium</code>, <code>high</code>, <code>xhigh</code>, <code>max</code>, or CLI default.</td></tr>
+        <tr><td><strong>Model / Agent / Project</strong></td><td>Optional <code>--model</code>, <code>--agent</code>, and <code>--project</code> overrides.</td></tr>
+        <tr><td><strong>Additional directories</strong></td><td>One path per line, each passed as a repeatable <code>--add-dir</code> argument.</td></tr>
+        <tr><td><strong>Conversation resume</strong></td><td><code>--continue</code> (default on) to resume the latest conversation, or <code>--conversation &lt;id&gt;</code> (takes precedence over <code>--continue</code>).</td></tr>
+        <tr><td><strong>Security flags</strong></td><td><code>--sandbox</code>, <code>--dangerously-skip-permissions</code>, and raw <b>Extra arguments</b>.</td></tr>
+      </table>
+    </article>
+
+    <!-- 9. Embedded Terminal -->
+    <article id="terminal" class="section">
+      <div class="eyebrow">Interactive Console</div>
+      <h2>9. Embedded Terminal</h2>
+      <p>
+        The <b>Terminal</b> tab embeds a VT100/ANSI terminal emulator connected to a real pseudo console (ConPTY on Windows, POSIX PTY on Linux/macOS):
+      </p>
+      <ul>
+        <li><strong>Attach to:</strong> pick any running supervised instance from the dropdown (or jump from the Dashboard's <b>Terminal</b> button) to watch its live output and send keystrokes.</li>
+        <li><strong>Directory + Open claude here:</strong> pick any local folder with <b>Browse…</b> and launch an interactive CLI session directly inside that directory.</li>
+        <li><strong>Sign in…:</strong> runs the selected product's interactive login command right inside the terminal.</li>
+        <li><strong>Toolbar controls:</strong> <b>Stop</b>, <b>Clear</b>, <b>Copy screen</b>, <b>Paste</b>, and <b>Send Ctrl+C</b>.</li>
+      </ul>
+    </article>
+
+    <!-- 10. Logs -->
+    <article id="logs" class="section">
+      <div class="eyebrow">Diagnostics</div>
+      <h2>10. Logs &amp; Diagnostics</h2>
+      <p>
+        Every supervised instance writes stdout/stderr and supervisor lifecycle events to a rolling log file on disk and keeps a configurable tail in memory.
+      </p>
+      <ul>
+        <li><strong>Instance picker:</strong> inspect logs for any configured session.</li>
+        <li><strong>Auto-refresh:</strong> polls for new log lines automatically (can be toggled off while reading older output), alongside manual <b>Refresh</b>.</li>
+        <li><strong>Open logs folder:</strong> opens the OS-native log directory directly in Explorer / Finder / file manager.</li>
+      </ul>
+    </article>
+
+    <!-- 11. Environments -->
+    <article id="environments" class="section">
+      <div class="eyebrow">Claude Bridge Cleanup</div>
+      <h2>11. Environments (Claude Bridge)</h2>
+      <p>
+        Each time <code>claude remote-control</code> starts, it registers a bridge environment on your Anthropic account that remains listed even after the process exits — causing duplicate entries in the Claude Desktop session picker.
+      </p>
+      <p>
+        The <b>Environments</b> tab queries the Anthropic bridge API (when <em>Track environments</em> is enabled in <b>Settings → Products → Claude Code</b>) and compares registered environments against live supervised servers:
+      </p>
+      <ul>
+        <li><strong>Select duplicates:</strong> keeps the live (or newest) environment per directory and selects all older duplicates for deletion.</li>
+        <li><strong>Select stale:</strong> selects environments no longer backed by any active server.</li>
+        <li><strong>Delete selected:</strong> stops a matching server if still restarting and force-deletes orphaned environment records.</li>
+        <li><strong>Show non-bridge environments / Open log:</strong> toggle visibility of unrelated environments or inspect API diagnostics.</li>
+      </ul>
+    </article>
+
+    <!-- 12. Service & Startup -->
+    <article id="hosting" class="section">
+      <div class="eyebrow">Background Persistence</div>
+      <h2>12. Service &amp; Startup</h2>
+      <p>
+        The <b>Service &amp; startup</b> tab lets you install, start, stop, and remove the background supervisor host without touching the command line:
+      </p>
+      <div class="grid2">
+        <div class="subcard">
+          <h4>User session host (recommended)</h4>
+          <p>Runs inside your own signed-in user profile so it immediately sees your CLI credentials, SSH keys, and environment:</p>
+          <ul>
+            <li><strong>Windows:</strong> Scheduled Task</li>
+            <li><strong>Linux:</strong> <code>systemd</code> user unit</li>
+            <li><strong>macOS:</strong> <code>launchd</code> LaunchAgent</li>
+          </ul>
+        </div>
+        <div class="subcard">
+          <h4>System-wide host</h4>
+          <p>Starts at boot even before anyone signs in:</p>
+          <ul>
+            <li><strong>Windows:</strong> Windows Service (enter your <b>Account</b> and one-time <b>Password</b> so it runs under your profile)</li>
+            <li><strong>Linux:</strong> <code>systemd</code> system unit</li>
+            <li><strong>macOS:</strong> <code>launchd</code> LaunchDaemon</li>
+          </ul>
+        </div>
+      </div>
+      <div class="warn">
+        <div>⚠️</div>
+        <div>
+          <b>Run system-wide hosts under your own user account</b>
+          Running as <code>LocalSystem</code> or <code>root</code> uses a different home directory, so Claude/Cursor/Antigravity credentials stored in your user profile will not be found.
+        </div>
+      </div>
+    </article>
+
+    <!-- 13. Settings & Appearance -->
+    <article id="settings" class="section">
+      <div class="eyebrow">Customization</div>
+      <h2>13. Settings &amp; Appearance</h2>
+      <p>The <b>Settings</b> tab organizes all global options into three sub-tabs (click <b>Save settings</b> in the top-right to persist to <code>config.json</code>):</p>
+
+      <h3>A) General</h3>
+      <table class="ref">
+        <tr><th>Setting</th><th>Default</th><th>Description</th></tr>
+        <tr><td><code>First retry (s)</code></td><td><code>10</code></td><td>Initial delay before restarting a crashed process.</td></tr>
+        <tr><td><code>Max backoff (s)</code></td><td><code>300</code></td><td>Maximum exponential backoff cap between restarts.</td></tr>
+        <tr><td><code>Backoff multiplier</code></td><td><code>2.0</code></td><td>Multiplier applied after each consecutive crash.</td></tr>
+        <tr><td><code>Reset healthy after (s)</code></td><td><code>120</code></td><td>Uptime required to reset the backoff counter back to 0.</td></tr>
+        <tr><td><code>Max restarts</code></td><td><code>0</code></td><td>Maximum consecutive restart attempts (<code>0</code> = restart forever).</td></tr>
+        <tr><td><code>Graceful stop wait (s)</code></td><td><code>12</code></td><td>Seconds to wait after Ctrl+C before force-killing the process.</td></tr>
+        <tr><td><code>Health check interval (s)</code></td><td><code>30</code></td><td>Supervisor health probe cadence.</td></tr>
+        <tr><td><code>Log file size (MB)</code> / <code>Log tail lines</code></td><td><code>8</code> MB / <code>1000</code></td><td>Rolling log file cap per instance and in-memory UI tail size.</td></tr>
+        <tr><td><code>Use pseudo console (ConPTY)</code></td><td><code>true</code></td><td>Enables PTY hosting required by the embedded terminal.</td></tr>
+        <tr><td><code>Configuration &amp; logs</code></td><td>—</td><td>Displays read-only <code>config.json</code> path plus <b>Open config folder</b> and <b>Open logs folder</b> buttons.</td></tr>
+      </table>
+
+      <h3>B) Products</h3>
+      <p>Configure per-product CLI paths, auto-detected installations (with one-click <b>Use</b>), interactive sign-in triggers, Claude environment tracking, Cursor API key / auth token files, and Cursor Windows SQLite auto-patching.</p>
+
+      <h3>C) Appearance (Theme Manager &amp; Color Picker)</h3>
+      <p>
+        Switch between <strong>5 built-in presets</strong> — <em>Default Dark</em>, <em>Light</em>, <em>Midnight Blue</em>, <em>Forest Dark</em>, and <em>High Contrast</em> —
+        or customize any of the <strong>12 UI color tokens</strong> live using the built-in <b>ColorPicker</b> (<code>BackgroundColor</code>, <code>SurfaceColor</code>,
+        <code>SurfaceAltColor</code>, <code>BorderColor</code>, <code>TextColor</code>, <code>MutedTextColor</code>, <code>AccentColor</code>,
+        <code>AccentHoverColor</code>, <code>SuccessColor</code>, <code>WarningColor</code>, <code>DangerColor</code>, <code>TerminalBackgroundColor</code>).
+        Overrides are saved in <code>config.json</code> under <code>Theme.CustomColors</code>.
+      </p>
+    </article>
+
+    <!-- 14. Auto-Updater -->
+    <article id="auto-update" class="section">
+      <div class="eyebrow">Upgrades</div>
+      <h2>14. In-App Auto-Updater</h2>
+      <p>
+        On startup (and whenever you click <b>Check for updates</b> in the top bar), LiveClaude fetches
+        <code>update.json</code> from the latest GitHub Release and compares semantic versions:
+      </p>
+      <ol>
+        <li><strong>Verification:</strong> downloads the platform package to a temporary folder and verifies its <b>SHA-256</b> hash against <code>update.json</code> before executing anything.</li>
+        <li><strong>Windows:</strong> runs <code>msiexec.exe /i ... /passive /norestart</code> for MSI installs, or a PowerShell swap script for portable ZIP installs (elevating automatically for per-machine installs).</li>
+        <li><strong>Linux:</strong> runs a detached <code>apply-update.sh</code> script that waits for LiveClaude to exit, extracts <code>LiveClaude-&lt;ver&gt;-linux-&lt;arch&gt;.tar.gz</code> over the install directory (using <code>pkexec</code>/<code>sudo</code> if needed), and relaunches.</li>
+        <li><strong>macOS:</strong> mounts <code>LiveClaude-&lt;ver&gt;-osx-&lt;arch&gt;.dmg</code> via <code>hdiutil</code>, replaces <code>LiveClaude.app</code> via <code>ditto</code>, clears <code>com.apple.quarantine</code>, detaches, and reopens the app.</li>
+      </ol>
+      <p>You can override the manifest endpoint for air-gapped or staging environments using <code>LIVECLAUDE_UPDATE_MANIFEST_URL</code>.</p>
+    </article>
+
+    <!-- 15. CLI & Paths -->
+    <article id="cli-paths" class="section">
+      <div class="eyebrow">Reference</div>
+      <h2>15. CLI Commands &amp; Paths</h2>
+      <p><code>LiveClaude.Service</code> (and the desktop binary when invoked with a verb) supports headless automation commands:</p>
+      <table class="ref">
+        <tr><th>Command</th><th>Description</th></tr>
+        <tr><td><code>install-autostart --scope user|system</code></td><td>Registers and starts the user or system autostart host. Optional: <code>--no-start-before-sign-in</code> (<code>--no-boot</code>), <code>--user</code> (<code>--account</code>), <code>--password</code>.</td></tr>
+        <tr><td><code>uninstall-autostart --scope user|system</code></td><td>Stops and removes the registered autostart host.</td></tr>
+        <tr><td><code>start-autostart</code> / <code>stop-autostart</code></td><td>Starts or stops the host for the given <code>--scope</code>.</td></tr>
+        <tr><td><code>status</code></td><td>Prints current supervisor and autostart host status.</td></tr>
+      </table>
+      <p>Legacy Windows aliases (<code>install-service</code>, <code>uninstall-service</code>, <code>start-service</code>, <code>stop-service</code>, <code>install-task</code>, <code>uninstall-task</code>) remain supported.</p>
+    </article>
+
+    <!-- 16. Privacy & FAQ -->
+    <article id="privacy-faq" class="section">
+      <div class="eyebrow">Privacy &amp; Help</div>
+      <h2>16. Privacy, Telemetry &amp; FAQ</h2>
+      <div id="privacy" class="note">
+        <div>🔒</div>
+        <div>
+          <b>Anonymous installation counter (opt-out)</b>
+          At the end of a successful first-time setup (MSI or portable ZIP), the installer requests a single SVG image from <code>hits.sh</code>
+          without opening a window. It sends no machine names, accounts, tokens, or personal data. Uninstalls, repairs, and normal app launches never ping the counter.
+          Opt out with <code>INSTALLCOUNTER=0</code> (MSI) or <code>-NoInstallCounter</code> (<code>install.ps1</code>).
+        </div>
+      </div>
+
+      <details>
+        <summary>Why does my session keep entering Backoff right after starting?</summary>
+        <p>Usually the CLI needs interactive workspace trust or sign-in first. Open the <b>Logs</b> tab to see the exact CLI error, or click <b>Terminal</b> on the Dashboard card (or <b>Trust this directory…</b> in <b>Sessions</b>) to answer the one-time prompt.</p>
+      </details>
+      <details>
+        <summary>Where is my configuration stored?</summary>
+        <p>Open <b>Settings → General → Configuration &amp; logs</b> to view the exact <code>config.json</code> path on your OS and open the config or logs folder in one click.</p>
+      </details>
+      <details>
+        <summary>Can I disable Anthropic API calls completely?</summary>
+        <p>Yes. Uncheck <b>Track which environment each Claude server registers</b> under <b>Settings → Products → Claude Code</b> and save settings.</p>
+      </details>
+    </article>
+
+  </main>
 </div>
-
-<section id="products" class="wrap">
-  <h2>Supported Agent Products</h2>
-  <p class="sub">
-    Each product runs as an isolated plugin assembly. Pick a product per session and configure its CLI path in <strong>Settings → Products</strong>.
-  </p>
-  <div class="grid">
-    <div class="card">
-      <span class="tag">Claude Code</span>
-      <h3><code>claude remote-control</code></h3>
-      <p>Supports <code>same-dir</code>, <code>worktree</code>, and <code>session</code> spawn modes, permission modes, capacity limits, bridge environment cleanup, and automatic <code>--continue</code> reattachment.</p>
-    </div>
-    <div class="card">
-      <span class="tag">Cursor</span>
-      <h3><code>agent worker start</code></h3>
-      <p>Supervises Cursor My Machines workers with multi-directory routing (<code>--worker-dir</code>), API key or token file authentication, and automatic Windows <code>better-sqlite3</code> ABI patching.</p>
-    </div>
-    <div class="card">
-      <span class="tag">Antigravity</span>
-      <h3><code>agy --remote-control</code></h3>
-      <p>Runs Google Antigravity CLI in foreground Remote Control mode with configurable execution mode, reasoning effort, model override, agent, project, sandbox, and conversation resume.</p>
-    </div>
-  </div>
-</section>
-
-<section id="install" class="wrap">
-  <h2>Install</h2>
-  <p class="sub">Windows 10 1809+, Linux with systemd, or macOS 12+.</p>
-
-  <div class="tabs" role="tablist">
-    <button role="tab" aria-selected="true" aria-controls="p-msi" id="t-msi">Windows · MSI (Recommended)</button>
-    <button role="tab" aria-selected="false" aria-controls="p-zip" id="t-zip">Windows · Portable ZIP</button>
-    <button role="tab" aria-selected="false" aria-controls="p-winget" id="t-winget">Windows · winget</button>
-    <button role="tab" aria-selected="false" aria-controls="p-linux" id="t-linux">Linux</button>
-    <button role="tab" aria-selected="false" aria-controls="p-macos" id="t-macos">macOS</button>
-    <button role="tab" aria-selected="false" aria-controls="p-source" id="t-source">From source</button>
-  </div>
-
-  <div class="panel" id="p-msi" role="tabpanel" aria-labelledby="t-msi">
-    <p>
-      Download <code>LiveClaude-&lt;version&gt;-x64.msi</code> from the
-      <a href="https://github.com/LeandroCannizzaro/LiveClaude/releases/latest">latest release</a> and run it.
-    </p>
-    <p>
-      Installs self-contained to <code>Program Files\LiveClaude</code>, preserves your configuration across upgrades,
-      stops/restarts the Windows service cleanly if registered, and enables one-click in-app auto-updates.
-      To skip the anonymous installation counter during silent deployment: <code>msiexec /i LiveClaude.msi INSTALLCOUNTER=0</code>.
-    </p>
-  </div>
-
-  <div class="panel" id="p-winget" role="tabpanel" aria-labelledby="t-winget" hidden>
-    <pre>winget install LeandroCannizzaro.LiveClaude</pre>
-    <p>Installs both <code>liveclaude</code> (the app) and <code>liveclaude-service</code> (the supervisor CLI).</p>
-  </div>
-
-  <div class="panel" id="p-zip" role="tabpanel" aria-labelledby="t-zip" hidden>
-    <pre><span class="c"># after extracting the zip</span>
-./Install-LiveClaude.ps1 -RegisterTask -Launch</pre>
-    <p>
-      The script copies the files to <code>%LOCALAPPDATA%\Programs\LiveClaude</code>, creates a Start Menu
-      shortcut and registers the supervisor task. No administrator rights needed. Pick the
-      <code>-selfcontained</code> zip to skip the .NET runtime prerequisite.
-    </p>
-    <p><a href="https://github.com/LeandroCannizzaro/LiveClaude/releases/latest">Download the latest zip →</a></p>
-  </div>
-
-  <div class="panel" id="p-clickonce" role="tabpanel" aria-labelledby="t-clickonce" hidden>
-    <p>Installs for the current user and checks for updates on every launch.</p>
-    <p><a class="btn primary" href="clickonce/v2/LiveClaude.application">Install LiveClaude 2</a></p>
-    <p>
-      Your browser will download <code>LiveClaude.application</code>; open it to install. Requires the
-      <a href="https://dotnet.microsoft.com/download/dotnet/10.0">.NET 10 Runtime</a>. The manifests are
-      unsigned, so SmartScreen asks for a confirmation the first time.
-    </p>
-    <p class="note">
-      Still on 1.x? That channel is frozen at
-      <a href="clickonce/LiveClaude.application">1.0.15</a> and keeps working — 2.0 is a separate
-      install, not an update, because it is a different application underneath. Install it alongside
-      and remove 1.x when you are happy.
-    </p>
-  </div>
-
-  <div class="panel" id="p-linux" role="tabpanel" aria-labelledby="t-linux" hidden>
-    <pre>curl -fsSL https://leandrocannizzaro.github.io/LiveClaude/install.sh | sh</pre>
-    <p>
-      Picks the <code>.deb</code>, <code>.rpm</code> or tarball for your machine, installs it to
-      <code>/opt/liveclaude</code> and puts <code>liveclaude</code> and
-      <code>liveclaude-supervisor</code> on your PATH. x86_64 and arm64. Self-contained — no .NET
-      runtime needed.
-    </p>
-    <p>
-      Autostart is a systemd user unit, installed from the app or with
-      <code>liveclaude-supervisor install-autostart</code>. Starting before you sign in additionally
-      needs <code>loginctl enable-linger</code>, which the app offers to do for you.
-    </p>
-    <p><a href="https://github.com/LeandroCannizzaro/LiveClaude/releases/latest">Or download a package directly →</a></p>
-  </div>
-
-  <div class="panel" id="p-macos" role="tabpanel" aria-labelledby="t-macos" hidden>
-    <pre>curl -fsSL https://leandrocannizzaro.github.io/LiveClaude/install-macos.sh | sh</pre>
-    <p>
-      Downloads the <code>.dmg</code> for your Mac, copies the app to <code>/Applications</code> and
-      clears the quarantine flag. Apple silicon and Intel. Self-contained.
-    </p>
-    <p>
-      Installing the <code>.dmg</code> by hand works too — but the app is <strong>not notarised
-      yet</strong>, so macOS refuses the first launch: right-click the app and choose <em>Open</em>,
-      once. The script exists to spare you that.
-    </p>
-    <p>
-      Autostart is a LaunchAgent. A LaunchDaemon can start before sign-in, but the login Keychain —
-      where Claude Code keeps its token — stays locked until somebody signs in.
-    </p>
-  </div>
-
-  <div class="panel" id="p-source" role="tabpanel" aria-labelledby="t-source" hidden>
-    <pre>git clone https://github.com/LeandroCannizzaro/LiveClaude.git
-cd LiveClaude
-dotnet build -c Release
-dotnet run --project src/LiveClaude.App</pre>
-  </div>
-</section>
-
-<section id="manual" class="wrap">
-  <h2>User Manual</h2>
-  <p class="sub">
-    The supervisor owns one foreground CLI process per configured session, each inside its own pseudo terminal.
-    The desktop app connects over a named pipe on Windows and a Unix socket elsewhere, so you can close the window and your sessions keep running.
-  </p>
-
-  <table>
-    <tr>
-      <th>Area</th>
-      <th>How to use it</th>
-    </tr>
-    <tr>
-      <td><strong>Sessions</strong></td>
-      <td>Use the top toolbar (<code>New session</code>, <code>Save session</code>, <code>Trust this directory…</code>, <code>Run once in terminal…</code>, <code>Delete</code>) and the three tabs (<em>General &amp; Product</em>, <em>Product Options</em>, <em>Command Preview</em>) without scrolling.</td>
-    </tr>
-    <tr>
-      <td><strong>Service &amp; startup</strong></td>
-      <td>Choose between the <em>User session host</em> (Scheduled Task / systemd user / LaunchAgent — recommended) and the <em>System-wide host</em> (Windows Service / systemd system / LaunchDaemon).</td>
-    </tr>
-    <tr>
-      <td><strong>Settings &amp; Themes</strong></td>
-      <td>Configure supervisor intervals, backoff policy, config/log folders, per-product CLI paths, and UI themes. Pick a built-in preset (<em>Default Dark</em>, <em>Light</em>, <em>Midnight Blue</em>, <em>Forest Dark</em>, <em>High Contrast</em>) or customize any color live with the built-in Color Picker.</td>
-    </tr>
-    <tr>
-      <td><strong>Auto-Update</strong></td>
-      <td>When a new version is published, an <strong>Update to vX.Y.Z</strong> button appears in the top-right header. LiveClaude verifies the SHA-256 checksum, applies the update for your platform (Windows MSI/ZIP, Linux <code>.tar.gz</code>, or macOS <code>.dmg</code>), and restarts automatically.</td>
-    </tr>
-  </table>
-
-  <p id="privacy" style="margin-top:28px" class="note">
-    <strong>Anonymous installation counter.</strong> At the end of a successful first-time setup (MSI or portable ZIP),
-    the installer requests a single SVG image from <code>hits.sh</code> without opening a window. It sends no machine names,
-    accounts, tokens, or personal data (only the standard HTTPS network connection). Uninstalls, repairs, and normal app launches
-    never ping the counter. You can opt out with <code>INSTALLCOUNTER=0</code> (MSI) or <code>-NoInstallCounter</code> (<code>install.ps1</code>).
-  </p>
-</section>
 
 <footer>
   <div class="wrap">
     <span>MIT licensed · © Leandro Cannizzaro</span>
     <span class="spacer"></span>
+    <a href="release-notes.html">Release Notes</a>
     <a href="https://github.com/LeandroCannizzaro/LiveClaude">GitHub</a>
     <a href="https://github.com/LeandroCannizzaro/LiveClaude/issues">Issues</a>
     <a href="https://code.claude.com/docs/en/remote-control">Remote Control docs</a>
   </div>
-  <div class="wrap" style="margin-top:14px; font-size:13px;">
-    Independent project — not affiliated with, endorsed by or sponsored by Anthropic.
-  </div>
 </footer>
 
 <script>
+  // Platform tab switcher in Installation section
   document.querySelectorAll('.tabs button').forEach(function (button) {
     button.addEventListener('click', function () {
       document.querySelectorAll('.tabs button').forEach(function (other) {
@@ -426,6 +562,29 @@ dotnet run --project src/LiveClaude.App</pre>
     });
   });
 
+  // Left sidebar active section highlight on scroll
+  (function () {
+    var links = Array.prototype.slice.call(document.querySelectorAll('.toc a'));
+    var sections = links.map(function (a) {
+      return document.querySelector(a.getAttribute('href'));
+    }).filter(Boolean);
+
+    if (!('IntersectionObserver' in window) || !sections.length) return;
+
+    var observer = new IntersectionObserver(function (entries) {
+      entries.forEach(function (entry) {
+        if (!entry.isIntersecting) return;
+        var id = '#' + entry.target.id;
+        links.forEach(function (a) {
+          a.classList.toggle('active', a.getAttribute('href') === id);
+        });
+      });
+    }, { rootMargin: '-20% 0px -65% 0px', threshold: 0 });
+
+    sections.forEach(function (s) { observer.observe(s); });
+  })();
+
+  // Direct download button (.msi / .dmg / .rpm) based on OS and CPU architecture
   (async function () {
     var btn = document.getElementById('download-btn');
     if (!btn) return;
