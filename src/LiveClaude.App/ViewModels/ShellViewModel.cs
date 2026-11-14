@@ -35,6 +35,8 @@ public sealed class ShellViewModel : ObservableObject, IAsyncDisposable
     private AvailableUpdate? _availableUpdate;
     private bool _isCheckingUpdates;
     private bool _isInstallingUpdate;
+    private double _updateProgress;
+    private bool _isUpdateProgressIndeterminate;
     private string _updateStatusText = "";
 
     public ShellViewModel()
@@ -110,9 +112,33 @@ public sealed class ShellViewModel : ObservableObject, IAsyncDisposable
 
     public bool HasUpdateAvailable => _availableUpdate is not null;
 
-    public string UpdateButtonText => _availableUpdate is not null
-        ? $"Update to v{_availableUpdate.Version.ToString(3)}"
-        : (_isCheckingUpdates ? "Checking…" : "Check updates");
+    public bool IsInstallingUpdate
+    {
+        get => _isInstallingUpdate;
+        private set
+        {
+            if (SetProperty(ref _isInstallingUpdate, value))
+                OnPropertyChanged(nameof(UpdateButtonText));
+        }
+    }
+
+    public double UpdateProgress
+    {
+        get => _updateProgress;
+        private set => SetProperty(ref _updateProgress, value);
+    }
+
+    public bool IsUpdateProgressIndeterminate
+    {
+        get => _isUpdateProgressIndeterminate;
+        private set => SetProperty(ref _isUpdateProgressIndeterminate, value);
+    }
+
+    public string UpdateButtonText => _isInstallingUpdate
+        ? "Updating…"
+        : (_availableUpdate is not null
+            ? $"Update to v{_availableUpdate.Version.ToString(3)}"
+            : (_isCheckingUpdates ? "Checking…" : "Check updates"));
 
     public string UpdateStatusText
     {
@@ -558,6 +584,8 @@ public sealed class ShellViewModel : ObservableObject, IAsyncDisposable
             return;
 
         _isCheckingUpdates = true;
+        if (userInitiated)
+            UpdateStatusText = "Checking for updates…";
         OnPropertyChanged(nameof(UpdateButtonText));
 
         try
@@ -627,14 +655,34 @@ public sealed class ShellViewModel : ObservableObject, IAsyncDisposable
         if (!confirm)
             return;
 
-        _isInstallingUpdate = true;
-        UpdateStatusText = "Downloading update…";
+        IsInstallingUpdate = true;
+        IsUpdateProgressIndeterminate = false;
+        UpdateProgress = 0;
+        UpdateStatusText = "Downloading update (0%)…";
 
         try
         {
             using var http = new HttpClient { Timeout = TimeSpan.FromMinutes(5) };
             var dir = UpdateInstaller.DownloadDirectory(update.Version);
-            var packagePath = await UpdateInstaller.DownloadAsync(http, update.Package, dir, progress: null);
+            var lastPercent = -1;
+            var progress = new Progress<double>(ratio =>
+            {
+                var pct = (int)Math.Clamp(Math.Round(ratio * 100.0), 0, 100);
+                UpdateProgress = ratio * 100.0;
+                if (pct != lastPercent)
+                {
+                    lastPercent = pct;
+                    UpdateStatusText = pct >= 100
+                        ? "Verifying download (SHA-256)…"
+                        : $"Downloading update ({pct}%)…";
+                }
+            });
+
+            var packagePath = await UpdateInstaller.DownloadAsync(http, update.Package, dir, progress);
+
+            IsUpdateProgressIndeterminate = true;
+            UpdateStatusText = "Launching installer — closing LiveClaude…";
+            await Task.Delay(150);
 
             var exeName = OperatingSystem.IsWindows() ? "LiveClaude.exe" : "LiveClaude";
             var exe = Environment.ProcessPath ?? Path.Combine(AppContext.BaseDirectory, exeName);
@@ -646,7 +694,9 @@ public sealed class ShellViewModel : ObservableObject, IAsyncDisposable
         }
         catch (Exception ex)
         {
-            _isInstallingUpdate = false;
+            IsInstallingUpdate = false;
+            IsUpdateProgressIndeterminate = false;
+            UpdateProgress = 0;
             UpdateStatusText = "";
             await Dialogs.ShowWarningAsync($"Update failed.\n\n{ex.Message}", "Update failed");
         }
