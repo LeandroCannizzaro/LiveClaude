@@ -122,6 +122,96 @@ public static class ThemeService
                 ["WarningColor"] = "#F59E0B",
                 ["DangerColor"] = "#EF4444",
                 ["TerminalBackgroundColor"] = "#000000"
+            }),
+        new(
+            "Dracula",
+            IsLight: false,
+            new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["BackgroundColor"] = "#21222C",
+                ["SurfaceColor"] = "#282A36",
+                ["SurfaceAltColor"] = "#343746",
+                ["BorderColor"] = "#44475A",
+                ["TextColor"] = "#F8F8F2",
+                ["MutedTextColor"] = "#6272A4",
+                ["AccentColor"] = "#BD93F9",
+                ["AccentHoverColor"] = "#D6ACFF",
+                ["SuccessColor"] = "#50FA7B",
+                ["WarningColor"] = "#FFB86C",
+                ["DangerColor"] = "#FF5555",
+                ["TerminalBackgroundColor"] = "#191A21"
+            }),
+        new(
+            "Nord",
+            IsLight: false,
+            new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["BackgroundColor"] = "#242933",
+                ["SurfaceColor"] = "#2E3440",
+                ["SurfaceAltColor"] = "#3B4252",
+                ["BorderColor"] = "#4C566A",
+                ["TextColor"] = "#ECEFF4",
+                ["MutedTextColor"] = "#D8DEE9",
+                ["AccentColor"] = "#88C0D0",
+                ["AccentHoverColor"] = "#8FBCBB",
+                ["SuccessColor"] = "#A3BE8C",
+                ["WarningColor"] = "#EBCB8B",
+                ["DangerColor"] = "#BF616A",
+                ["TerminalBackgroundColor"] = "#1D222B"
+            }),
+        new(
+            "Catppuccin Mocha",
+            IsLight: false,
+            new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["BackgroundColor"] = "#181825",
+                ["SurfaceColor"] = "#1E1E2E",
+                ["SurfaceAltColor"] = "#313244",
+                ["BorderColor"] = "#45475A",
+                ["TextColor"] = "#CDD6F4",
+                ["MutedTextColor"] = "#A6ADC8",
+                ["AccentColor"] = "#CBA6F7",
+                ["AccentHoverColor"] = "#B4BEFE",
+                ["SuccessColor"] = "#A6E3A1",
+                ["WarningColor"] = "#F9E2AF",
+                ["DangerColor"] = "#F38BA8",
+                ["TerminalBackgroundColor"] = "#11111B"
+            }),
+        new(
+            "Tokyo Night",
+            IsLight: false,
+            new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["BackgroundColor"] = "#16161E",
+                ["SurfaceColor"] = "#1A1B26",
+                ["SurfaceAltColor"] = "#24283B",
+                ["BorderColor"] = "#3B4261",
+                ["TextColor"] = "#C0CAF5",
+                ["MutedTextColor"] = "#787C99",
+                ["AccentColor"] = "#7AA2F7",
+                ["AccentHoverColor"] = "#89DDFF",
+                ["SuccessColor"] = "#9ECE6A",
+                ["WarningColor"] = "#E0AF68",
+                ["DangerColor"] = "#F7768E",
+                ["TerminalBackgroundColor"] = "#13141C"
+            }),
+        new(
+            "Solarized Light",
+            IsLight: true,
+            new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["BackgroundColor"] = "#EEE8D5",
+                ["SurfaceColor"] = "#FDF6E3",
+                ["SurfaceAltColor"] = "#E4DEC9",
+                ["BorderColor"] = "#D3CBB8",
+                ["TextColor"] = "#073642",
+                ["MutedTextColor"] = "#586E75",
+                ["AccentColor"] = "#268BD2",
+                ["AccentHoverColor"] = "#2AA198",
+                ["SuccessColor"] = "#859900",
+                ["WarningColor"] = "#B58900",
+                ["DangerColor"] = "#DC322F",
+                ["TerminalBackgroundColor"] = "#002B36"
             })
     ];
 

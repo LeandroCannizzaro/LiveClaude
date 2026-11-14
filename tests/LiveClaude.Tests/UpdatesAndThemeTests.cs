@@ -82,5 +82,8 @@ public class UpdatesAndThemeTests
         var resolved = ThemeService.ResolveColors(settings);
         Assert.Equal("#FF00AA", resolved["AccentColor"]);
         Assert.Equal(ThemeService.GetPreset("Midnight Blue").Colors["BorderColor"], resolved["BorderColor"]);
+        Assert.Equal(10, ThemeService.Presets.Count);
+        Assert.True(ThemeService.GetPreset("Solarized Light").IsLight);
+        Assert.False(ThemeService.GetPreset("Dracula").IsLight);
     }
 }
