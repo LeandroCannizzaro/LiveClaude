@@ -36,6 +36,16 @@ jobs:
           cp packaging/scripts/install-macos.sh site/install-macos.sh
           chmod +x site/install.sh site/install-macos.sh
 
+      - name: Include update.json from the latest Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh release download --repo "${{ github.repository }}" --pattern update.json --dir site --clobber; then
+            cat site/update.json
+          else
+            echo "::warning::No Release with update.json found yet; publishing without update manifest."
+          fi
+
       # Two ClickOnce channels, and the reason they are separate is the point of this step.
       #
       # /clickonce/    is 1.x — the Windows-only WPF program — frozen at 1.0.15 forever. It is taken

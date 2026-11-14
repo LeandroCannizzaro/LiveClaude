@@ -7,18 +7,33 @@ using LiveClaude.Core.Model;
 
 namespace LiveClaude.Core.Claude;
 
+/// <summary>Why an environments call failed in a way that may need interactive sign-in.</summary>
+public enum EnvironmentsAuthFailureKind
+{
+    None = 0,
+    MissingCredentials,
+    ExpiredCredentials,
+    RejectedByApi
+}
+
 /// <summary>
 /// A failed call to the environments API, carrying everything needed to explain it to the user and
 /// to find it again in Anthropic's logs.
 /// </summary>
 public sealed class EnvironmentsApiException : Exception
 {
-    public EnvironmentsApiException(string message, int statusCode = 0, string? requestId = null, bool requiresForce = false)
+    public EnvironmentsApiException(
+        string message,
+        int statusCode = 0,
+        string? requestId = null,
+        bool requiresForce = false,
+        EnvironmentsAuthFailureKind authFailure = EnvironmentsAuthFailureKind.None)
         : base(message)
     {
         StatusCode = statusCode;
         RequestId = requestId;
         RequiresForce = requiresForce;
+        AuthFailure = authFailure;
     }
 
     public int StatusCode { get; }
@@ -31,6 +46,11 @@ public sealed class EnvironmentsApiException : Exception
     /// needs <c>force=true</c>, which also removes those sessions.
     /// </summary>
     public bool RequiresForce { get; }
+
+    /// <summary>Non-<see cref="EnvironmentsAuthFailureKind.None"/> when the UI should offer sign-in.</summary>
+    public EnvironmentsAuthFailureKind AuthFailure { get; }
+
+    public bool NeedsSignIn => AuthFailure != EnvironmentsAuthFailureKind.None;
 }
 
 /// <summary>
@@ -126,6 +146,10 @@ public sealed class EnvironmentsClient : IDisposable
         var requiresForce = status == HttpStatusCode.Conflict &&
                             apiMessage.Contains("force", StringComparison.OrdinalIgnoreCase);
 
+        var authFailure = status is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden
+            ? EnvironmentsAuthFailureKind.RejectedByApi
+            : EnvironmentsAuthFailureKind.None;
+
         var message = status switch
         {
             HttpStatusCode.Conflict when requiresForce =>
@@ -139,7 +163,7 @@ public sealed class EnvironmentsClient : IDisposable
             _ => $"The environments API returned {code}. {apiMessage}".Trim()
         };
 
-        return new EnvironmentsApiException(message, code, requestId, requiresForce);
+        return new EnvironmentsApiException(message, code, requestId, requiresForce, authFailure);
     }
 
     /// <summary>Parses the list payload. Public so it can be tested without the network.</summary>
@@ -184,11 +208,13 @@ public sealed class EnvironmentsClient : IDisposable
     {
         var credentials = _credentialsFactory()
                           ?? throw new EnvironmentsApiException(
-                              "No Claude Code sign-in found on this machine. Run 'claude /login' first.");
+                              "No Claude Code sign-in found on this machine. Run 'claude /login' first.",
+                              authFailure: EnvironmentsAuthFailureKind.MissingCredentials);
 
         if (credentials.IsExpired)
             throw new EnvironmentsApiException(
-                "The Claude Code token has expired. Start a Claude Code session to refresh it, then try again.");
+                "The Claude Code token has expired. Start a Claude Code session to refresh it, then try again.",
+                authFailure: EnvironmentsAuthFailureKind.ExpiredCredentials);
 
         var request = new HttpRequestMessage(method, url);
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", credentials.AccessToken);

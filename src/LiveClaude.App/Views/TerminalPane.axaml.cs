@@ -202,6 +202,41 @@ public partial class TerminalPane : UserControl
         StartLocal(directory, []);
     }
 
+    private async void OnSignIn(object? sender, RoutedEventArgs e)
+    {
+        var shell = Shell;
+        if (shell is null)
+            return;
+
+        var products = shell.Login.LoginCapableProducts;
+        if (products.Count == 0)
+        {
+            await Dialogs.ShowWarningAsync("No agent product supports interactive sign-in.");
+            return;
+        }
+
+        if (products.Count == 1 || sender is not Button button)
+        {
+            await shell.Login.StartLoginAsync(products[0].Id, DirectoryBox.Text);
+            return;
+        }
+
+        var flyout = new MenuFlyout { Placement = PlacementMode.BottomEdgeAlignedRight };
+        foreach (var product in products)
+        {
+            var item = new MenuItem { Header = $"Sign in with {product.DisplayName}", Tag = product.Id };
+            item.Click += async (_, _) =>
+            {
+                if (item.Tag is string productId)
+                    await shell.Login.StartLoginAsync(productId, DirectoryBox.Text);
+            };
+            flyout.Items.Add(item);
+        }
+
+        button.Flyout = flyout;
+        flyout.ShowAt(button);
+    }
+
     private void OnStop(object? sender, RoutedEventArgs e)
     {
         StopLocal();

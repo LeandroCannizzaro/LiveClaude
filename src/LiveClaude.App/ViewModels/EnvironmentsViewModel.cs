@@ -99,24 +99,31 @@ public sealed class EnvironmentsViewModel : ObservableObject
     private readonly RollingLogWriter _log;
     private readonly Dictionary<string, string> _lastErrors = new(StringComparer.Ordinal);
 
+    private readonly Func<Task>? _signInAsync;
+
     private string _statusMessage = "Not loaded yet.";
     private string _failureSummary = "";
+    private string _failureTitle = "Something went wrong";
     private bool _busy;
     private bool _showUnrelated;
+    private bool _needsSignIn;
 
     public EnvironmentsViewModel(
         Func<IReadOnlyList<InstanceSnapshot>> instances,
         Func<IReadOnlyList<SessionConfig>> sessions,
-        Func<string, Task> stopInstanceAsync)
+        Func<string, Task> stopInstanceAsync,
+        Func<Task>? signInAsync = null)
     {
         _instances = instances;
         _sessions = sessions;
         _stopInstanceAsync = stopInstanceAsync;
+        _signInAsync = signInAsync;
 
         ConfigStore.EnsureDirectories();
         _log = new RollingLogWriter(Path.Combine(ConfigStore.LogDirectory, "environments.log"), maxSizeMb: 4);
 
         RefreshCommand = new RelayCommand(_ => RefreshAsync());
+        SignInCommand = new RelayCommand(_ => SignInAsync());
         SelectStaleCommand = new RelayCommand(_ =>
         {
             foreach (var item in Items)
@@ -158,6 +165,7 @@ public sealed class EnvironmentsViewModel : ObservableObject
     public ObservableCollection<EnvironmentViewModel> Items { get; } = new();
 
     public RelayCommand RefreshCommand { get; }
+    public RelayCommand SignInCommand { get; }
     public RelayCommand SelectStaleCommand { get; }
     public RelayCommand SelectDuplicatesCommand { get; }
     public RelayCommand ClearSelectionCommand { get; }
@@ -179,6 +187,18 @@ public sealed class EnvironmentsViewModel : ObservableObject
             if (SetProperty(ref _failureSummary, value))
                 OnPropertyChanged(nameof(HasFailures));
         }
+    }
+
+    public string FailureTitle
+    {
+        get => _failureTitle;
+        private set => SetProperty(ref _failureTitle, value);
+    }
+
+    public bool NeedsSignIn
+    {
+        get => _needsSignIn;
+        private set => SetProperty(ref _needsSignIn, value);
     }
 
     public bool HasFailures => !string.IsNullOrWhiteSpace(FailureSummary);
@@ -248,6 +268,7 @@ public sealed class EnvironmentsViewModel : ObservableObject
                 _lastErrors.Remove(id);
 
             UpdateCounts();
+            ClearFailure();
             var hidden = ordered.Count - Items.Count;
             StatusMessage = hidden > 0
                 ? $"{Items.Count} Remote Control environment(s); {hidden} other environment(s) hidden."
@@ -257,19 +278,29 @@ public sealed class EnvironmentsViewModel : ObservableObject
         {
             Items.Clear();
             StatusMessage = ex.Message;
-            FailureSummary = Decorate(ex);
+            SetFailure(Decorate(ex), ex.NeedsSignIn, ex.NeedsSignIn ? "Sign-in required" : "Could not load environments");
         }
         catch (Exception ex)
         {
             Items.Clear();
             StatusMessage = $"Could not reach the environments API: {ex.Message}";
-            FailureSummary = StatusMessage;
+            SetFailure(StatusMessage, needsSignIn: false, title: "Could not load environments");
             Log($"LIST failed: {ex}");
         }
         finally
         {
             Busy = false;
         }
+    }
+
+    private async Task SignInAsync()
+    {
+        if (_signInAsync is null)
+            return;
+
+        // Opens the embedded terminal; the user finishes login there, then clicks Refresh.
+        await _signInAsync();
+        StatusMessage = "Sign-in started in the Terminal tab. When it finishes, click Refresh.";
     }
 
     private async Task DeleteSelectedAsync()
@@ -298,6 +329,7 @@ public sealed class EnvironmentsViewModel : ObservableObject
         Busy = true;
         var deleted = 0;
         var failures = new List<string>();
+        var needsSignIn = false;
 
         Log($"--- delete run: {selected.Count} environment(s)");
 
@@ -323,6 +355,8 @@ public sealed class EnvironmentsViewModel : ObservableObject
                     failures.Add($"{item.Name}: {detail}");
                     _lastErrors[item.Id] = detail;
                     item.LastError = detail;
+                    if (ex.NeedsSignIn)
+                        needsSignIn = true;
                 }
                 catch (Exception ex)
                 {
@@ -356,9 +390,13 @@ public sealed class EnvironmentsViewModel : ObservableObject
             Log($"[warning] {reappeared.Count} environment(s) re-registered right after deletion.");
         }
 
-        FailureSummary = failures.Count == 0
-            ? ""
-            : string.Join(Environment.NewLine, failures);
+        if (failures.Count == 0)
+            ClearFailure();
+        else
+            SetFailure(
+                string.Join(Environment.NewLine, failures),
+                needsSignIn,
+                needsSignIn ? "Sign-in required" : "The last delete did not finish");
 
         StatusMessage = failures.Count == 0
             ? $"Deleted {deleted} environment(s)."
@@ -419,6 +457,20 @@ public sealed class EnvironmentsViewModel : ObservableObject
 
     private static string Decorate(EnvironmentsApiException ex) =>
         ex.RequestId is null ? ex.Message : $"{ex.Message} (request-id {ex.RequestId})";
+
+    private void ClearFailure()
+    {
+        FailureSummary = "";
+        NeedsSignIn = false;
+        FailureTitle = "Something went wrong";
+    }
+
+    private void SetFailure(string summary, bool needsSignIn, string title)
+    {
+        FailureSummary = summary;
+        NeedsSignIn = needsSignIn;
+        FailureTitle = title;
+    }
 
     private void Log(string line) => _log.Write(line);
 

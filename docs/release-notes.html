@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>LiveClaude — Release Notes</title>
+  <link rel="icon" href="assets/favicon.ico" />
+  <style>
+    :root {
+      --bg: #0b0d11;
+      --surface: #14181f;
+      --border: #28303b;
+      --text: #e8ebef;
+      --muted: #9aa4b2;
+      --accent: #d97757;
+      --radius: 14px;
+      --max: 900px;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font: 16px/1.65 -apple-system, "Segoe UI", system-ui, sans-serif;
+    }
+    a { color: var(--accent); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    .wrap { max-width: var(--max); margin: 0 auto; padding: 32px 24px 64px; }
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 24px;
+      margin-top: 24px;
+    }
+    h1 { margin: 0 0 8px; font-size: 34px; }
+    h2 { margin: 0 0 8px; font-size: 22px; color: var(--accent); }
+    .meta { color: var(--muted); font-size: 14px; margin-bottom: 14px; }
+    ul { margin: 0; padding-left: 20px; }
+    li { margin: 8px 0; }
+    code { background: #1b212a; padding: 2px 6px; border-radius: 5px; font-size: 14px; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <p><a href="index.html">← Back to User Manual</a></p>
+    <h1>Release Notes</h1>
+    <p class="meta">Published releases of LiveClaude.</p>
+
+    <section id="v2.2.0" class="card">
+      <h2>v2.2.0</h2>
+      <div class="meta">Antigravity provider, no-scroll tabbed UI, Themes &amp; Color Picker, MSI installer &amp; auto-update</div>
+      <ul>
+        <li><strong>Antigravity Remote Control provider:</strong> new isolated plugin <code>LiveClaude.Product.Antigravity</code> supporting <code>agy --remote-control</code> with execution mode, reasoning effort, model, agent, project, extra directories, sandbox, and conversation resume.</li>
+        <li><strong>No-scroll tabbed UI:</strong> reorganized <em>Sessions</em> and <em>Service &amp; startup</em> with top command toolbars and inner tabs; added a dedicated <em>Settings</em> tab for general supervisor options, folders, products, and appearance; moved version into the top-left header and removed the footer.</li>
+        <li><strong>Theme manager &amp; Color Picker:</strong> 5 built-in presets (<em>Default Dark</em>, <em>Light</em>, <em>Midnight Blue</em>, <em>Forest Dark</em>, <em>High Contrast</em>) plus live per-token color customization persisted in <code>config.json</code>.</li>
+        <li><strong>Windows MSI installer &amp; in-app Auto-Update:</strong> per-machine WiX MSI package, portable ZIP installer, SHA-256 verified updates via <code>update.json</code>, and an <em>Update</em> button + <em>About</em> dialog in the top bar.</li>
+        <li><strong>Documentation &amp; install counter:</strong> expanded English user manual, release notes page, and opt-out anonymous setup counter via Hits.sh.</li>
+      </ul>
+    </section>
+
+    <section id="v2.1.3" class="card">
+      <h2>v2.1.3</h2>
+      <div class="meta">Multi-product supervision &amp; Cursor My Machines support</div>
+      <ul>
+        <li><strong>Multi-product architecture:</strong> isolated <code>LiveClaude.Product.Claude</code> and <code>LiveClaude.Product.Cursor</code> plugin assemblies loaded dynamically by <code>ProductHost</code>.</li>
+        <li><strong>Cursor My Machines:</strong> support for <code>agent worker start</code>, multi-directory routing, and automatic Windows <code>better-sqlite3</code> ABI patching.</li>
+      </ul>
+    </section>
+  </div>
+</body>
+</html>

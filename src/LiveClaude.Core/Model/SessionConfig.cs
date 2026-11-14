@@ -90,6 +90,10 @@ public sealed class SessionConfig
 
     public CursorSessionOptions Cursor { get; set; } = new();
 
+    // --- Antigravity Remote Control options (used when ProductId == antigravity) ---
+
+    public AntigravitySessionOptions Antigravity { get; set; } = new();
+
     /// <summary>Raw extra arguments appended verbatim.</summary>
     public string ExtraArgs { get; set; } = "";
 
@@ -101,6 +105,7 @@ public sealed class SessionConfig
         var clone = (SessionConfig)MemberwiseClone();
         clone.Environment = new Dictionary<string, string>(Environment, StringComparer.OrdinalIgnoreCase);
         clone.Cursor = Cursor.Clone();
+        clone.Antigravity = Antigravity.Clone();
         return clone;
     }
 

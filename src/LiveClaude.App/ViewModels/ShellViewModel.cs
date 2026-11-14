@@ -1,8 +1,12 @@
 using System.Collections.ObjectModel;
 using System.Diagnostics;
 using System.IO;
+using System.Net.Http;
+using Avalonia;
+using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Threading;
 using LiveClaude.Abstractions;
+using LiveClaude.App.Services;
 using LiveClaude.Core.Config;
 using LiveClaude.Core.Ipc;
 using LiveClaude.Core.Model;
@@ -27,22 +31,35 @@ public sealed class ShellViewModel : ObservableObject, IAsyncDisposable
     private string _claudeInfo = "";
     private bool _isConnected;
     private int _selectedTabIndex;
+    private bool _loginOfferDone;
+    private AvailableUpdate? _availableUpdate;
+    private bool _isCheckingUpdates;
+    private bool _isInstallingUpdate;
+    private string _updateStatusText = "";
 
     public ShellViewModel()
     {
         Editor = new SessionEditorViewModel();
         Editor.LoadNew();
         Hosting = new HostingViewModel();
+        Theme = new ThemeEditorViewModel();
+        Login = new InteractiveLoginHost(
+            () => _config,
+            (directory, arguments, executable) =>
+                MainWindow.Current?.OpenInteractiveTerminal(directory, arguments, executable));
+
         Environments = new EnvironmentsViewModel(
             () => Instances.Select(i => i.Snapshot).ToList(),
             () => _config.Sessions,
-            id => _api?.StopInstanceAsync(id) ?? Task.CompletedTask);
+            id => _api?.StopInstanceAsync(id) ?? Task.CompletedTask,
+            () => Login.StartLoginAsync(ProductIds.Claude));
 
         RefreshCommand = new RelayCommand(_ => RefreshAsync());
         ReconnectCommand = new RelayCommand(_ => ConnectAsync(force: true));
         StartCommand = new RelayCommand(p => WithInstance(p, id => _api!.StartInstanceAsync(id)));
         StopCommand = new RelayCommand(p => WithInstance(p, id => _api!.StopInstanceAsync(id)));
         RestartCommand = new RelayCommand(p => WithInstance(p, id => _api!.RestartInstanceAsync(id)));
+        SignInCommand = new RelayCommand(p => SignInAsync(p));
         NewSessionCommand = new RelayCommand(_ =>
         {
             Editor.LoadNew();
@@ -64,6 +81,7 @@ public sealed class ShellViewModel : ObservableObject, IAsyncDisposable
         OpenLogFolderCommand = new RelayCommand(_ => OpenUrl(ConfigStore.LogDirectory));
         OpenConfigCommand = new RelayCommand(_ => OpenUrl(new ConfigStore().Path));
         SaveSettingsCommand = new RelayCommand(_ => SaveSettingsAsync());
+        UpdateCommand = new RelayCommand(_ => HandleUpdateButtonAsync());
 
         _ticker = new DispatcherTimer(DispatcherPriority.Background) { Interval = TimeSpan.FromSeconds(1) };
         _ticker.Tick += (_, _) =>
@@ -80,10 +98,27 @@ public sealed class ShellViewModel : ObservableObject, IAsyncDisposable
 
     public HostingViewModel Hosting { get; }
 
+    public ThemeEditorViewModel Theme { get; }
+
     public EnvironmentsViewModel Environments { get; }
 
-    /// <summary>Shown in the footer; clicking it opens the About window.</summary>
-    public string AppVersion => $"v{Views.AppInfo.Version}";
+    /// <summary>Product-agnostic interactive sign-in host.</summary>
+    public InteractiveLoginHost Login { get; }
+
+    /// <summary>Shown next to the LiveClaude title in the header.</summary>
+    public string AppVersion => $"(v{Views.AppInfo.Version})";
+
+    public bool HasUpdateAvailable => _availableUpdate is not null;
+
+    public string UpdateButtonText => _availableUpdate is not null
+        ? $"Update to v{_availableUpdate.Version.ToString(3)}"
+        : (_isCheckingUpdates ? "Checking…" : "Check updates");
+
+    public string UpdateStatusText
+    {
+        get => _updateStatusText;
+        private set => SetProperty(ref _updateStatusText, value);
+    }
 
     public ISupervisorApi? Api => _api;
 
@@ -171,6 +206,34 @@ public sealed class ShellViewModel : ObservableObject, IAsyncDisposable
         set { _config.Products.Cursor.AutoPatchWindowsSqlite = value; OnPropertyChanged(); }
     }
 
+    public bool ClaudeOfferLoginWhenRequired
+    {
+        get => _config.Products.Claude.OfferLoginWhenRequired;
+        set { _config.Products.Claude.OfferLoginWhenRequired = value; OnPropertyChanged(); }
+    }
+
+    public bool CursorOfferLoginWhenRequired
+    {
+        get => _config.Products.Cursor.OfferLoginWhenRequired;
+        set { _config.Products.Cursor.OfferLoginWhenRequired = value; OnPropertyChanged(); }
+    }
+
+    public string AntigravityPath
+    {
+        get => _config.Products.Antigravity.Path ?? "";
+        set
+        {
+            _config.Products.Antigravity.Path = string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+            OnPropertyChanged();
+        }
+    }
+
+    public bool AntigravityOfferLoginWhenRequired
+    {
+        get => _config.Products.Antigravity.OfferLoginWhenRequired;
+        set { _config.Products.Antigravity.OfferLoginWhenRequired = value; OnPropertyChanged(); }
+    }
+
     public int BackoffInitialSeconds
     {
         get => _config.Backoff.InitialSeconds;
@@ -195,6 +258,36 @@ public sealed class ShellViewModel : ObservableObject, IAsyncDisposable
         set { _config.LogMaxSizeMb = Math.Clamp(value, 1, 512); OnPropertyChanged(); }
     }
 
+    public int HealthCheckSeconds
+    {
+        get => _config.HealthCheckSeconds;
+        set { _config.HealthCheckSeconds = Math.Clamp(value, 5, 3600); OnPropertyChanged(); }
+    }
+
+    public int LogTailLines
+    {
+        get => _config.LogTailLines;
+        set { _config.LogTailLines = Math.Clamp(value, 100, 10000); OnPropertyChanged(); }
+    }
+
+    public bool UsePseudoConsole
+    {
+        get => _config.UsePseudoConsole;
+        set { _config.UsePseudoConsole = value; OnPropertyChanged(); }
+    }
+
+    public double BackoffMultiplier
+    {
+        get => _config.Backoff.Multiplier;
+        set { _config.Backoff.Multiplier = Math.Clamp(value, 1.0, 10.0); OnPropertyChanged(); }
+    }
+
+    public int BackoffResetAfterHealthySeconds
+    {
+        get => _config.Backoff.ResetAfterHealthySeconds;
+        set { _config.Backoff.ResetAfterHealthySeconds = Math.Clamp(value, 10, 3600); OnPropertyChanged(); }
+    }
+
     public int GracefulStopSeconds
     {
         get => _config.GracefulStopSeconds;
@@ -216,6 +309,8 @@ public sealed class ShellViewModel : ObservableObject, IAsyncDisposable
 
     public IReadOnlyList<DiscoveredCli> DetectedCursorInstalls { get; private set; } = [];
 
+    public IReadOnlyList<DiscoveredCli> DetectedAntigravityInstalls { get; private set; } = [];
+
     #endregion
 
     #region Commands
@@ -233,6 +328,8 @@ public sealed class ShellViewModel : ObservableObject, IAsyncDisposable
     public RelayCommand OpenLogFolderCommand { get; }
     public RelayCommand OpenConfigCommand { get; }
     public RelayCommand SaveSettingsCommand { get; }
+    public RelayCommand SignInCommand { get; }
+    public RelayCommand UpdateCommand { get; }
 
     #endregion
 
@@ -282,6 +379,27 @@ public sealed class ShellViewModel : ObservableObject, IAsyncDisposable
         IsConnected = true;
         await RefreshAsync();
         await Hosting.RefreshAsync();
+
+        if (!_loginOfferDone)
+        {
+            _loginOfferDone = true;
+            await Login.OfferPendingLoginsAsync();
+        }
+
+        _ = CheckForUpdatesAsync(userInitiated: false);
+    }
+
+    /// <summary>
+    /// Starts interactive login for a product id, instance, or defaults to Claude.
+    /// </summary>
+    public Task SignInAsync(object? parameter = null)
+    {
+        return parameter switch
+        {
+            InstanceViewModel instance => Login.StartLoginAsync(instance.ProductId, instance.Directory),
+            string productId when !string.IsNullOrWhiteSpace(productId) => Login.StartLoginAsync(productId),
+            _ => Login.StartLoginAsync(ProductIds.Claude)
+        };
     }
 
     /// <summary>
@@ -324,6 +442,7 @@ public sealed class ShellViewModel : ObservableObject, IAsyncDisposable
         _config = await _api.GetConfigAsync();
         DetectedClaudeInstalls = ProductHost.TryGet(ProductIds.Claude)?.ListInstalls(_config) ?? [];
         DetectedCursorInstalls = ProductHost.TryGet(ProductIds.Cursor)?.ListInstalls(_config) ?? [];
+        DetectedAntigravityInstalls = ProductHost.TryGet(ProductIds.Antigravity)?.ListInstalls(_config) ?? [];
 
         var status = await _api.GetStatusAsync();
         OnStatusChanged(status);
@@ -333,15 +452,26 @@ public sealed class ShellViewModel : ObservableObject, IAsyncDisposable
         OnPropertyChanged(nameof(CursorApiKeyPath));
         OnPropertyChanged(nameof(CursorAuthTokenFile));
         OnPropertyChanged(nameof(CursorAutoPatchWindowsSqlite));
+        OnPropertyChanged(nameof(ClaudeOfferLoginWhenRequired));
+        OnPropertyChanged(nameof(CursorOfferLoginWhenRequired));
+        OnPropertyChanged(nameof(AntigravityPath));
+        OnPropertyChanged(nameof(AntigravityOfferLoginWhenRequired));
         OnPropertyChanged(nameof(BackoffInitialSeconds));
         OnPropertyChanged(nameof(BackoffMaxSeconds));
         OnPropertyChanged(nameof(BackoffMaxRestarts));
         OnPropertyChanged(nameof(LogMaxSizeMb));
+        OnPropertyChanged(nameof(HealthCheckSeconds));
+        OnPropertyChanged(nameof(LogTailLines));
+        OnPropertyChanged(nameof(UsePseudoConsole));
+        OnPropertyChanged(nameof(BackoffMultiplier));
+        OnPropertyChanged(nameof(BackoffResetAfterHealthySeconds));
         OnPropertyChanged(nameof(GracefulStopSeconds));
         OnPropertyChanged(nameof(TrackEnvironments));
         OnPropertyChanged(nameof(ShowEnvironmentsTab));
         OnPropertyChanged(nameof(DetectedClaudeInstalls));
         OnPropertyChanged(nameof(DetectedCursorInstalls));
+        OnPropertyChanged(nameof(DetectedAntigravityInstalls));
+        Theme.LoadFrom(_config.Theme);
     }
 
     private void OnStatusChanged(SupervisorStatus status) => Dispatcher.UIThread.Post(() =>
@@ -417,8 +547,108 @@ public sealed class ShellViewModel : ObservableObject, IAsyncDisposable
         if (_api is null)
             return;
 
+        _config.Theme = Theme.ToSettings();
         await _api.SaveSettingsAsync(_config);
         await RefreshAsync();
+    }
+
+    public async Task CheckForUpdatesAsync(bool userInitiated)
+    {
+        if (_isCheckingUpdates || _isInstallingUpdate)
+            return;
+
+        _isCheckingUpdates = true;
+        OnPropertyChanged(nameof(UpdateButtonText));
+
+        try
+        {
+            using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(15) };
+            var kind = InstallKindDetector.Detect();
+            var checker = new UpdateChecker(http, UpdateChecker.ManifestUrl(), UpdateVersions.Current(), kind);
+            _availableUpdate = await checker.CheckAsync();
+            OnPropertyChanged(nameof(HasUpdateAvailable));
+            OnPropertyChanged(nameof(UpdateButtonText));
+
+            if (_availableUpdate is not null)
+            {
+                UpdateStatusText = $"v{_availableUpdate.Version.ToString(3)} available";
+            }
+            else if (userInitiated)
+            {
+                UpdateStatusText = "Up to date";
+                await Dialogs.ShowInfoAsync(
+                    $"You are running the latest version (v{Views.AppInfo.Version}).",
+                    "Check for updates");
+            }
+        }
+        catch (Exception ex) when (userInitiated)
+        {
+            await Dialogs.ShowWarningAsync($"Could not check for updates.\n\n{ex.Message}", "Update check");
+        }
+        catch
+        {
+            // Background startup check is best-effort.
+        }
+        finally
+        {
+            _isCheckingUpdates = false;
+            OnPropertyChanged(nameof(UpdateButtonText));
+        }
+    }
+
+    private async Task HandleUpdateButtonAsync()
+    {
+        if (_availableUpdate is null)
+        {
+            await CheckForUpdatesAsync(userInitiated: true);
+            return;
+        }
+
+        if (_isInstallingUpdate)
+            return;
+
+        var update = _availableUpdate;
+        var kind = InstallKindDetector.Detect();
+        if (kind == InstallKind.None || update.Package is null)
+        {
+            var notes = update.Manifest.NotesUrl?.ToString()
+                        ?? UpdateChecker.ReleaseNotesUrl(UpdateChecker.ManifestUrl()).ToString();
+            var open = await Dialogs.ConfirmAsync(
+                $"Version v{update.Version.ToString(3)} is available, but this copy is not an installed MSI or ZIP package.\n\nOpen the release notes in your browser?",
+                "Update available");
+            if (open)
+                OpenUrl(notes);
+            return;
+        }
+
+        var confirm = await Dialogs.ConfirmAsync(
+            $"Download and install LiveClaude v{update.Version.ToString(3)} now?\n\nThe application will close briefly during the update and restart automatically.",
+            "Install update");
+        if (!confirm)
+            return;
+
+        _isInstallingUpdate = true;
+        UpdateStatusText = "Downloading update…";
+
+        try
+        {
+            using var http = new HttpClient { Timeout = TimeSpan.FromMinutes(5) };
+            var dir = UpdateInstaller.DownloadDirectory(update.Version);
+            var packagePath = await UpdateInstaller.DownloadAsync(http, update.Package, dir, progress: null);
+
+            var exe = Environment.ProcessPath ?? Path.Combine(AppContext.BaseDirectory, "LiveClaude.exe");
+            var log = Path.Combine(ConfigStore.LogDirectory, $"update-{update.Version.ToString(3)}.log");
+            UpdateInstaller.Launch(kind, packagePath, AppContext.BaseDirectory, exe, Environment.ProcessId, log);
+
+            if (Application.Current?.ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
+                desktop.Shutdown();
+        }
+        catch (Exception ex)
+        {
+            _isInstallingUpdate = false;
+            UpdateStatusText = "";
+            await Dialogs.ShowWarningAsync($"Update failed.\n\n{ex.Message}", "Update failed");
+        }
     }
 
     private async Task WithInstance(object? parameter, Func<string, Task> action)

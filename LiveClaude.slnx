@@ -14,6 +14,7 @@
     <Project Path="src/LiveClaude.Platform.Windows/LiveClaude.Platform.Windows.csproj" />
   </Folder>
   <Folder Name="/src/products/">
+    <Project Path="src/LiveClaude.Product.Antigravity/LiveClaude.Product.Antigravity.csproj" />
     <Project Path="src/LiveClaude.Product.Claude/LiveClaude.Product.Claude.csproj" />
     <Project Path="src/LiveClaude.Product.Cursor/LiveClaude.Product.Cursor.csproj" />
   </Folder>

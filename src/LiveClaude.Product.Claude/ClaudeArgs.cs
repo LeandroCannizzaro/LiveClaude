@@ -101,4 +101,7 @@ public static class ClaudeArgs
 
     /// <summary>Splits a raw extra-arguments string, honouring double quotes.</summary>
     public static IReadOnlyList<string> SplitArguments(string input) => CliArguments.Split(input);
+
+    /// <summary>Builds <c>claude /login</c> for the embedded terminal auth flow.</summary>
+    public static IReadOnlyList<string> BuildLogin() => ["/login"];
 }

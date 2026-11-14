@@ -8,7 +8,7 @@ using Microsoft.Extensions.Logging;
 namespace LiveClaude.Product.Cursor;
 
 /// <summary>Cursor My Machines worker product (<c>agent worker start</c>).</summary>
-public sealed class CursorAgentProduct : IAgentProduct
+public sealed class CursorAgentProduct : IAgentProduct, IAgentAuth
 {
     private readonly WindowsBetterSqlite3Patcher _patcher;
 
@@ -28,6 +28,8 @@ public sealed class CursorAgentProduct : IAgentProduct
     public bool SupportsEnvironments => false;
 
     public bool SupportsWorktrees => false;
+
+    public bool SupportsInteractiveLogin => true;
 
     public string? ResolveExecutable(AppConfig appConfig) =>
         CursorAgentLocator.Locate(appConfig.Products.Cursor.Path)?.Path;
@@ -82,5 +84,48 @@ public sealed class CursorAgentProduct : IAgentProduct
         return new LaunchPlan(executable, args, session.Directory, environment);
     }
 
+    public AgentAuthState GetAuthState(AppConfig appConfig)
+    {
+        var apiKeyPath = appConfig.Products.Cursor.ApiKeyPath;
+        if (!string.IsNullOrWhiteSpace(apiKeyPath) && File.Exists(apiKeyPath))
+            return new AgentAuthState(AgentAuthStatus.SignedIn, null);
+
+        var tokenFile = appConfig.Products.Cursor.AuthTokenFile;
+        if (!string.IsNullOrWhiteSpace(tokenFile) && File.Exists(tokenFile))
+            return new AgentAuthState(AgentAuthStatus.SignedIn, null);
+
+        // PreferExistingLogin relies on a prior `agent login` with no local probe we can trust here.
+        if (appConfig.Products.Cursor.PreferExistingLogin)
+            return new AgentAuthState(AgentAuthStatus.Unknown, null);
+
+        return new AgentAuthState(
+            AgentAuthStatus.SignedOut,
+            "Cursor Agent is not signed in. Run interactive login or set an API key / auth token file.");
+    }
+
+    public bool ShouldOfferLogin(AppConfig appConfig) =>
+        appConfig.Products.Cursor.OfferLoginWhenRequired;
+
+    public LaunchPlan? BuildLoginLaunch(AppConfig appConfig, string workingDirectory)
+    {
+        var executable = ResolveExecutable(appConfig);
+        if (executable is null)
+            return null;
+
+        return new LaunchPlan(
+            executable,
+            CursorArgs.BuildLogin(),
+            ResolveWorkingDirectory(workingDirectory),
+            new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase));
+    }
+
     public IOutputInterpreter CreateOutputInterpreter() => new CursorOutputInterpreter();
+
+    private static string ResolveWorkingDirectory(string workingDirectory)
+    {
+        if (!string.IsNullOrWhiteSpace(workingDirectory) && Directory.Exists(workingDirectory))
+            return workingDirectory;
+
+        return Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+    }
 }

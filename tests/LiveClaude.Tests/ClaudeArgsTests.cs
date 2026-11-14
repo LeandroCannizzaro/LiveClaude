@@ -17,6 +17,14 @@ public class ClaudeArgsTests
     };
 
     [Fact]
+    public void BuildLoginUsesTheSlashLoginArgv()
+    {
+        var args = ClaudeArgs.BuildLogin();
+
+        Assert.Equal(["/login"], args);
+    }
+
+    [Fact]
     public void ColdStartBuildsAFullCommandLine()
     {
         var args = ClaudeArgs.BuildRemoteControl(Session());

@@ -1,0 +1,83 @@
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs" xmlns:util="http://wixtoolset.org/schemas/v4/wxs/util">
+
+  <!--
+    Linear, unsigned, per-machine package: everything goes to Program Files\LiveClaude.
+    The Windows service is NOT registered here: the app registers it on demand (UAC) from LiveClaude.Service.exe.
+    User data (%ProgramData%\LiveClaude, %LocalAppData%\LiveClaude) is never touched, uninstall included.
+  -->
+  <Package Name="LiveClaude"
+           Manufacturer="Leandro Cannizzaro"
+           Version="$(ProductVersion)"
+           UpgradeCode="B7C9D3A4-4E21-4F8B-9C12-7A8D5E3F1042"
+           Language="1033"
+           Scope="perMachine"
+           InstallerVersion="500">
+
+    <SummaryInformation Description="LiveClaude: keeps Claude Code, Cursor, and Antigravity Remote Control sessions running." />
+
+    <MajorUpgrade DowngradeErrorMessage="A newer version of LiveClaude is already installed." />
+    <MediaTemplate EmbedCab="yes" CompressionLevel="high" />
+
+    <!-- Start menu shortcut and Programs and Features icon. -->
+    <Icon Id="AppIcon.ico" SourceFile="$(IconSource)" />
+    <Property Id="ARPPRODUCTICON" Value="AppIcon.ico" />
+    <Property Id="INSTALLCOUNTER" Value="1" Secure="yes" />
+
+    <!-- Asks the running app to close gracefully so its files can be replaced. -->
+    <util:CloseApplication Id="CloseApp" Target="LiveClaude.exe" CloseMessage="yes" RebootPrompt="no" />
+
+    <StandardDirectory Id="ProgramFiles64Folder">
+      <Directory Id="INSTALLFOLDER" Name="LiveClaude" />
+    </StandardDirectory>
+
+    <Feature Id="Main" Title="LiveClaude" Level="1" AllowAbsent="no">
+      <ComponentGroupRef Id="AppFiles" />
+      <ComponentRef Id="AppExe" />
+      <ComponentRef Id="StartMenuShortcut" />
+      <ComponentRef Id="ServiceControl" />
+    </Feature>
+
+    <!-- The exe and counter script are explicit files below; the rest of the app, service, and plugins are harvested. -->
+    <ComponentGroup Id="AppFiles" Directory="INSTALLFOLDER">
+      <Files Include="$(AppSource)\**">
+        <Exclude Files="$(AppSource)\LiveClaude.exe" />
+        <Exclude Files="$(AppSource)\count-installation.ps1" />
+      </Files>
+    </ComponentGroup>
+
+    <DirectoryRef Id="INSTALLFOLDER">
+      <Component Id="AppExe">
+        <File Id="AppExe" Source="$(AppSource)\LiveClaude.exe" KeyPath="yes" />
+        <File Id="InstallCounterScript" Source="$(InstallCounterSource)" />
+      </Component>
+
+      <!-- If the app registered the Windows service, stop it before its files are replaced or removed, and remove it on uninstall. -->
+      <Component Id="ServiceControl">
+        <RegistryValue Root="HKLM" Key="Software\LiveClaude" Name="Installed" Type="integer" Value="1" KeyPath="yes" />
+        <ServiceControl Id="StopService" Name="LiveClaude" Stop="both" Remove="uninstall" Wait="yes" />
+      </Component>
+    </DirectoryRef>
+
+    <StandardDirectory Id="ProgramMenuFolder">
+      <Component Id="StartMenuShortcut">
+        <Shortcut Id="StartMenuShortcut" Name="LiveClaude" Target="[#AppExe]" WorkingDirectory="INSTALLFOLDER" Icon="AppIcon.ico" />
+        <RegistryValue Root="HKCU" Key="Software\LiveClaude" Name="StartMenuShortcut" Type="integer" Value="1" KeyPath="yes" />
+      </Component>
+    </StandardDirectory>
+
+    <!-- After an upgrade, bring the service back if there is one (harmless on first install). -->
+    <CustomAction Id="StartServiceIfPresent" Directory="INSTALLFOLDER" ExeCommand="&quot;[System64Folder]sc.exe&quot; start LiveClaude" Execute="deferred" Impersonate="no" Return="ignore" />
+    <CustomAction Id="SetInstallCounterCommand" Property="WixQuietExecCmdLine"
+                  Value="&quot;[System64Folder]WindowsPowerShell\v1.0\powershell.exe&quot; -NoProfile -NonInteractive -ExecutionPolicy Bypass -File &quot;[#InstallCounterScript]&quot;" />
+    <CustomAction Id="CountCompletedInstallation" BinaryRef="Wix4UtilCA_X64" DllEntry="WixQuietExec"
+                  Execute="immediate" Return="ignore" />
+    <InstallExecuteSequence>
+      <Custom Action="StartServiceIfPresent" Before="InstallFinalize" Condition="NOT REMOVE" />
+      <Custom Action="SetInstallCounterCommand" After="InstallFinalize"
+              Condition="NOT Installed AND NOT REMOVE AND NOT UPGRADINGPRODUCTCODE AND INSTALLCOUNTER = &quot;1&quot;" />
+      <Custom Action="CountCompletedInstallation" After="SetInstallCounterCommand"
+              Condition="NOT Installed AND NOT REMOVE AND NOT UPGRADINGPRODUCTCODE AND INSTALLCOUNTER = &quot;1&quot;" />
+    </InstallExecuteSequence>
+
+  </Package>
+</Wix>

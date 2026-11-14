@@ -1,0 +1,244 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="LiveClaude.App.Views.AppSettingsView"
+             Background="{DynamicResource SurfaceBrush}">
+  <Grid Margin="20" RowDefinitions="Auto,*">
+
+    <!-- Top bar -->
+    <Grid Grid.Row="0" ColumnDefinitions="*,Auto" Margin="0,0,0,10">
+      <StackPanel Grid.Column="0">
+        <TextBlock Text="Settings" Classes="heading" />
+        <TextBlock Classes="subheading" Margin="0"
+                   Text="General supervisor options, product CLIs, configuration folders, and appearance themes." />
+      </StackPanel>
+      <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+        <Button Content="Save settings" Classes="primary" Command="{Binding SaveSettingsCommand}" Margin="0" />
+      </StackPanel>
+    </Grid>
+
+    <!-- No-scroll tabbed layout -->
+    <TabControl Grid.Row="1">
+
+      <!-- General & Folders -->
+      <TabItem Header="General">
+        <Grid ColumnDefinitions="*,16,*" Margin="0,12,0,0">
+          <Border Grid.Column="0" Classes="card" VerticalAlignment="Top">
+            <StackPanel>
+              <TextBlock Text="Supervisor &amp; restart policy" FontSize="15" FontWeight="SemiBold" />
+              <Grid Margin="0,10,0,0" ColumnDefinitions="*,12,*">
+                <StackPanel Grid.Column="0">
+                  <TextBlock Text="First retry (s)" Classes="field" />
+                  <TextBox Text="{Binding BackoffInitialSeconds}" />
+                  <TextBlock Text="Max backoff (s)" Classes="field" />
+                  <TextBox Text="{Binding BackoffMaxSeconds}" />
+                  <TextBlock Text="Backoff multiplier" Classes="field" />
+                  <TextBox Text="{Binding BackoffMultiplier}" />
+                  <TextBlock Text="Reset healthy after (s)" Classes="field" />
+                  <TextBox Text="{Binding BackoffResetAfterHealthySeconds}" />
+                </StackPanel>
+                <StackPanel Grid.Column="2">
+                  <TextBlock Text="Max restarts (0 = forever)" Classes="field" />
+                  <TextBox Text="{Binding BackoffMaxRestarts}" />
+                  <TextBlock Text="Graceful stop wait (s)" Classes="field" />
+                  <TextBox Text="{Binding GracefulStopSeconds}" />
+                  <TextBlock Text="Health check interval (s)" Classes="field" />
+                  <TextBox Text="{Binding HealthCheckSeconds}" />
+                  <TextBlock Text="Log file size (MB)" Classes="field" />
+                  <TextBox Text="{Binding LogMaxSizeMb}" />
+                </StackPanel>
+              </Grid>
+              <Grid Margin="0,6,0,0" ColumnDefinitions="*,12,*">
+                <StackPanel Grid.Column="0">
+                  <TextBlock Text="Log tail lines (in memory)" Classes="field" />
+                  <TextBox Text="{Binding LogTailLines}" />
+                </StackPanel>
+                <CheckBox Grid.Column="2" Content="Use pseudo console (ConPTY)"
+                          IsChecked="{Binding UsePseudoConsole}" VerticalAlignment="Bottom" Margin="0,0,0,6" />
+              </Grid>
+            </StackPanel>
+          </Border>
+
+          <Border Grid.Column="2" Classes="card" VerticalAlignment="Top">
+            <StackPanel>
+              <TextBlock Text="Configuration &amp; logs" FontSize="15" FontWeight="SemiBold" />
+              <TextBlock Classes="subheading" Margin="0,6,0,8"
+                         Text="LiveClaude stores its configuration and rolling instance logs in the platform directories below." />
+              <TextBlock Text="Config file path" Classes="field" />
+              <TextBox Text="{Binding ConfigPath}" IsReadOnly="True" Classes="mono" />
+              <StackPanel Orientation="Horizontal" Margin="0,14,0,0">
+                <Button Content="Open config folder" Command="{Binding OpenConfigCommand}" />
+                <Button Content="Open logs folder" Command="{Binding OpenLogFolderCommand}" Margin="0" />
+              </StackPanel>
+            </StackPanel>
+          </Border>
+        </Grid>
+      </TabItem>
+
+      <!-- Products (sub-tabbed so nothing scrolls) -->
+      <TabItem Header="Products">
+        <TabControl Margin="0,10,0,0">
+          <TabItem Header="Claude Code">
+            <Border Classes="card" Margin="0,10,0,0" VerticalAlignment="Top">
+              <Grid ColumnDefinitions="*,16,*">
+                <StackPanel Grid.Column="0">
+                  <TextBlock Text="Claude Code CLI" FontSize="15" FontWeight="SemiBold" />
+                  <TextBlock Classes="mono" FontSize="11" Margin="0,4,0,6" TextWrapping="Wrap"
+                             Text="Prefer a stable native install: the copy bundled with the Claude desktop app lives in a versioned folder whose path changes on every update." />
+                  <TextBlock Text="Path (leave empty to auto-detect)" Classes="field" />
+                  <TextBox Text="{Binding ClaudePath}" />
+                  <CheckBox Content="Track which environment each Claude server registers (needs Anthropic API)"
+                            IsChecked="{Binding TrackEnvironments}" Margin="0,12,0,0" />
+                  <CheckBox Content="Offer sign-in when Claude credentials are missing or expired"
+                            IsChecked="{Binding ClaudeOfferLoginWhenRequired}" Margin="0,8,0,0" />
+                  <Button Content="Sign in with Claude Code…" HorizontalAlignment="Left" Margin="0,12,0,0"
+                          Click="OnSignInClaude" />
+                </StackPanel>
+                <StackPanel Grid.Column="2">
+                  <TextBlock Text="Detected Claude installs" Classes="field" Margin="0,0,0,6" />
+                  <ItemsControl ItemsSource="{Binding DetectedClaudeInstalls}">
+                    <ItemsControl.ItemTemplate>
+                      <DataTemplate>
+                        <Grid Margin="0,0,0,6" ColumnDefinitions="*,Auto">
+                          <StackPanel Grid.Column="0">
+                            <TextBlock Text="{Binding Path}" Classes="mono" Foreground="{DynamicResource TextBrush}" />
+                            <TextBlock Classes="mono" FontSize="11">
+                              <Run Text="{Binding Version}" />
+                              <Run Text=" — " />
+                              <Run Text="{Binding Source}" />
+                            </TextBlock>
+                          </StackPanel>
+                          <Button Grid.Column="1" Content="Use" Click="OnUseClaudeInstall" Tag="{Binding Path}" Classes="small" Margin="0" />
+                        </Grid>
+                      </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                  </ItemsControl>
+                </StackPanel>
+              </Grid>
+            </Border>
+          </TabItem>
+
+          <TabItem Header="Cursor">
+            <Border Classes="card" Margin="0,10,0,0" VerticalAlignment="Top">
+              <Grid ColumnDefinitions="*,16,*">
+                <StackPanel Grid.Column="0">
+                  <TextBlock Text="Cursor Agent CLI" FontSize="15" FontWeight="SemiBold" />
+                  <TextBlock Classes="mono" FontSize="11" Margin="0,4,0,6" TextWrapping="Wrap"
+                             Text="My Machines worker (`agent worker start`). Auth: existing agent login, API key file, or auth token file." />
+                  <TextBlock Text="Path (leave empty to auto-detect)" Classes="field" />
+                  <TextBox Text="{Binding CursorPath}" />
+                  <TextBlock Text="API key file (optional)" Classes="field" />
+                  <TextBox Text="{Binding CursorApiKeyPath}" />
+                  <TextBlock Text="Auth token file (optional)" Classes="field" />
+                  <TextBox Text="{Binding CursorAuthTokenFile}" />
+                  <CheckBox Content="Auto-patch Windows better-sqlite3 before starting a worker"
+                            IsChecked="{Binding CursorAutoPatchWindowsSqlite}" Margin="0,10,0,0" />
+                  <CheckBox Content="Offer sign-in when Cursor reports login is required"
+                            IsChecked="{Binding CursorOfferLoginWhenRequired}" Margin="0,6,0,0" />
+                  <Button Content="Sign in with Cursor…" HorizontalAlignment="Left" Margin="0,10,0,0"
+                          Click="OnSignInCursor" />
+                </StackPanel>
+                <StackPanel Grid.Column="2">
+                  <TextBlock Text="Detected Cursor installs" Classes="field" Margin="0,0,0,6" />
+                  <ItemsControl ItemsSource="{Binding DetectedCursorInstalls}">
+                    <ItemsControl.ItemTemplate>
+                      <DataTemplate>
+                        <Grid Margin="0,0,0,6" ColumnDefinitions="*,Auto">
+                          <StackPanel Grid.Column="0">
+                            <TextBlock Text="{Binding Path}" Classes="mono" Foreground="{DynamicResource TextBrush}" />
+                            <TextBlock Classes="mono" FontSize="11">
+                              <Run Text="{Binding Version}" />
+                              <Run Text=" — " />
+                              <Run Text="{Binding Source}" />
+                            </TextBlock>
+                          </StackPanel>
+                          <Button Grid.Column="1" Content="Use" Click="OnUseCursorInstall" Tag="{Binding Path}" Classes="small" Margin="0" />
+                        </Grid>
+                      </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                  </ItemsControl>
+                </StackPanel>
+              </Grid>
+            </Border>
+          </TabItem>
+
+          <TabItem Header="Antigravity">
+            <Border Classes="card" Margin="0,10,0,0" VerticalAlignment="Top">
+              <Grid ColumnDefinitions="*,16,*">
+                <StackPanel Grid.Column="0">
+                  <TextBlock Text="Antigravity CLI" FontSize="15" FontWeight="SemiBold" />
+                  <TextBlock Classes="mono" FontSize="11" Margin="0,4,0,6" TextWrapping="Wrap"
+                             Text="Google Antigravity CLI (`agy --remote-control`). Uses the OS keyring or interactive OAuth sign-in." />
+                  <TextBlock Text="Path (leave empty to auto-detect)" Classes="field" />
+                  <TextBox Text="{Binding AntigravityPath}" />
+                  <CheckBox Content="Offer sign-in when Antigravity reports login is required"
+                            IsChecked="{Binding AntigravityOfferLoginWhenRequired}" Margin="0,12,0,0" />
+                  <Button Content="Sign in with Antigravity…" HorizontalAlignment="Left" Margin="0,12,0,0"
+                          Click="OnSignInAntigravity" />
+                </StackPanel>
+                <StackPanel Grid.Column="2">
+                  <TextBlock Text="Detected Antigravity installs" Classes="field" Margin="0,0,0,6" />
+                  <ItemsControl ItemsSource="{Binding DetectedAntigravityInstalls}">
+                    <ItemsControl.ItemTemplate>
+                      <DataTemplate>
+                        <Grid Margin="0,0,0,6" ColumnDefinitions="*,Auto">
+                          <StackPanel Grid.Column="0">
+                            <TextBlock Text="{Binding Path}" Classes="mono" Foreground="{DynamicResource TextBrush}" />
+                            <TextBlock Classes="mono" FontSize="11">
+                              <Run Text="{Binding Version}" />
+                              <Run Text=" — " />
+                              <Run Text="{Binding Source}" />
+                            </TextBlock>
+                          </StackPanel>
+                          <Button Grid.Column="1" Content="Use" Click="OnUseAntigravityInstall" Tag="{Binding Path}" Classes="small" Margin="0" />
+                        </Grid>
+                      </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                  </ItemsControl>
+                </StackPanel>
+              </Grid>
+            </Border>
+          </TabItem>
+        </TabControl>
+      </TabItem>
+
+      <!-- Appearance / Theme -->
+      <TabItem Header="Appearance">
+        <Border Classes="card" Margin="0,12,0,0" DataContext="{Binding Theme}" VerticalAlignment="Top">
+          <StackPanel>
+            <Grid ColumnDefinitions="Auto,240,Auto,*" Margin="0,0,0,14">
+              <TextBlock Grid.Column="0" Text="Theme preset" VerticalAlignment="Center" Margin="0,0,12,0" FontWeight="SemiBold" />
+              <ComboBox Grid.Column="1" ItemsSource="{Binding PresetNames}" SelectedItem="{Binding SelectedPresetName}" HorizontalAlignment="Stretch" />
+              <Button Grid.Column="2" Content="Reset to preset" Command="{Binding ResetToPresetCommand}" Margin="12,0,0,0" />
+              <TextBlock Grid.Column="3" Classes="mono" FontSize="11" VerticalAlignment="Center" Margin="14,0,0,0"
+                         Text="Changes preview immediately; click Save settings to persist." />
+            </Grid>
+
+            <ItemsControl ItemsSource="{Binding Tokens}">
+              <ItemsControl.ItemsPanel>
+                <ItemsPanelTemplate>
+                  <UniformGrid Columns="3" />
+                </ItemsPanelTemplate>
+              </ItemsControl.ItemsPanel>
+              <ItemsControl.ItemTemplate>
+                <DataTemplate>
+                  <Border Background="{DynamicResource SurfaceAltBrush}" BorderBrush="{DynamicResource BorderBrush}"
+                          BorderThickness="1" CornerRadius="6" Padding="10,8" Margin="0,0,10,10">
+                    <Grid ColumnDefinitions="*,Auto">
+                      <StackPanel Grid.Column="0" VerticalAlignment="Center">
+                        <TextBlock Text="{Binding Label}" FontSize="12.5" FontWeight="SemiBold" />
+                        <TextBlock Text="{Binding Hex}" Classes="mono" FontSize="11" />
+                      </StackPanel>
+                      <ColorPicker Grid.Column="1" Color="{Binding Color, Mode=TwoWay}"
+                                   IsAlphaEnabled="False" IsAlphaVisible="False" />
+                    </Grid>
+                  </Border>
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+          </StackPanel>
+        </Border>
+      </TabItem>
+
+    </TabControl>
+  </Grid>
+</UserControl>

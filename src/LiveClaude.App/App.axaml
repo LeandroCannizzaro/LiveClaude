@@ -10,6 +10,7 @@
       palette and its handful of text and button styles on top.
     -->
     <FluentTheme />
+    <StyleInclude Source="avares://Avalonia.Controls.ColorPicker/Themes/Fluent/Fluent.xaml" />
     <StyleInclude Source="avares://LiveClaude/Themes/Dark.axaml" />
   </Application.Styles>
 

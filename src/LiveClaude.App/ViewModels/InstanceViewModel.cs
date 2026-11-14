@@ -1,6 +1,8 @@
 using Avalonia.Media;
 using Avalonia.Media.Immutable;
+using LiveClaude.Abstractions;
 using LiveClaude.Core.Model;
+using LiveClaude.Core.Products;
 
 namespace LiveClaude.App.ViewModels;
 
@@ -24,6 +26,14 @@ public sealed class InstanceViewModel : ObservableObject
     public string Name => _snapshot.Name;
 
     public string Directory => _snapshot.Directory;
+
+    public string ProductId => _snapshot.ProductId;
+
+    /// <summary>True when the supervisor is blocked on interactive product sign-in.</summary>
+    public bool NeedsSignIn =>
+        _snapshot.State == InstanceState.NeedsAttention &&
+        _snapshot.AttentionSignal == OutputSignal.LoginRequired &&
+        AgentProductExtensions.TryGetAuth(_snapshot.ProductId) is { SupportsInteractiveLogin: true };
 
     public InstanceState State => _snapshot.State;
 
@@ -90,6 +100,14 @@ public sealed class InstanceViewModel : ObservableObject
                 var dirs = 1 + _config.Cursor.ExtraWorkerDirs.Count;
                 parts.Add($"{dirs} worker-dir(s)");
             }
+            else if (_config is not null &&
+                     string.Equals(_config.ProductId, "antigravity", StringComparison.OrdinalIgnoreCase))
+            {
+                var mode = string.IsNullOrWhiteSpace(_config.Antigravity.Mode) ? "default" : _config.Antigravity.Mode;
+                parts.Add(string.IsNullOrWhiteSpace(_config.Antigravity.Model)
+                    ? $"remote-control · {mode}"
+                    : $"remote-control · {mode} · {_config.Antigravity.Model}");
+            }
 
             return string.Join("   ·   ", parts);
         }
@@ -142,6 +160,8 @@ public sealed class InstanceViewModel : ObservableObject
         OnPropertyChanged(nameof(WorktreeSummary));
         OnPropertyChanged(nameof(CanStart));
         OnPropertyChanged(nameof(CanStop));
+        OnPropertyChanged(nameof(ProductId));
+        OnPropertyChanged(nameof(NeedsSignIn));
         OnPropertyChanged(nameof(Snapshot));
         OnPropertyChanged(nameof(Config));
     }

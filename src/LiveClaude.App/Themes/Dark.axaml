@@ -1,4 +1,4 @@
-<Styles xmlns="https://github.com/avaloniaui"
+﻿<Styles xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:conv="using:LiveClaude.App.Converters">
 
@@ -54,12 +54,12 @@
   </Styles.Resources>
 
   <Style Selector="Window">
-    <Setter Property="Background" Value="{StaticResource BackgroundBrush}" />
+    <Setter Property="Background" Value="{DynamicResource BackgroundBrush}" />
     <Setter Property="FontSize" Value="13" />
   </Style>
 
   <Style Selector="TextBlock">
-    <Setter Property="Foreground" Value="{StaticResource TextBrush}" />
+    <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
     <Setter Property="FontSize" Value="13" />
   </Style>
 
@@ -70,14 +70,14 @@
   </Style>
 
   <Style Selector="TextBlock.subheading">
-    <Setter Property="Foreground" Value="{StaticResource MutedTextBrush}" />
+    <Setter Property="Foreground" Value="{DynamicResource MutedTextBrush}" />
     <Setter Property="FontSize" Value="12.5" />
     <Setter Property="TextWrapping" Value="Wrap" />
     <Setter Property="Margin" Value="0,0,0,12" />
   </Style>
 
   <Style Selector="TextBlock.field">
-    <Setter Property="Foreground" Value="{StaticResource MutedTextBrush}" />
+    <Setter Property="Foreground" Value="{DynamicResource MutedTextBrush}" />
     <Setter Property="FontSize" Value="12" />
     <Setter Property="Margin" Value="0,10,0,4" />
   </Style>
@@ -85,12 +85,12 @@
   <Style Selector="TextBlock.mono">
     <Setter Property="FontFamily" Value="{StaticResource MonoFont}" />
     <Setter Property="FontSize" Value="12" />
-    <Setter Property="Foreground" Value="{StaticResource MutedTextBrush}" />
+    <Setter Property="Foreground" Value="{DynamicResource MutedTextBrush}" />
   </Style>
 
   <Style Selector="Border.card">
-    <Setter Property="Background" Value="{StaticResource SurfaceBrush}" />
-    <Setter Property="BorderBrush" Value="{StaticResource BorderBrush}" />
+    <Setter Property="Background" Value="{DynamicResource SurfaceBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}" />
     <Setter Property="BorderThickness" Value="1" />
     <Setter Property="CornerRadius" Value="10" />
     <Setter Property="Padding" Value="16" />
@@ -98,23 +98,23 @@
   </Style>
 
   <Style Selector="Border.terminal">
-    <Setter Property="Background" Value="{StaticResource TerminalBackgroundBrush}" />
-    <Setter Property="BorderBrush" Value="{StaticResource BorderBrush}" />
+    <Setter Property="Background" Value="{DynamicResource TerminalBackgroundBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}" />
     <Setter Property="BorderThickness" Value="1" />
     <Setter Property="CornerRadius" Value="10" />
     <Setter Property="ClipToBounds" Value="True" />
   </Style>
 
   <Style Selector="Border.pill">
-    <Setter Property="Background" Value="{StaticResource SurfaceAltBrush}" />
+    <Setter Property="Background" Value="{DynamicResource SurfaceAltBrush}" />
     <Setter Property="CornerRadius" Value="10" />
     <Setter Property="Padding" Value="8,2" />
   </Style>
 
   <Style Selector="Button">
-    <Setter Property="Background" Value="{StaticResource SurfaceAltBrush}" />
-    <Setter Property="Foreground" Value="{StaticResource TextBrush}" />
-    <Setter Property="BorderBrush" Value="{StaticResource BorderBrush}" />
+    <Setter Property="Background" Value="{DynamicResource SurfaceAltBrush}" />
+    <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}" />
     <Setter Property="BorderThickness" Value="1" />
     <Setter Property="CornerRadius" Value="7" />
     <Setter Property="Padding" Value="13,6" />
@@ -123,8 +123,8 @@
   </Style>
 
   <Style Selector="Button:pointerover /template/ ContentPresenter">
-    <Setter Property="Background" Value="{StaticResource BorderBrush}" />
-    <Setter Property="TextBlock.Foreground" Value="{StaticResource TextBrush}" />
+    <Setter Property="Background" Value="{DynamicResource BorderBrush}" />
+    <Setter Property="TextBlock.Foreground" Value="{DynamicResource TextBrush}" />
   </Style>
 
   <Style Selector="Button:disabled /template/ ContentPresenter">
@@ -132,21 +132,21 @@
   </Style>
 
   <Style Selector="Button.primary">
-    <Setter Property="Background" Value="{StaticResource AccentBrush}" />
-    <Setter Property="BorderBrush" Value="{StaticResource AccentBrush}" />
+    <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
     <Setter Property="Foreground" Value="#1A0E08" />
     <Setter Property="FontWeight" Value="SemiBold" />
   </Style>
 
   <Style Selector="Button.primary:pointerover /template/ ContentPresenter">
-    <Setter Property="Background" Value="{StaticResource AccentHoverBrush}" />
+    <Setter Property="Background" Value="{DynamicResource AccentHoverBrush}" />
     <Setter Property="TextBlock.Foreground" Value="#1A0E08" />
   </Style>
 
   <Style Selector="Button.link">
     <Setter Property="Background" Value="Transparent" />
     <Setter Property="BorderBrush" Value="Transparent" />
-    <Setter Property="Foreground" Value="{StaticResource MutedTextBrush}" />
+    <Setter Property="Foreground" Value="{DynamicResource MutedTextBrush}" />
     <Setter Property="Padding" Value="10,3" />
     <Setter Property="FontSize" Value="11.5" />
   </Style>
@@ -157,9 +157,9 @@
   </Style>
 
   <Style Selector="TextBox">
-    <Setter Property="Background" Value="{StaticResource SurfaceAltBrush}" />
-    <Setter Property="Foreground" Value="{StaticResource TextBrush}" />
-    <Setter Property="BorderBrush" Value="{StaticResource BorderBrush}" />
+    <Setter Property="Background" Value="{DynamicResource SurfaceAltBrush}" />
+    <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}" />
     <Setter Property="BorderThickness" Value="1" />
     <Setter Property="CornerRadius" Value="7" />
     <Setter Property="Padding" Value="9,6" />
@@ -175,15 +175,15 @@
   </Style>
 
   <Style Selector="ComboBox">
-    <Setter Property="Background" Value="{StaticResource SurfaceAltBrush}" />
-    <Setter Property="Foreground" Value="{StaticResource TextBrush}" />
-    <Setter Property="BorderBrush" Value="{StaticResource BorderBrush}" />
+    <Setter Property="Background" Value="{DynamicResource SurfaceAltBrush}" />
+    <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}" />
     <Setter Property="CornerRadius" Value="7" />
     <Setter Property="FontSize" Value="12.5" />
   </Style>
 
   <Style Selector="CheckBox">
-    <Setter Property="Foreground" Value="{StaticResource TextBrush}" />
+    <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
     <Setter Property="FontSize" Value="12.5" />
   </Style>
 
@@ -193,14 +193,14 @@
   </Style>
 
   <Style Selector="TabItem">
-    <Setter Property="Foreground" Value="{StaticResource MutedTextBrush}" />
+    <Setter Property="Foreground" Value="{DynamicResource MutedTextBrush}" />
     <Setter Property="FontSize" Value="13" />
     <Setter Property="Padding" Value="14,8" />
     <Setter Property="MinHeight" Value="0" />
   </Style>
 
   <Style Selector="TabItem:selected">
-    <Setter Property="Foreground" Value="{StaticResource TextBrush}" />
+    <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
   </Style>
 
   <Style Selector="ListBox">
@@ -220,7 +220,7 @@
     <Setter Property="Template">
       <ControlTemplate>
         <Border Name="Root"
-                Background="{StaticResource SurfaceAltBrush}"
+                Background="{DynamicResource SurfaceAltBrush}"
                 CornerRadius="8"
                 Padding="12,10"
                 BorderThickness="1"
@@ -233,11 +233,11 @@
   </Style>
 
   <Style Selector="ListBoxItem:selected /template/ Border#Root">
-    <Setter Property="BorderBrush" Value="{StaticResource AccentBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
   </Style>
 
   <Style Selector="ListBoxItem:pointerover /template/ Border#Root">
-    <Setter Property="Background" Value="{StaticResource BorderBrush}" />
+    <Setter Property="Background" Value="{DynamicResource BorderBrush}" />
   </Style>
 
 </Styles>
