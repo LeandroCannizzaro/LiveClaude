@@ -79,6 +79,8 @@ cat > "$APP/Contents/Info.plist" <<PLIST
     <string>$VERSION</string>
     <key>CFBundlePackageType</key>
     <string>APPL</string>
+    <key>CFBundleInfoDictionaryVersion</key>
+    <string>6.0</string>
     <key>CFBundleExecutable</key>
     <string>LiveClaude</string>
     <key>CFBundleIconFile</key>
@@ -109,6 +111,21 @@ else
   echo "    (iconutil/sips unavailable — bundle ships without an icon)"
 fi
 
+# ---------------------------------------------------------------- codesign (ad-hoc)
+# .NET's apphost carries a bare ad-hoc signature that does not cover Info.plist, resources, or
+# the second published executable (LiveClaude.Service). An incomplete or missing bundle signature
+# causes Gatekeeper on macOS 11+ (and especially Apple Silicon) to report the downloaded app as
+# "damaged and can't be opened" instead of "unidentified developer".
+if command -v xattr >/dev/null 2>&1; then
+  xattr -cr "$APP"
+fi
+
+if command -v codesign >/dev/null 2>&1; then
+  echo "==> codesign (ad-hoc)"
+  codesign --force --deep --sign - "$APP"
+  codesign --verify --deep --strict "$APP"
+fi
+
 # ---------------------------------------------------------------- dmg
 
 echo "==> dmg"
@@ -120,8 +137,8 @@ ln -s /Applications "$DMG_ROOT/Applications"
 # Unsigned, so Gatekeeper asks the first time. Notarisation needs a Developer ID account and is
 # tracked separately; documenting the right-click-Open route is the honest interim answer.
 cat > "$DMG_ROOT/READ ME FIRST.txt" <<'README'
-LiveClaude is not signed with an Apple Developer ID yet, so macOS will refuse to
-open it on the first try.
+LiveClaude is ad-hoc signed (not notarized with an Apple Developer ID yet), so
+macOS will warn about an unidentified developer on the first try.
 
 To run it: drag LiveClaude to Applications, then right-click (or Control-click)
 the app and choose Open. Confirm once. Every later launch works normally.
@@ -130,9 +147,11 @@ If you prefer the terminal:
     xattr -dr com.apple.quarantine /Applications/LiveClaude.app
 README
 
+# Force HFS+ so DMGs created on newer macOS runners (e.g. Sequoia) remain compatible with macOS 11.
 hdiutil create \
   -volname "LiveClaude $VERSION" \
   -srcfolder "$DMG_ROOT" \
+  -fs HFS+ \
   -ov -format UDZO \
   "$OUTPUT/LiveClaude-$VERSION-$RID$SUFFIX.dmg"
 

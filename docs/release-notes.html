@@ -47,6 +47,15 @@
     <h1>Release Notes</h1>
     <p class="meta">Published releases of LiveClaude.</p>
 
+    <section id="v2.2.8" class="card">
+      <h2>v2.2.8</h2>
+      <div class="meta">Fix macOS 11 DMG &amp; bundle signature ("damaged app" error)</div>
+      <ul>
+        <li><strong>Ad-hoc bundle signing:</strong> signs the full <code>LiveClaude.app</code> bundle with <code>codesign --force --deep --sign -</code> and verifies it with <code>codesign --verify --deep --strict</code> after stripping extended attributes (<code>xattr -cr</code>).</li>
+        <li><strong>macOS 11 DMG compatibility:</strong> forces <code>-fs HFS+</code> in <code>hdiutil create</code> and adds <code>CFBundleInfoDictionaryVersion</code> to <code>Info.plist</code>.</li>
+      </ul>
+    </section>
+
     <section id="v2.2.7" class="card">
       <h2>v2.2.7</h2>
       <div class="meta">Dual macOS packages: macOS 12+ (.NET 10) &amp; macOS 11 Big Sur (.NET 8)</div>
