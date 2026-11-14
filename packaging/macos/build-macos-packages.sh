@@ -75,7 +75,7 @@ cat > "$APP/Contents/Info.plist" <<PLIST
     <key>CFBundleIconFile</key>
     <string>liveclaude.icns</string>
     <key>LSMinimumSystemVersion</key>
-    <string>12.0</string>
+    <string>11.0</string>
     <key>NSHighResolutionCapable</key>
     <true/>
     <key>NSHumanReadableCopyright</key>
