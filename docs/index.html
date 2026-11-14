@@ -169,7 +169,8 @@
     restarted automatically across crashes, sign-ins, and reboots.
   </p>
   <div class="cta">
-    <a class="btn primary" href="https://github.com/LeandroCannizzaro/LiveClaude/releases/latest">Download MSI / Packages</a>
+    <a id="download-btn" class="btn primary" href="https://github.com/LeandroCannizzaro/LiveClaude/releases/latest">Download Latest</a>
+    <a class="btn" href="https://github.com/LeandroCannizzaro/LiveClaude/releases">Releases</a>
     <a class="btn" href="release-notes.html">Release Notes</a>
     <a class="btn" href="https://github.com/LeandroCannizzaro/LiveClaude">View on GitHub</a>
   </div>
@@ -424,6 +425,58 @@ dotnet run --project src/LiveClaude.App</pre>
       });
     });
   });
+
+  (async function () {
+    var btn = document.getElementById('download-btn');
+    if (!btn) return;
+
+    var ua = navigator.userAgent || '';
+    var platform = (navigator.platform || '').toLowerCase();
+    var os = /Win/i.test(ua) || /win/.test(platform) ? 'windows'
+      : /Mac/i.test(ua) || /mac/.test(platform) ? 'macos'
+      : /Linux/i.test(ua) || /linux/.test(platform) ? 'linux'
+      : 'unknown';
+
+    var isArm64 = /arm64|aarch64/i.test(ua) || /aarch64|arm64/.test(platform);
+    if (navigator.userAgentData && typeof navigator.userAgentData.getHighEntropyValues === 'function') {
+      try {
+        var hints = await navigator.userAgentData.getHighEntropyValues(['architecture']);
+        if (hints && hints.architecture) {
+          isArm64 = /arm/i.test(hints.architecture);
+        }
+      } catch (_) {}
+    }
+
+    if (os === 'unknown') return;
+
+    var labelSuffix = os === 'windows' ? (isArm64 ? 'Windows ARM64 (.zip)' : 'Windows (.msi)')
+      : os === 'macos' ? (isArm64 ? 'macOS Apple Silicon (.dmg)' : 'macOS Intel (.dmg)')
+      : (isArm64 ? 'Linux ARM64 (.rpm)' : 'Linux x64 (.rpm)');
+
+    btn.textContent = 'Download for ' + labelSuffix;
+
+    try {
+      var res = await fetch('https://api.github.com/repos/LeandroCannizzaro/LiveClaude/releases/latest', {
+        headers: { 'Accept': 'application/vnd.github+json' }
+      });
+      if (!res.ok) return;
+      var release = await res.json();
+      var assets = Array.isArray(release.assets) ? release.assets : [];
+
+      var matcher = os === 'windows'
+        ? (isArm64 ? function (n) { return /-win-arm64\.zip$/i.test(n); } : function (n) { return /-x64\.msi$/i.test(n); })
+        : os === 'macos'
+        ? (isArm64 ? function (n) { return /-osx-arm64\.dmg$/i.test(n); } : function (n) { return /-osx-x64\.dmg$/i.test(n); })
+        : (isArm64 ? function (n) { return /\.aarch64\.rpm$/i.test(n); } : function (n) { return /\.x86_64\.rpm$/i.test(n); });
+
+      var asset = assets.find(function (a) { return a && a.name && matcher(a.name); });
+      if (asset && asset.browser_download_url) {
+        btn.href = asset.browser_download_url;
+        var ver = release.tag_name ? ' ' + release.tag_name : '';
+        btn.textContent = 'Download' + ver + ' — ' + labelSuffix;
+      }
+    } catch (_) {}
+  })();
 </script>
 
 </body>
