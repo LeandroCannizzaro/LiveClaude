@@ -89,10 +89,43 @@
 </div>
 
 <div class="shot-wrap">
-  <figure class="shot">
-    <img src="assets/dashboard.png" alt="LiveClaude desktop application dashboard" />
-    <figcaption>Every supervised session, product badge, live state, session URL, and quick actions — in one window.</figcaption>
-  </figure>
+  <div class="carousel" id="app-carousel" aria-roledescription="carousel" aria-label="LiveClaude screenshots">
+    <div class="carousel-viewport" id="carousel-viewport" title="Click image to pause automatic playback">
+      <button type="button" class="carousel-btn prev" id="carousel-prev" aria-label="Previous screenshot">&#8249;</button>
+      <div class="carousel-track" id="carousel-track">
+        <figure class="carousel-slide" data-title="Dashboard" data-desc="Live status of all supervised sessions, product badges, session URLs, and quick Start/Stop/Terminal controls.">
+          <img src="assets/dashboard.png" alt="LiveClaude Dashboard" />
+        </figure>
+        <figure class="carousel-slide" data-title="Sessions" data-desc="No-scroll tabbed session editor for Claude Code, Cursor My Machines, and Antigravity with live command preview.">
+          <img src="assets/sessions.png" alt="LiveClaude Sessions editor" />
+        </figure>
+        <figure class="carousel-slide" data-title="Embedded Terminal" data-desc="Real ConPTY / POSIX PTY console inside the app for workspace trust prompts, /login, and live steering.">
+          <img src="assets/terminal.png" alt="LiveClaude Embedded Terminal" />
+        </figure>
+        <figure class="carousel-slide" data-title="Logs" data-desc="Rolling instance logs with auto-refresh and one-click access to the platform log folder.">
+          <img src="assets/logs.png" alt="LiveClaude Logs viewer" />
+        </figure>
+        <figure class="carousel-slide" data-title="Environments" data-desc="Inspect Claude bridge environments on your account and clean up stale or duplicate entries safely.">
+          <img src="assets/environments.png" alt="LiveClaude Environments cleanup" />
+        </figure>
+        <figure class="carousel-slide" data-title="Service &amp; Startup" data-desc="Install, start, stop, or remove the User session host or System-wide host on Windows, Linux, and macOS.">
+          <img src="assets/hosting.png" alt="LiveClaude Service and startup" />
+        </figure>
+        <figure class="carousel-slide" data-title="Settings &amp; Themes" data-desc="Configure restart backoff, ConPTY, product CLI paths, 10 built-in theme presets, and the 12-token Color Picker.">
+          <img src="assets/settings-general.png" alt="LiveClaude Settings" />
+        </figure>
+        <figure class="carousel-slide" data-title="About LiveClaude" data-desc="Top banner artwork, version info, license details, and direct links to the User Manual and Release Notes.">
+          <img src="assets/about.png" alt="LiveClaude About dialog" />
+        </figure>
+      </div>
+      <button type="button" class="carousel-btn next" id="carousel-next" aria-label="Next screenshot">&#8250;</button>
+    </div>
+    <div class="carousel-footer">
+      <div class="carousel-caption" id="carousel-caption"><strong>Dashboard</strong> — Live status of all supervised sessions, product badges, session URLs, and quick Start/Stop/Terminal controls.</div>
+      <span class="carousel-state" id="carousel-state">Auto-play (5s) · click image to pause</span>
+      <div class="carousel-dots" id="carousel-dots" aria-label="Choose screenshot"></div>
+    </div>
+  </div>
 </div>
 
 <div class="layout">
@@ -553,6 +586,92 @@
 </footer>
 
 <script>
+  // Screenshot carousel: auto-advance every 5s; clicking an image stops auto-advance while keeping side scroll buttons active
+  (function () {
+    var track = document.getElementById('carousel-track');
+    var viewport = document.getElementById('carousel-viewport');
+    var prevBtn = document.getElementById('carousel-prev');
+    var nextBtn = document.getElementById('carousel-next');
+    var captionEl = document.getElementById('carousel-caption');
+    var stateEl = document.getElementById('carousel-state');
+    var dotsEl = document.getElementById('carousel-dots');
+    if (!track || !viewport) return;
+
+    var slides = Array.prototype.slice.call(track.querySelectorAll('.carousel-slide'));
+    var index = 0;
+    var autoPaused = false;
+    var timer = null;
+    var INTERVAL_MS = 5000;
+
+    slides.forEach(function (slide, i) {
+      var dot = document.createElement('button');
+      dot.type = 'button';
+      dot.setAttribute('aria-label', 'Show ' + (slide.getAttribute('data-title') || ('slide ' + (i + 1))));
+      dot.addEventListener('click', function (e) {
+        e.stopPropagation();
+        goTo(i);
+        if (!autoPaused) restartTimer();
+      });
+      dotsEl.appendChild(dot);
+    });
+
+    function render() {
+      track.style.transform = 'translateX(-' + (index * 100) + '%)';
+      var current = slides[index];
+      var title = current.getAttribute('data-title') || '';
+      var desc = current.getAttribute('data-desc') || '';
+      captionEl.innerHTML = '<strong>' + title + '</strong> — ' + desc;
+      Array.prototype.forEach.call(dotsEl.children, function (d, i) {
+        d.classList.toggle('active', i === index);
+      });
+    }
+
+    function goTo(nextIndex) {
+      index = (nextIndex + slides.length) % slides.length;
+      render();
+    }
+
+    function stopAuto() {
+      autoPaused = true;
+      if (timer) {
+        clearInterval(timer);
+        timer = null;
+      }
+      if (stateEl) {
+        stateEl.textContent = 'Auto-play paused · use arrows to browse';
+        stateEl.classList.add('paused');
+      }
+    }
+
+    function restartTimer() {
+      if (timer) clearInterval(timer);
+      if (autoPaused) return;
+      timer = setInterval(function () {
+        goTo(index + 1);
+      }, INTERVAL_MS);
+    }
+
+    prevBtn.addEventListener('click', function (e) {
+      e.stopPropagation();
+      goTo(index - 1);
+      if (!autoPaused) restartTimer();
+    });
+
+    nextBtn.addEventListener('click', function (e) {
+      e.stopPropagation();
+      goTo(index + 1);
+      if (!autoPaused) restartTimer();
+    });
+
+    viewport.addEventListener('click', function (e) {
+      if (e.target.closest('.carousel-btn')) return;
+      stopAuto();
+    });
+
+    render();
+    restartTimer();
+  })();
+
   // Platform tab switcher in Installation section
   document.querySelectorAll('.tabs button').forEach(function (button) {
     button.addEventListener('click', function () {
