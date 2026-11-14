@@ -69,24 +69,6 @@ jobs:
           ./packaging/build-zip.ps1 -Version $v -Package artifacts/package/app -Output artifacts/packages
           Rename-Item "artifacts/packages/LiveClaude-$v-win-x64.zip" "LiveClaude-$v-win-x64-installer.zip" -Force
 
-      - name: Generate update.json
-        shell: pwsh
-        run: |
-          $v = '${{ needs.version.outputs.version }}'
-          $tag = if ('${{ github.ref_type }}' -eq 'tag') { '${{ github.ref_name }}' } else { "v$v" }
-          $base = "https://github.com/${{ github.repository }}/releases/download/$tag"
-          function Package($name) {
-            $file = Get-Item (Join-Path artifacts/packages $name)
-            [ordered]@{ url = "$base/$name"; sha256 = (Get-FileHash $file -Algorithm SHA256).Hash.ToLowerInvariant(); size = $file.Length }
-          }
-          [ordered]@{
-            version     = $v
-            publishedAt = (Get-Date).ToUniversalTime().ToString('o')
-            notesUrl    = "https://leandrocannizzaro.github.io/LiveClaude/release-notes.html#v$v"
-            msi         = Package "LiveClaude-$v-x64.msi"
-            zip         = Package "LiveClaude-$v-win-x64-installer.zip"
-          } | ConvertTo-Json -Depth 3 | Set-Content artifacts/packages/update.json -Encoding utf8
-
       - name: Publish framework-dependent (win-x64)
         run: >
           dotnet publish src/LiveClaude.App/LiveClaude.App.csproj
@@ -269,6 +251,30 @@ jobs:
           pattern: packages-*
           merge-multiple: true
           path: artifacts/packages
+
+      - name: Generate update.json
+        shell: pwsh
+        run: |
+          $v = '${{ needs.version.outputs.version }}'
+          $tag = if ('${{ github.ref_type }}' -eq 'tag') { '${{ github.ref_name }}' } else { "v$v" }
+          $base = "https://github.com/${{ github.repository }}/releases/download/$tag"
+          function Package($name) {
+            $path = Join-Path artifacts/packages $name
+            if (-not (Test-Path $path)) { return $null }
+            $file = Get-Item $path
+            [ordered]@{ url = "$base/$name"; sha256 = (Get-FileHash $file -Algorithm SHA256).Hash.ToLowerInvariant(); size = $file.Length }
+          }
+          [ordered]@{
+            version     = $v
+            publishedAt = (Get-Date).ToUniversalTime().ToString('o')
+            notesUrl    = "https://leandrocannizzaro.github.io/LiveClaude/release-notes.html#v$v"
+            msi         = Package "LiveClaude-$v-x64.msi"
+            zip         = Package "LiveClaude-$v-win-x64-installer.zip"
+            linuxX64    = Package "LiveClaude-$v-linux-x64.tar.gz"
+            linuxArm64  = Package "LiveClaude-$v-linux-arm64.tar.gz"
+            osxX64      = Package "LiveClaude-$v-osx-x64.dmg"
+            osxArm64    = Package "LiveClaude-$v-osx-arm64.dmg"
+          } | ConvertTo-Json -Depth 3 | Set-Content artifacts/packages/update.json -Encoding utf8
 
       - name: Compute checksums
         id: hashes

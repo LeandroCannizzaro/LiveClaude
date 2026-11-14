@@ -47,6 +47,16 @@
     <h1>Release Notes</h1>
     <p class="meta">Published releases of LiveClaude.</p>
 
+    <section id="v2.2.1" class="card">
+      <h2>v2.2.1</h2>
+      <div class="meta">Cross-platform in-app auto-updater (Windows, Linux, macOS) &amp; POSIX test fix</div>
+      <ul>
+        <li><strong>Cross-platform Auto-Update:</strong> extended <code>update.json</code>, <code>InstallKindDetector</code>, <code>UpdateChecker</code>, and <code>UpdateInstaller</code> to support in-app self-updating on <strong>Windows</strong> (MSI &amp; ZIP), <strong>Linux</strong> (<code>.tar.gz</code> x64/arm64), and <strong>macOS</strong> (<code>.dmg</code> x64/arm64).</li>
+        <li><strong>Release workflow:</strong> moved <code>update.json</code> generation to the release aggregation job so all OS packages and SHA-256 checksums are published together.</li>
+        <li><strong>POSIX test fix:</strong> set executable permissions on temporary test CLI stubs in <code>AgentAuthTests</code> and <code>AntigravityProductTests</code> for Linux and macOS CI runners.</li>
+      </ul>
+    </section>
+
     <section id="v2.2.0" class="card">
       <h2>v2.2.0</h2>
       <div class="meta">Antigravity provider, no-scroll tabbed UI, Themes &amp; Color Picker, MSI installer &amp; auto-update</div>
