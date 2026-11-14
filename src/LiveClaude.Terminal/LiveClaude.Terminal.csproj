@@ -1,7 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFramework>net10.0</TargetFramework>
+    <TargetFramework>$(BaseTargetFramework)</TargetFramework>
     <AssemblyName>LiveClaude.Terminal</AssemblyName>
     <RootNamespace>LiveClaude.Terminal</RootNamespace>
     <Nullable>enable</Nullable>

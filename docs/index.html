@@ -228,7 +228,7 @@
         </tr>
         <tr>
           <td><strong>macOS</strong></td>
-          <td>macOS 11+ (best effort; .NET 10 targets macOS 12+) — Apple Silicon (<code>osx-arm64</code>) &amp; Intel (<code>osx-x64</code>) via <code>.dmg</code>. Self-contained; uses <code>launchd</code> (LaunchAgent / LaunchDaemon).</td>
+          <td>macOS 12+ (.NET 10) &amp; macOS 11 Big Sur (.NET 8 <code>-macos11</code>) — Apple Silicon (<code>osx-arm64</code>) &amp; Intel (<code>osx-x64</code>) via <code>.dmg</code>. Self-contained; uses <code>launchd</code>.</td>
         </tr>
         <tr>
           <td><strong>Agent CLIs</strong></td>
@@ -723,11 +723,20 @@
       : 'unknown';
 
     var isArm64 = /arm64|aarch64/i.test(ua) || /aarch64|arm64/.test(platform);
+    var isMacOs11 = /Mac OS X 11[._]/i.test(ua);
     if (navigator.userAgentData && typeof navigator.userAgentData.getHighEntropyValues === 'function') {
       try {
-        var hints = await navigator.userAgentData.getHighEntropyValues(['architecture']);
+        var hints = await navigator.userAgentData.getHighEntropyValues(['architecture', 'platformVersion']);
         if (hints && hints.architecture) {
           isArm64 = /arm/i.test(hints.architecture);
+        }
+        if (os === 'macos' && hints && hints.platformVersion) {
+          var major = parseInt(String(hints.platformVersion).split('.')[0], 10);
+          if (major === 11 || String(hints.platformVersion).indexOf('10.16') === 0) {
+            isMacOs11 = true;
+          } else if (major >= 12) {
+            isMacOs11 = false;
+          }
         }
       } catch (_) {}
     }
@@ -736,7 +745,9 @@
 
     var isRpmDistro = /Fedora|Red Hat|RHEL|CentOS|AlmaLinux|Rocky|openSUSE|SUSE/i.test(ua);
     var labelSuffix = os === 'windows' ? (isArm64 ? 'Windows ARM64 (.zip)' : 'Windows (.msi)')
-      : os === 'macos' ? (isArm64 ? 'macOS Apple Silicon (.dmg)' : 'macOS Intel (.dmg)')
+      : os === 'macos' ? (isMacOs11
+          ? (isArm64 ? 'macOS 11 Apple Silicon (.dmg)' : 'macOS 11 Intel (.dmg)')
+          : (isArm64 ? 'macOS 12+ Apple Silicon (.dmg)' : 'macOS 12+ Intel (.dmg)'))
       : isRpmDistro ? (isArm64 ? 'Linux ARM64 (.rpm)' : 'Linux x64 (.rpm)')
       : (isArm64 ? 'Linux Ubuntu/Debian ARM64 (.deb)' : 'Linux Ubuntu/Debian x64 (.deb)');
 
@@ -753,7 +764,9 @@
       var matcher = os === 'windows'
         ? (isArm64 ? function (n) { return /-win-arm64\.zip$/i.test(n); } : function (n) { return /-x64\.msi$/i.test(n); })
         : os === 'macos'
-        ? (isArm64 ? function (n) { return /-osx-arm64\.dmg$/i.test(n); } : function (n) { return /-osx-x64\.dmg$/i.test(n); })
+        ? (isMacOs11
+            ? (isArm64 ? function (n) { return /-osx-arm64-macos11\.dmg$/i.test(n); } : function (n) { return /-osx-x64-macos11\.dmg$/i.test(n); })
+            : (isArm64 ? function (n) { return /-osx-arm64\.dmg$/i.test(n); } : function (n) { return /-osx-x64\.dmg$/i.test(n); }))
         : isRpmDistro
         ? (isArm64 ? function (n) { return /\.aarch64\.rpm$/i.test(n); } : function (n) { return /\.x86_64\.rpm$/i.test(n); })
         : (isArm64 ? function (n) { return /_arm64\.deb$/i.test(n); } : function (n) { return /_amd64\.deb$/i.test(n); });
@@ -763,6 +776,17 @@
         btn.href = asset.browser_download_url;
         var ver = release.tag_name ? ' ' + release.tag_name : '';
         btn.textContent = 'Download' + ver + ' — ' + labelSuffix;
+      }
+
+      if (os === 'macos' && meta) {
+        var mac12Asset = assets.find(function (a) { return a && a.name && (isArm64 ? /-osx-arm64\.dmg$/i : /-osx-x64\.dmg$/i).test(a.name); });
+        var mac11Asset = assets.find(function (a) { return a && a.name && (isArm64 ? /-osx-arm64-macos11\.dmg$/i : /-osx-x64-macos11\.dmg$/i).test(a.name); });
+        var macLinks = [];
+        if (mac12Asset) macLinks.push('<a href="' + mac12Asset.browser_download_url + '">macOS 12+ (.dmg)</a>');
+        if (mac11Asset) macLinks.push('<a href="' + mac11Asset.browser_download_url + '">macOS 11 Big Sur (.dmg)</a>');
+        if (macLinks.length) {
+          meta.innerHTML = 'macOS packages: ' + macLinks.join(' · ') + ' · or run <code>curl -fsSL https://leandrocannizzaro.github.io/LiveClaude/install-macos.sh | sh</code>';
+        }
       }
 
       if (os === 'linux' && meta) {

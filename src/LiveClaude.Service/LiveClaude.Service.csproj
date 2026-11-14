@@ -1,7 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk.Worker">
 
   <PropertyGroup>
-    <TargetFramework>net10.0</TargetFramework>
+    <TargetFramework>$(BaseTargetFramework)</TargetFramework>
     <AssemblyName>LiveClaude.Service</AssemblyName>
     <RootNamespace>LiveClaude.Service</RootNamespace>
     <UserSecretsId>liveclaude-service</UserSecretsId>
@@ -12,7 +12,7 @@
     Windowed on Windows, on purpose: a console-owning process hands its console to every child, which
     makes Windows ignore the pseudo-console attribute and breaks the embedded terminal. CLI commands
     attach to the caller's console at runtime instead (see ConsoleBridge in the Windows platform).
-    POSIX has no such rule — a pty slave is the child's controlling terminal either way — so there the
+    POSIX has no such rule â€” a pty slave is the child's controlling terminal either way â€” so there the
     supervisor is a plain console executable and its output goes where it was started from.
   -->
   <PropertyGroup Condition="'$([System.Runtime.InteropServices.RuntimeInformation]::IsOSPlatform($([System.Runtime.InteropServices.OSPlatform]::Windows)))' == 'true'">

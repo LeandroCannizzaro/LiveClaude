@@ -1,7 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFramework>net10.0</TargetFramework>
+    <TargetFramework>$(BaseTargetFramework)</TargetFramework>
     <IsPackable>false</IsPackable>
   </PropertyGroup>
 
@@ -17,8 +17,8 @@
     <ProjectReference Include="..\..\src\LiveClaude.Vt\LiveClaude.Vt.csproj" />
 
     <!--
-      The POSIX assemblies are referenced here, unlike everywhere else, because what they produce —
-      a systemd unit, a launchd property list, a quoted command line — is a pure function of its
+      The POSIX assemblies are referenced here, unlike everywhere else, because what they produce â€”
+      a systemd unit, a launchd property list, a quoted command line â€” is a pure function of its
       input and worth asserting on every operating system. A unit file that is wrong announces itself
       at the next reboot; a test that only runs on the machine which would have caught it is no help.
       These are net10.0 like this project, so referencing them costs nothing.
@@ -29,8 +29,8 @@
   </ItemGroup>
 
   <!--
-    These exercise the platform assembly itself — the pseudo terminal, the IPC endpoint, the command
-    line quoting — so they need the one for the OS they run on. Each test states which platforms it
+    These exercise the platform assembly itself â€” the pseudo terminal, the IPC endpoint, the command
+    line quoting â€” so they need the one for the OS they run on. Each test states which platforms it
     applies to and skips elsewhere, so the whole project runs everywhere without being green by
     running nothing.
   -->

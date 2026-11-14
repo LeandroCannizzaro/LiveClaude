@@ -2,7 +2,7 @@
 
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
-    <TargetFramework>net10.0</TargetFramework>
+    <TargetFramework>$(BaseTargetFramework)</TargetFramework>
     <AssemblyName>LiveClaude</AssemblyName>
     <RootNamespace>LiveClaude.App</RootNamespace>
     <ApplicationIcon>Assets\liveclaude.ico</ApplicationIcon>
