@@ -113,8 +113,13 @@ public class AgentAuthTests
     private static string CreateTempExecutable(string prefix)
     {
         // Locators only require the file to exist (and be "executable" per platform checks).
-        var path = Path.Combine(Path.GetTempPath(), $"{prefix}-{Guid.NewGuid()}.exe");
+        var suffix = OperatingSystem.IsWindows() ? ".exe" : string.Empty;
+        var path = Path.Combine(Path.GetTempPath(), $"{prefix}-{Guid.NewGuid()}{suffix}");
         File.WriteAllText(path, "");
+        if (!OperatingSystem.IsWindows())
+        {
+            File.SetUnixFileMode(path, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+        }
         return path;
     }
 }

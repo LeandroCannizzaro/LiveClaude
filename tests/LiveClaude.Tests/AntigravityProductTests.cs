@@ -124,6 +124,10 @@ public class AntigravityProductTests
         {
             var exe = Path.Combine(tempDir.FullName, OperatingSystem.IsWindows() ? "agy.exe" : "agy");
             File.WriteAllText(exe, "");
+            if (!OperatingSystem.IsWindows())
+            {
+                File.SetUnixFileMode(exe, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+            }
 
             var product = new AntigravityAgentProduct();
             var config = new AppConfig { Products = { Antigravity = { Path = exe, OfferLoginWhenRequired = false } } };

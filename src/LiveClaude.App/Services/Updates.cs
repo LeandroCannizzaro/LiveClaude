@@ -1,300 +1,589 @@
 using System.Diagnostics;
-using System.Net.Http.Headers;
+using System.IO;
+using System.Net.Http;
 using System.Reflection;
+using System.Runtime.InteropServices;
 using System.Security.Cryptography;
 using System.Text.Json;
-using Microsoft.Win32;
+using System.Text.Json.Serialization;
 
 namespace LiveClaude.App.Services;
 
-/// <summary>One downloadable package of a release, as listed in <c>update.json</c>.</summary>
-public sealed record UpdatePackage(Uri Url, string Sha256, long Size = 0);
+public sealed record UpdatePackage(
+    [property: JsonPropertyName("url")] Uri Url,
+    [property: JsonPropertyName("sha256")] string Sha256,
+    [property: JsonPropertyName("size")] long Size);
 
-/// <summary>
-/// <c>update.json</c>, published on GitHub Pages by the Release workflow: the latest version and where its packages are.
-/// </summary>
 public sealed record UpdateManifest(
-    string Version,
-    DateTimeOffset? PublishedAt = null,
-    Uri? NotesUrl = null,
-    UpdatePackage? Msi = null,
-    UpdatePackage? Zip = null);
+    [property: JsonPropertyName("version")] string Version,
+    [property: JsonPropertyName("publishedAt")] DateTimeOffset? PublishedAt = null,
+    [property: JsonPropertyName("notesUrl")] Uri? NotesUrl = null,
+    [property: JsonPropertyName("msi")] UpdatePackage? Msi = null,
+    [property: JsonPropertyName("zip")] UpdatePackage? Zip = null,
+    [property: JsonPropertyName("linuxX64")] UpdatePackage? LinuxX64 = null,
+    [property: JsonPropertyName("linuxArm64")] UpdatePackage? LinuxArm64 = null,
+    [property: JsonPropertyName("osxX64")] UpdatePackage? OsxX64 = null,
+    [property: JsonPropertyName("osxArm64")] UpdatePackage? OsxArm64 = null);
 
-/// <summary>How this copy was installed, which decides how it can replace itself.</summary>
 public enum InstallKind
 {
-    /// <summary>Not an installed copy (a build folder): updates are only announced.</summary>
     None,
-
-    /// <summary>The MSI, per machine in Program Files.</summary>
     Msi,
-
-    /// <summary>The ZIP's install.ps1, for this user only (no administrator).</summary>
     ZipPerUser,
-
-    /// <summary>The ZIP's install.ps1 with -AllUsers (administrator).</summary>
     ZipAllUsers,
+    LinuxTarball,
+    MacOsDmg,
 }
 
-/// <summary>A newer version than the running one; <see cref="Package"/> is null when this copy cannot install it by itself.</summary>
-public sealed record AvailableUpdate(UpdateManifest Manifest, Version Version, UpdatePackage? Package);
+public sealed record AvailableUpdate(Version Version, UpdateManifest Manifest, UpdatePackage? Package);
 
 public static class UpdateVersions
 {
-    /// <summary>The running app's version (from VersionPrefix or the -p:Version of the release build).</summary>
-    public static Version Current() =>
-        Normalize(Assembly.GetEntryAssembly()?.GetName().Version ?? new Version(0, 0, 0));
-
-    /// <summary>"1.2.3", "v1.2.3" or "1.2.3.4"; anything after '-' or '+' is ignored.</summary>
-    public static Version? TryParse(string? text)
+    public static Version Current()
     {
-        if (string.IsNullOrWhiteSpace(text))
-            return null;
+        var asm = typeof(UpdateVersions).Assembly;
+        var info = asm.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion;
+        if (TryParse(info) is { } v)
+            return v;
 
-        var core = text.Trim().TrimStart('v', 'V').Split('-', '+')[0];
-        return Version.TryParse(core, out var version) ? Normalize(version) : null;
+        var raw = asm.GetName().Version;
+        return raw is null
+            ? new Version(0, 0, 0, 0)
+            : new Version(Math.Max(raw.Major, 0), Math.Max(raw.Minor, 0), Math.Max(raw.Build, 0), 0);
     }
 
-    // 1.2.3 and 1.2.3.0 must compare equal: missing parts count as zero.
-    private static Version Normalize(Version v) =>
-        new(v.Major, Math.Max(v.Minor, 0), Math.Max(v.Build, 0), Math.Max(v.Revision, 0));
+    public static Version? TryParse(string? raw)
+    {
+        if (string.IsNullOrWhiteSpace(raw))
+            return null;
+
+        var trimmed = raw.Trim().TrimStart('v', 'V');
+        var plus = trimmed.IndexOf('+');
+        if (plus >= 0)
+            trimmed = trimmed[..plus];
+
+        var dash = trimmed.IndexOf('-');
+        if (dash >= 0)
+            trimmed = trimmed[..dash];
+
+        if (!Version.TryParse(trimmed, out var v))
+            return null;
+
+        return new Version(
+            Math.Max(v.Major, 0),
+            Math.Max(v.Minor, 0),
+            Math.Max(v.Build, 0),
+            0);
+    }
 }
 
-/// <summary>Reads <c>update.json</c> and tells whether it describes a newer version.</summary>
-public sealed class UpdateChecker(HttpClient http, Uri manifestUrl, Version current, InstallKind kind)
+public sealed class UpdateChecker
 {
-    public static readonly Uri DefaultManifestUrl = new("https://leandrocannizzaro.github.io/LiveClaude/update.json");
+    public const string DefaultManifestUrl =
+        "https://github.com/LeandroCannizzaro/LiveClaude/releases/latest/download/update.json";
 
-    private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
-
-    /// <summary>The manifest address; LIVECLAUDE_UPDATE_URL overrides it (a fork, a local test server).</summary>
-    public static Uri ManifestUrl() =>
-        Uri.TryCreate(Environment.GetEnvironmentVariable("LIVECLAUDE_UPDATE_URL"), UriKind.Absolute, out var url)
-            ? url
-            : DefaultManifestUrl;
-
-    /// <summary>The release notes page, published next to the manifest.</summary>
-    public static Uri ReleaseNotesUrl(Uri manifestUrl) => new(manifestUrl, "release-notes.html");
-
-    public async Task<AvailableUpdate?> CheckAsync(CancellationToken cancellationToken = default)
+    private static readonly JsonSerializerOptions JsonOptions = new()
     {
-        // Pages sits behind a CDN that caches for minutes: a changing query string asks for a fresh copy.
-        var url = new UriBuilder(manifestUrl) { Query = $"t={DateTimeOffset.UtcNow.ToUnixTimeSeconds()}" }.Uri;
-        using var request = new HttpRequestMessage(HttpMethod.Get, url);
-        request.Headers.CacheControl = new CacheControlHeaderValue { NoCache = true };
-        using var response = await http.SendAsync(request, cancellationToken);
-        response.EnsureSuccessStatusCode();
-        var manifest = JsonSerializer.Deserialize<UpdateManifest>(
-            await response.Content.ReadAsStringAsync(cancellationToken), Json)
-            ?? throw new InvalidDataException("Empty update.json manifest.");
-        return Evaluate(manifest, current, kind);
+        PropertyNameCaseInsensitive = true,
+    };
+
+    private readonly HttpClient _http;
+    private readonly Uri _manifestUrl;
+    private readonly Version _current;
+    private readonly InstallKind _kind;
+
+    public UpdateChecker(HttpClient http, Uri manifestUrl, Version current, InstallKind kind)
+    {
+        _http = http;
+        _manifestUrl = manifestUrl;
+        _current = current;
+        _kind = kind;
     }
 
-    /// <summary>The update the manifest offers to this copy, or null when it is not newer.</summary>
-    public static AvailableUpdate? Evaluate(UpdateManifest manifest, Version current, InstallKind kind)
+    public static Uri ManifestUrl(string? overrideUrl = null)
     {
-        var version = UpdateVersions.TryParse(manifest.Version)
-            ?? throw new InvalidDataException($"Invalid version in update.json: '{manifest.Version}'.");
-        if (version <= current)
+        var env = string.IsNullOrWhiteSpace(overrideUrl)
+            ? Environment.GetEnvironmentVariable("LIVECLAUDE_UPDATE_MANIFEST_URL")
+            : overrideUrl;
+
+        return Uri.TryCreate(env, UriKind.Absolute, out var custom)
+            ? custom
+            : new Uri(DefaultManifestUrl);
+    }
+
+    public static Uri ReleaseNotesUrl(Uri? manifestUri = null)
+    {
+        _ = manifestUri;
+        return new Uri("https://leandrocannizzaro.github.io/LiveClaude/release-notes.html");
+    }
+
+    public async Task<AvailableUpdate?> CheckAsync(CancellationToken ct = default)
+    {
+        using var response = await _http.GetAsync(_manifestUrl, ct).ConfigureAwait(false);
+        response.EnsureSuccessStatusCode();
+
+        await using var stream = await response.Content.ReadAsStreamAsync(ct).ConfigureAwait(false);
+        var manifest = await JsonSerializer.DeserializeAsync<UpdateManifest>(stream, JsonOptions, ct)
+            .ConfigureAwait(false);
+
+        return Evaluate(manifest, _current, _kind);
+    }
+
+    public static AvailableUpdate? Evaluate(
+        UpdateManifest? manifest,
+        Version current,
+        InstallKind kind,
+        Architecture? arch = null)
+    {
+        if (manifest is null)
             return null;
 
-        var package = kind switch
+        var remote = UpdateVersions.TryParse(manifest.Version);
+        if (remote is null)
+            return null;
+
+        var normalizedCurrent = new Version(
+            Math.Max(current.Major, 0),
+            Math.Max(current.Minor, 0),
+            Math.Max(current.Build, 0),
+            0);
+
+        if (remote <= normalizedCurrent)
+            return null;
+
+        var targetArch = arch ?? RuntimeInformation.OSArchitecture;
+        var pkg = SelectPackage(manifest, kind, targetArch);
+        return new AvailableUpdate(remote, manifest, pkg);
+    }
+
+    private static UpdatePackage? SelectPackage(UpdateManifest manifest, InstallKind kind, Architecture arch) =>
+        kind switch
         {
             InstallKind.Msi => manifest.Msi,
             InstallKind.ZipPerUser or InstallKind.ZipAllUsers => manifest.Zip,
+            InstallKind.LinuxTarball => arch == Architecture.Arm64 ? manifest.LinuxArm64 : manifest.LinuxX64,
+            InstallKind.MacOsDmg => arch == Architecture.Arm64 ? manifest.OsxArm64 : manifest.OsxX64,
             _ => null,
         };
-        return new AvailableUpdate(manifest, version, package);
-    }
 }
 
 public static class InstallKindDetector
 {
-    /// <summary>The running copy's install kind, from where it lives and the MSI's registry marker.</summary>
-    public static InstallKind Detect() =>
-        Detect(
-            AppContext.BaseDirectory,
-            HasMsiMarker(),
-            Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles),
-            File.Exists);
-
-    public static InstallKind Detect(string baseDirectory, bool msiMarker, string programFiles, Func<string, bool> fileExists)
+    public static InstallKind Detect(string? baseDirectory = null)
     {
-        var dir = Path.TrimEndingDirectorySeparator(Path.GetFullPath(baseDirectory));
-        var inProgramFiles = !string.IsNullOrEmpty(programFiles)
-            && dir.StartsWith(
-                Path.TrimEndingDirectorySeparator(Path.GetFullPath(programFiles)) + Path.DirectorySeparatorChar,
-                StringComparison.OrdinalIgnoreCase);
+        var dir = (baseDirectory ?? AppContext.BaseDirectory).TrimEnd('\\', '/');
+        if (string.IsNullOrEmpty(dir))
+            return InstallKind.None;
 
-        if (msiMarker && inProgramFiles)
-            return InstallKind.Msi;
+        var msiMarker = File.Exists(Path.Combine(dir, ".liveclaude-msi"))
+                        || (!OperatingSystem.IsWindows() ? false : IsMsiFallback(dir));
 
-        // install.ps1 copies uninstall.ps1 next to the app: its presence distinguishes an installed ZIP from a build folder.
-        if (fileExists(Path.Combine(dir, "uninstall.ps1")))
-            return inProgramFiles ? InstallKind.ZipAllUsers : InstallKind.ZipPerUser;
+        return Detect(
+            dir,
+            msiMarker,
+            Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles),
+            File.Exists,
+            OperatingSystem.IsWindows(),
+            OperatingSystem.IsLinux(),
+            OperatingSystem.IsMacOS());
+    }
+
+    private static bool IsMsiFallback(string dir)
+    {
+        var programFiles = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles);
+        return !string.IsNullOrEmpty(programFiles)
+               && dir.StartsWith(programFiles.TrimEnd('\\', '/'), StringComparison.OrdinalIgnoreCase)
+               && !File.Exists(Path.Combine(dir, "uninstall.ps1"));
+    }
+
+    public static InstallKind Detect(
+        string baseDir,
+        bool msiMarker,
+        string programFiles,
+        Func<string, bool> fileExists) =>
+        Detect(baseDir, msiMarker, programFiles, fileExists, isWindows: true, isLinux: false, isMacOs: false);
+
+    public static InstallKind Detect(
+        string baseDir,
+        bool msiMarker,
+        string programFiles,
+        Func<string, bool> fileExists,
+        bool isWindows,
+        bool isLinux,
+        bool isMacOs)
+    {
+        var dir = baseDir.TrimEnd('\\', '/');
+        if (string.IsNullOrEmpty(dir))
+            return InstallKind.None;
+
+        var normalized = dir.Replace('\\', '/');
+        if (normalized.Contains("/bin/Debug/", StringComparison.OrdinalIgnoreCase)
+            || normalized.Contains("/bin/Release/", StringComparison.OrdinalIgnoreCase)
+            || normalized.EndsWith("/bin/Debug", StringComparison.OrdinalIgnoreCase)
+            || normalized.EndsWith("/bin/Release", StringComparison.OrdinalIgnoreCase))
+        {
+            return InstallKind.None;
+        }
+
+        if (isWindows)
+        {
+            if (msiMarker)
+                return InstallKind.Msi;
+
+            var hasUninstall = fileExists(Path.Combine(dir, "uninstall.ps1"))
+                               || fileExists(Path.Combine(dir, ".liveclaude-zip-install"));
+            if (!hasUninstall)
+                return InstallKind.None;
+
+            if (!string.IsNullOrEmpty(programFiles) &&
+                dir.StartsWith(programFiles.TrimEnd('\\', '/'), StringComparison.OrdinalIgnoreCase))
+                return InstallKind.ZipAllUsers;
+
+            return InstallKind.ZipPerUser;
+        }
+
+        if (isLinux)
+            return InstallKind.LinuxTarball;
+
+        if (isMacOs)
+        {
+            return normalized.Contains(".app/Contents/MacOS", StringComparison.OrdinalIgnoreCase)
+                ? InstallKind.MacOsDmg
+                : InstallKind.None;
+        }
 
         return InstallKind.None;
     }
-
-    private static bool HasMsiMarker()
-    {
-        if (!OperatingSystem.IsWindows())
-            return false;
-
-        try
-        {
-            using var hklm = RegistryKey.OpenBaseKey(RegistryHive.LocalMachine, RegistryView.Registry64);
-            using var key = hklm.OpenSubKey(@"Software\LiveClaude");
-            return key?.GetValue("Installed") is int value && value == 1;
-        }
-        catch (Exception ex) when (ex is System.Security.SecurityException or UnauthorizedAccessException or IOException)
-        {
-            return false;
-        }
-    }
 }
 
-/// <summary>Downloads a package, checks its SHA-256, and hands it to a script that installs it once the app has closed.</summary>
 public static class UpdateInstaller
 {
-    public static string DownloadDirectory(Version version) =>
-        Path.Combine(Path.GetTempPath(), "LiveClaude-update", version.ToString(3));
+    public static string DownloadDirectory(Version version)
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "LiveClaude-Update", version.ToString(3));
+        Directory.CreateDirectory(dir);
+        return dir;
+    }
 
-    /// <summary>Downloads into <paramref name="directory"/> and verifies the SHA-256; a mismatch deletes the file and throws.</summary>
     public static async Task<string> DownloadAsync(
         HttpClient http,
         UpdatePackage package,
-        string directory,
+        string targetDir,
         IProgress<double>? progress,
-        CancellationToken cancellationToken = default)
+        CancellationToken ct = default)
     {
-        Directory.CreateDirectory(directory);
-        var path = Path.Combine(directory, Path.GetFileName(package.Url.LocalPath));
+        var fileName = Path.GetFileName(package.Url.LocalPath);
+        if (string.IsNullOrWhiteSpace(fileName))
+            fileName = "LiveClaude-Update";
 
-        using (var response = await http.GetAsync(package.Url, HttpCompletionOption.ResponseHeadersRead, cancellationToken))
+        var destination = Path.Combine(targetDir, fileName);
+        var temp = destination + ".part";
+
+        using (var response = await http.GetAsync(package.Url, HttpCompletionOption.ResponseHeadersRead, ct).ConfigureAwait(false))
         {
             response.EnsureSuccessStatusCode();
             var total = response.Content.Headers.ContentLength ?? package.Size;
-            await using var source = await response.Content.ReadAsStreamAsync(cancellationToken);
-            await using var target = File.Create(path);
+
+            await using var input = await response.Content.ReadAsStreamAsync(ct).ConfigureAwait(false);
+            await using var output = new FileStream(temp, FileMode.Create, FileAccess.Write, FileShare.None, 81920, true);
+
             var buffer = new byte[81920];
-            long done = 0;
+            long readTotal = 0;
             int read;
-            while ((read = await source.ReadAsync(buffer, cancellationToken)) > 0)
+            while ((read = await input.ReadAsync(buffer.AsMemory(0, buffer.Length), ct).ConfigureAwait(false)) > 0)
             {
-                await target.WriteAsync(buffer.AsMemory(0, read), cancellationToken);
-                done += read;
+                await output.WriteAsync(buffer.AsMemory(0, read), ct).ConfigureAwait(false);
+                readTotal += read;
                 if (total > 0)
-                    progress?.Report((double)done / total);
+                    progress?.Report(Math.Clamp((double)readTotal / total, 0, 1));
             }
         }
 
-        await VerifyAsync(path, package.Sha256, cancellationToken);
-        return path;
-    }
-
-    public static async Task VerifyAsync(string path, string expectedSha256, CancellationToken cancellationToken = default)
-    {
-        string actual;
-        await using (var stream = File.OpenRead(path))
+        if (!string.IsNullOrWhiteSpace(package.Sha256))
         {
-            actual = Convert.ToHexString(await SHA256.HashDataAsync(stream, cancellationToken));
+            await using var verifyStream = File.OpenRead(temp);
+            var hashBytes = await SHA256.HashDataAsync(verifyStream, ct).ConfigureAwait(false);
+            var actual = Convert.ToHexString(hashBytes).ToLowerInvariant();
+            if (!string.Equals(actual, package.Sha256.Trim().ToLowerInvariant(), StringComparison.Ordinal))
+            {
+                File.Delete(temp);
+                throw new InvalidOperationException(
+                    $"Downloaded update failed SHA-256 verification (expected {package.Sha256}, got {actual}).");
+            }
         }
 
-        if (!string.Equals(actual, expectedSha256?.Trim(), StringComparison.OrdinalIgnoreCase))
-        {
-            File.Delete(path);
-            throw new InvalidDataException(
-                "Downloaded file does not match the published SHA-256 checksum; update aborted.");
-        }
+        File.Move(temp, destination, overwrite: true);
+        return destination;
     }
 
-    /// <summary>
-    /// Starts the installer script, detached: it waits for this process to end, installs, and starts the app again.
-    /// The caller must exit right after, so the files can be replaced.
-    /// </summary>
     public static void Launch(
         InstallKind kind,
         string packagePath,
-        string installDirectory,
-        string executable,
+        string installDir,
+        string exePath,
         int processId,
         string logPath)
     {
-        if (kind == InstallKind.None)
+        var workDir = Path.GetDirectoryName(packagePath) ?? Path.GetTempPath();
+        Directory.CreateDirectory(Path.GetDirectoryName(logPath) ?? Path.GetTempPath());
+
+        switch (kind)
         {
-            throw new InvalidOperationException(
-                "This copy is not an installed package; automatic update is unavailable.");
+            case InstallKind.Msi:
+            case InstallKind.ZipPerUser:
+            case InstallKind.ZipAllUsers:
+                LaunchWindows(kind, packagePath, installDir, exePath, processId, logPath, workDir);
+                break;
+
+            case InstallKind.LinuxTarball:
+                LaunchLinux(packagePath, installDir, exePath, processId, logPath, workDir);
+                break;
+
+            case InstallKind.MacOsDmg:
+                LaunchMacOs(packagePath, installDir, processId, logPath, workDir);
+                break;
+
+            default:
+                throw new InvalidOperationException($"Auto-update is not supported for install kind {kind}.");
         }
-
-        var script = Path.Combine(Path.GetDirectoryName(packagePath)!, "apply-update.ps1");
-        File.WriteAllText(script, ApplyScript);
-        Directory.CreateDirectory(Path.GetDirectoryName(logPath)!);
-
-        var start = new ProcessStartInfo("powershell.exe")
-        {
-            UseShellExecute = false,
-            CreateNoWindow = true,
-            WorkingDirectory = Path.GetTempPath(),
-        };
-        foreach (var arg in BuildArguments(kind, script, packagePath, installDirectory, executable, processId, logPath))
-            start.ArgumentList.Add(arg);
-
-        Process.Start(start);
     }
 
-    public static IReadOnlyList<string> BuildArguments(
+    private static void LaunchWindows(
         InstallKind kind,
-        string script,
         string packagePath,
-        string installDirectory,
-        string executable,
+        string installDir,
+        string exePath,
         int processId,
-        string logPath) =>
-    [
-        "-NoProfile", "-ExecutionPolicy", "Bypass", "-WindowStyle", "Hidden", "-File", script,
-        "-Kind", kind.ToString(),
-        "-Package", packagePath,
-        "-InstallDir", Path.TrimEndingDirectorySeparator(installDirectory),
-        "-Exe", executable,
-        "-WaitPid", processId.ToString(),
-        "-Log", logPath,
-    ];
+        string logPath,
+        string workDir)
+    {
+        var scriptPath = Path.Combine(workDir, "apply-update.ps1");
 
-    // Runs after the app has closed. The MSI asks for UAC by itself (per-machine package); install.ps1 -AllUsers is elevated here.
-    // Whatever happens, the app is started again as the user (never elevated), so a failed update leaves the old version running.
-    internal const string ApplyScript = """
-        param([string]$Kind, [string]$Package, [string]$InstallDir, [string]$Exe, [int]$WaitPid, [string]$Log)
-        $ErrorActionPreference = 'Stop'
-        Start-Transcript -Path $Log -Append | Out-Null
-        try {
-            if ($WaitPid) { Wait-Process -Id $WaitPid -Timeout 60 -ErrorAction SilentlyContinue }
-            if ($Kind -eq 'Msi') {
-                $msiLog = [IO.Path]::ChangeExtension($Log, '.msi.log')
-                $p = Start-Process msiexec.exe -ArgumentList "/i `"$Package`" /passive /norestart /l*v `"$msiLog`"" -Wait -PassThru
-                if ($p.ExitCode -notin 0, 3010) { throw "msiexec exited with $($p.ExitCode)" }
-            }
-            else {
-                $dir = Join-Path (Split-Path $Package) 'zip'
-                if (Test-Path $dir) { Remove-Item $dir -Recurse -Force }
-                Expand-Archive -Path $Package -DestinationPath $dir -Force
-                $arguments = "-NoProfile -ExecutionPolicy Bypass -File `"$(Join-Path $dir 'install.ps1')`" -InstallDir `"$InstallDir`" -NoStart"
-                if ($Kind -eq 'ZipAllUsers') {
-                    $p = Start-Process powershell.exe -ArgumentList "$arguments -AllUsers" -Verb RunAs -Wait -PassThru
+        var script = kind == InstallKind.Msi
+            ? $$"""
+                param([int]$PidToWait, [string]$Pkg, [string]$Exe, [string]$Log)
+                Start-Transcript -Path $Log -Append | Out-Null
+                try {
+                  while (Get-Process -Id $PidToWait -ErrorAction SilentlyContinue) { Start-Sleep -Milliseconds 300 }
+                  $p = Start-Process msiexec.exe -ArgumentList @('/i', "`"$Pkg`"", '/passive', '/norestart') -Wait -PassThru -Verb RunAs
+                  if ($p.ExitCode -eq 0 -or $p.ExitCode -eq 3010) {
+                    Start-Process $Exe
+                  }
+                } finally {
+                  Stop-Transcript | Out-Null
                 }
-                else {
-                    $p = Start-Process powershell.exe -ArgumentList $arguments -WindowStyle Hidden -Wait -PassThru
+                """
+            : $$"""
+                param([int]$PidToWait, [string]$Pkg, [string]$Target, [string]$Exe, [string]$Log, [switch]$Elevate)
+                Start-Transcript -Path $Log -Append | Out-Null
+                try {
+                  while (Get-Process -Id $PidToWait -ErrorAction SilentlyContinue) { Start-Sleep -Milliseconds 300 }
+                  $stage = Join-Path ([IO.Path]::GetDirectoryName($Pkg)) 'stage'
+                  if (Test-Path $stage) { Remove-Item $stage -Recurse -Force }
+                  Expand-Archive -Path $Pkg -DestinationPath $stage -Force
+                  $payload = if (Test-Path (Join-Path $stage 'app\LiveClaude.exe')) { Join-Path $stage 'app' } else { $stage }
+                  Copy-Item (Join-Path $payload '*') -Destination $Target -Recurse -Force
+                  Start-Process $Exe
+                } finally {
+                  Stop-Transcript | Out-Null
                 }
-                if ($p.ExitCode) { throw "install.ps1 exited with $($p.ExitCode)" }
+                """;
+
+        File.WriteAllText(scriptPath, script);
+
+        var ps = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.System), "WindowsPowerShell", "v1.0", "powershell.exe");
+        if (!File.Exists(ps))
+            ps = "powershell.exe";
+
+        var psi = new ProcessStartInfo
+        {
+            FileName = ps,
+            UseShellExecute = kind == InstallKind.ZipAllUsers,
+            Verb = kind == InstallKind.ZipAllUsers ? "runas" : "",
+            CreateNoWindow = true,
+        };
+
+        psi.ArgumentList.Add("-NoProfile");
+        psi.ArgumentList.Add("-ExecutionPolicy");
+        psi.ArgumentList.Add("Bypass");
+        psi.ArgumentList.Add("-WindowStyle");
+        psi.ArgumentList.Add("Hidden");
+        psi.ArgumentList.Add("-File");
+        psi.ArgumentList.Add(scriptPath);
+        psi.ArgumentList.Add("-PidToWait");
+        psi.ArgumentList.Add(processId.ToString());
+        psi.ArgumentList.Add("-Pkg");
+        psi.ArgumentList.Add(packagePath);
+
+        if (kind != InstallKind.Msi)
+        {
+            psi.ArgumentList.Add("-Target");
+            psi.ArgumentList.Add(installDir.TrimEnd('\\', '/'));
+        }
+
+        psi.ArgumentList.Add("-Exe");
+        psi.ArgumentList.Add(exePath);
+        psi.ArgumentList.Add("-Log");
+        psi.ArgumentList.Add(logPath);
+
+        Process.Start(psi);
+    }
+
+    private static void LaunchLinux(
+        string packagePath,
+        string installDir,
+        string exePath,
+        int processId,
+        string logPath,
+        string workDir)
+    {
+        var scriptPath = Path.Combine(workDir, "apply-update.sh");
+        var target = installDir.TrimEnd('/');
+        var script = """
+            #!/bin/sh
+            set -eu
+            PID_TO_WAIT="$1"
+            PKG="$2"
+            TARGET="$3"
+            EXE="$4"
+            LOG="$5"
+
+            exec >>"$LOG" 2>&1
+            echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] Starting Linux update"
+
+            while kill -0 "$PID_TO_WAIT" 2>/dev/null; do
+              sleep 0.3
+            done
+
+            STAGE=$(mktemp -d)
+            cleanup() { rm -rf "$STAGE"; }
+            trap cleanup EXIT
+
+            tar -xzf "$PKG" -C "$STAGE"
+            if [ -f "$STAGE/LiveClaude" ]; then
+              SRC="$STAGE"
+            else
+              SRC=$(find "$STAGE" -mindepth 1 -maxdepth 1 -type d | head -n 1)
+            fi
+
+            if [ -z "${SRC:-}" ] || [ ! -d "$SRC" ]; then
+              echo "Could not locate extracted payload in $STAGE"
+              exit 1
+            fi
+
+            if [ -w "$TARGET" ]; then
+              cp -af "$SRC"/. "$TARGET"/
+              chmod +x "$TARGET/LiveClaude" 2>/dev/null || true
+            elif command -v pkexec >/dev/null 2>&1; then
+              pkexec sh -c 'cp -af "$1"/. "$2"/ && chmod +x "$2/LiveClaude"' _ "$SRC" "$TARGET"
+            elif command -v sudo >/dev/null 2>&1; then
+              sudo -n sh -c 'cp -af "$1"/. "$2"/ && chmod +x "$2/LiveClaude"' _ "$SRC" "$TARGET"
+            else
+              echo "Target directory $TARGET is not writable and neither pkexec nor sudo is available."
+              exit 1
+            fi
+
+            rm -f "$PKG"
+            nohup "$EXE" >/dev/null 2>&1 &
+            """;
+
+        File.WriteAllText(scriptPath, script.Replace("\r\n", "\n"));
+        if (!OperatingSystem.IsWindows())
+            File.SetUnixFileMode(scriptPath, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+
+        var psi = new ProcessStartInfo
+        {
+            FileName = "/bin/sh",
+            UseShellExecute = false,
+            CreateNoWindow = true,
+        };
+        psi.ArgumentList.Add(scriptPath);
+        psi.ArgumentList.Add(processId.ToString());
+        psi.ArgumentList.Add(packagePath);
+        psi.ArgumentList.Add(target);
+        psi.ArgumentList.Add(exePath);
+        psi.ArgumentList.Add(logPath);
+
+        Process.Start(psi);
+    }
+
+    private static void LaunchMacOs(
+        string packagePath,
+        string installDir,
+        int processId,
+        string logPath,
+        string workDir)
+    {
+        var scriptPath = Path.Combine(workDir, "apply-update.sh");
+        var appBundle = ResolveMacAppBundle(installDir);
+        var script = """
+            #!/bin/sh
+            set -eu
+            PID_TO_WAIT="$1"
+            PKG="$2"
+            TARGET_APP="$3"
+            LOG="$4"
+
+            exec >>"$LOG" 2>&1
+            echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] Starting macOS update"
+
+            while kill -0 "$PID_TO_WAIT" 2>/dev/null; do
+              sleep 0.3
+            done
+
+            MOUNT_POINT=$(mktemp -d)
+            cleanup() {
+              hdiutil detach "$MOUNT_POINT" -quiet >/dev/null 2>&1 || hdiutil detach "$MOUNT_POINT" -force -quiet >/dev/null 2>&1 || true
+              rmdir "$MOUNT_POINT" >/dev/null 2>&1 || true
             }
-            Write-Output 'Update completed.'
-        }
-        catch {
-            Write-Output "Update failed: $_"
-        }
-        finally {
-            Start-Process -FilePath $Exe
-            Stop-Transcript | Out-Null
-        }
-        """;
+            trap cleanup EXIT
+
+            hdiutil attach "$PKG" -nobrowse -quiet -mountpoint "$MOUNT_POINT"
+            SRC_APP=$(find "$MOUNT_POINT" -maxdepth 2 -name "*.app" -print -quit)
+            if [ -z "${SRC_APP:-}" ] || [ ! -d "$SRC_APP" ]; then
+              echo "Could not locate .app bundle inside $PKG"
+              exit 1
+            fi
+
+            PARENT_DIR=$(dirname "$TARGET_APP")
+            if [ -w "$PARENT_DIR" ]; then
+              rm -rf "$TARGET_APP"
+              ditto "$SRC_APP" "$TARGET_APP"
+              xattr -dr com.apple.quarantine "$TARGET_APP" >/dev/null 2>&1 || true
+            else
+              osascript -e "do shell script \"rm -rf '$TARGET_APP' && ditto '$SRC_APP' '$TARGET_APP' && xattr -dr com.apple.quarantine '$TARGET_APP'\" with administrator privileges"
+            fi
+
+            rm -f "$PKG"
+            open -a "$TARGET_APP"
+            """;
+
+        File.WriteAllText(scriptPath, script.Replace("\r\n", "\n"));
+        if (!OperatingSystem.IsWindows())
+            File.SetUnixFileMode(scriptPath, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+
+        var psi = new ProcessStartInfo
+        {
+            FileName = "/bin/sh",
+            UseShellExecute = false,
+            CreateNoWindow = true,
+        };
+        psi.ArgumentList.Add(scriptPath);
+        psi.ArgumentList.Add(processId.ToString());
+        psi.ArgumentList.Add(packagePath);
+        psi.ArgumentList.Add(appBundle);
+        psi.ArgumentList.Add(logPath);
+
+        Process.Start(psi);
+    }
+
+    private static string ResolveMacAppBundle(string installDir)
+    {
+        var normalized = installDir.Replace('\\', '/').TrimEnd('/');
+        var idx = normalized.IndexOf(".app/Contents/MacOS", StringComparison.OrdinalIgnoreCase);
+        if (idx >= 0)
+            return normalized[..(idx + 4)];
+
+        return "/Applications/LiveClaude.app";
+    }
 }

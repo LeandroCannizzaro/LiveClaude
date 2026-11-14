@@ -614,7 +614,7 @@ public sealed class ShellViewModel : ObservableObject, IAsyncDisposable
             var notes = update.Manifest.NotesUrl?.ToString()
                         ?? UpdateChecker.ReleaseNotesUrl(UpdateChecker.ManifestUrl()).ToString();
             var open = await Dialogs.ConfirmAsync(
-                $"Version v{update.Version.ToString(3)} is available, but this copy is not an installed MSI or ZIP package.\n\nOpen the release notes in your browser?",
+                $"Version v{update.Version.ToString(3)} is available, but this copy is not an installed package.\n\nOpen the release notes in your browser?",
                 "Update available");
             if (open)
                 OpenUrl(notes);
@@ -636,7 +636,8 @@ public sealed class ShellViewModel : ObservableObject, IAsyncDisposable
             var dir = UpdateInstaller.DownloadDirectory(update.Version);
             var packagePath = await UpdateInstaller.DownloadAsync(http, update.Package, dir, progress: null);
 
-            var exe = Environment.ProcessPath ?? Path.Combine(AppContext.BaseDirectory, "LiveClaude.exe");
+            var exeName = OperatingSystem.IsWindows() ? "LiveClaude.exe" : "LiveClaude";
+            var exe = Environment.ProcessPath ?? Path.Combine(AppContext.BaseDirectory, exeName);
             var log = Path.Combine(ConfigStore.LogDirectory, $"update-{update.Version.ToString(3)}.log");
             UpdateInstaller.Launch(kind, packagePath, AppContext.BaseDirectory, exe, Environment.ProcessId, log);
 
