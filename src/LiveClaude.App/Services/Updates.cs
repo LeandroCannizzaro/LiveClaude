@@ -23,7 +23,9 @@ public sealed record UpdateManifest(
     [property: JsonPropertyName("linuxX64")] UpdatePackage? LinuxX64 = null,
     [property: JsonPropertyName("linuxArm64")] UpdatePackage? LinuxArm64 = null,
     [property: JsonPropertyName("osxX64")] UpdatePackage? OsxX64 = null,
-    [property: JsonPropertyName("osxArm64")] UpdatePackage? OsxArm64 = null);
+    [property: JsonPropertyName("osxArm64")] UpdatePackage? OsxArm64 = null,
+    [property: JsonPropertyName("osxX64Macos11")] UpdatePackage? OsxX64Macos11 = null,
+    [property: JsonPropertyName("osxArm64Macos11")] UpdatePackage? OsxArm64Macos11 = null);
 
 public enum InstallKind
 {
@@ -133,7 +135,8 @@ public sealed class UpdateChecker
         UpdateManifest? manifest,
         Version current,
         InstallKind kind,
-        Architecture? arch = null)
+        Architecture? arch = null,
+        bool? isMacOs11 = null)
     {
         if (manifest is null)
             return null;
@@ -152,16 +155,20 @@ public sealed class UpdateChecker
             return null;
 
         var targetArch = arch ?? RuntimeInformation.OSArchitecture;
-        var pkg = SelectPackage(manifest, kind, targetArch);
+        var macOs11 = isMacOs11 ?? (OperatingSystem.IsMacOS() && Environment.OSVersion.Version.Major < 12);
+        var pkg = SelectPackage(manifest, kind, targetArch, macOs11);
         return new AvailableUpdate(remote, manifest, pkg);
     }
 
-    private static UpdatePackage? SelectPackage(UpdateManifest manifest, InstallKind kind, Architecture arch) =>
+    private static UpdatePackage? SelectPackage(UpdateManifest manifest, InstallKind kind, Architecture arch, bool macOs11) =>
         kind switch
         {
             InstallKind.Msi => manifest.Msi,
             InstallKind.ZipPerUser or InstallKind.ZipAllUsers => manifest.Zip,
             InstallKind.LinuxTarball => arch == Architecture.Arm64 ? manifest.LinuxArm64 : manifest.LinuxX64,
+            InstallKind.MacOsDmg when macOs11 => arch == Architecture.Arm64
+                ? (manifest.OsxArm64Macos11 ?? manifest.OsxArm64)
+                : (manifest.OsxX64Macos11 ?? manifest.OsxX64),
             InstallKind.MacOsDmg => arch == Architecture.Arm64 ? manifest.OsxArm64 : manifest.OsxX64,
             _ => null,
         };

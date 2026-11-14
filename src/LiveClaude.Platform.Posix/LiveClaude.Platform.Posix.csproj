@@ -1,7 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFramework>net10.0</TargetFramework>
+    <TargetFramework>$(BaseTargetFramework)</TargetFramework>
     <AssemblyName>LiveClaude.Platform.Posix</AssemblyName>
     <RootNamespace>LiveClaude.Platform.Posix</RootNamespace>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>

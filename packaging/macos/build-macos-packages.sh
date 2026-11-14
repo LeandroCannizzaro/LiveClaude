@@ -14,6 +14,13 @@ set -euo pipefail
 VERSION="${1:?version required}"
 RID="${2:?runtime identifier required, e.g. osx-arm64}"
 OUTPUT="${3:?output directory required}"
+TFM="${4:-net10.0}"
+SUFFIX="${5:-}"
+
+MIN_OS="12.0"
+if [ "$TFM" = "net8.0" ]; then
+  MIN_OS="11.0"
+fi
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 STAGE="$(mktemp -d)"
@@ -26,22 +33,24 @@ esac
 
 mkdir -p "$OUTPUT"
 
-echo "==> publishing $RID"
+echo "==> publishing $RID ($TFM)"
 PUBLISH="$STAGE/publish"
 dotnet publish "$ROOT/src/LiveClaude.App/LiveClaude.App.csproj" \
-  -c Release -r "$RID" --self-contained true \
+  -c Release -r "$RID" -f "$TFM" --self-contained true \
+  -p:BaseTargetFramework="$TFM" \
   -p:Version="$VERSION" \
   -o "$PUBLISH"
 
 dotnet publish "$ROOT/src/LiveClaude.Service/LiveClaude.Service.csproj" \
-  -c Release -r "$RID" --self-contained true \
+  -c Release -r "$RID" -f "$TFM" --self-contained true \
+  -p:BaseTargetFramework="$TFM" \
   -p:Version="$VERSION" \
   -o "$PUBLISH"
 
 chmod +x "$PUBLISH/LiveClaude" "$PUBLISH/LiveClaude.Service"
 
 echo "==> tar.gz"
-tar -czf "$OUTPUT/LiveClaude-$VERSION-$RID.tar.gz" -C "$PUBLISH" .
+tar -czf "$OUTPUT/LiveClaude-$VERSION-$RID$SUFFIX.tar.gz" -C "$PUBLISH" .
 
 # ---------------------------------------------------------------- app bundle
 
@@ -75,7 +84,7 @@ cat > "$APP/Contents/Info.plist" <<PLIST
     <key>CFBundleIconFile</key>
     <string>liveclaude.icns</string>
     <key>LSMinimumSystemVersion</key>
-    <string>11.0</string>
+    <string>$MIN_OS</string>
     <key>NSHighResolutionCapable</key>
     <true/>
     <key>NSHumanReadableCopyright</key>
@@ -125,6 +134,6 @@ hdiutil create \
   -volname "LiveClaude $VERSION" \
   -srcfolder "$DMG_ROOT" \
   -ov -format UDZO \
-  "$OUTPUT/LiveClaude-$VERSION-$RID.dmg"
+  "$OUTPUT/LiveClaude-$VERSION-$RID$SUFFIX.dmg"
 
 echo "==> done: $(ls "$OUTPUT")"

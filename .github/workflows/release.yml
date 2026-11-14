@@ -45,7 +45,9 @@ jobs:
       - name: Set up .NET
         uses: actions/setup-dotnet@v5
         with:
-          dotnet-version: ${{ env.DOTNET_VERSION }}
+          dotnet-version: |
+            ${{ env.DOTNET_VERSION }}
+            8.0.x
 
       - name: Set up MSBuild (ClickOnce needs the .NET Framework MSBuild)
         uses: microsoft/setup-msbuild@v2
@@ -181,7 +183,9 @@ jobs:
       - name: Set up .NET
         uses: actions/setup-dotnet@v5
         with:
-          dotnet-version: ${{ env.DOTNET_VERSION }}
+          dotnet-version: |
+            ${{ env.DOTNET_VERSION }}
+            8.0.x
 
       - name: Test
         if: matrix.rid == 'linux-x64'
@@ -217,7 +221,9 @@ jobs:
       - name: Set up .NET
         uses: actions/setup-dotnet@v5
         with:
-          dotnet-version: ${{ env.DOTNET_VERSION }}
+          dotnet-version: |
+            ${{ env.DOTNET_VERSION }}
+            8.0.x
 
       - name: Test
         if: matrix.rid == 'osx-arm64'
@@ -225,11 +231,16 @@ jobs:
           dotnet test tests/LiveClaude.Tests/LiveClaude.Tests.csproj -c Release
           dotnet test tests/LiveClaude.Tests.Platform/LiveClaude.Tests.Platform.csproj -c Release
 
-      - name: Build packages
+      - name: Build packages (macOS 12+ on .NET 10)
         run: |
           chmod +x packaging/macos/build-macos-packages.sh
           packaging/macos/build-macos-packages.sh \
-            "${{ needs.version.outputs.version }}" "${{ matrix.rid }}" artifacts/packages
+            "${{ needs.version.outputs.version }}" "${{ matrix.rid }}" artifacts/packages net10.0 ""
+
+      - name: Build packages (macOS 11 Big Sur on .NET 8)
+        run: |
+          packaging/macos/build-macos-packages.sh \
+            "${{ needs.version.outputs.version }}" "${{ matrix.rid }}" artifacts/packages net8.0 "-macos11"
 
       - uses: actions/upload-artifact@v5
         with:
@@ -272,8 +283,10 @@ jobs:
             zip         = Package "LiveClaude-$v-win-x64-installer.zip"
             linuxX64    = Package "LiveClaude-$v-linux-x64.tar.gz"
             linuxArm64  = Package "LiveClaude-$v-linux-arm64.tar.gz"
-            osxX64      = Package "LiveClaude-$v-osx-x64.dmg"
-            osxArm64    = Package "LiveClaude-$v-osx-arm64.dmg"
+            osxX64         = Package "LiveClaude-$v-osx-x64.dmg"
+            osxArm64       = Package "LiveClaude-$v-osx-arm64.dmg"
+            osxX64Macos11  = Package "LiveClaude-$v-osx-x64-macos11.dmg"
+            osxArm64Macos11 = Package "LiveClaude-$v-osx-arm64-macos11.dmg"
           } | ConvertTo-Json -Depth 3 | Set-Content artifacts/packages/update.json -Encoding utf8
 
       - name: Compute checksums

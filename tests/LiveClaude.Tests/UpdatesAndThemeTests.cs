@@ -28,6 +28,7 @@ public class UpdatesAndThemeTests
         var linuxArm64 = new UpdatePackage(new Uri("https://example.com/LiveClaude-2.2.0-linux-arm64.tar.gz"), "jkl", 310);
         var osxX64 = new UpdatePackage(new Uri("https://example.com/LiveClaude-2.2.0-osx-x64.dmg"), "mno", 400);
         var osxArm64 = new UpdatePackage(new Uri("https://example.com/LiveClaude-2.2.0-osx-arm64.dmg"), "pqr", 410);
+        var osxArm64Macos11 = new UpdatePackage(new Uri("https://example.com/LiveClaude-2.2.0-osx-arm64-macos11.dmg"), "stu", 420);
         var manifest = new UpdateManifest(
             "2.2.0",
             Msi: msi,
@@ -35,15 +36,17 @@ public class UpdatesAndThemeTests
             LinuxX64: linuxX64,
             LinuxArm64: linuxArm64,
             OsxX64: osxX64,
-            OsxArm64: osxArm64);
+            OsxArm64: osxArm64,
+            OsxArm64Macos11: osxArm64Macos11);
 
         Assert.Null(UpdateChecker.Evaluate(manifest, new Version(2, 2, 0, 0), InstallKind.Msi));
         Assert.Equal(msi, UpdateChecker.Evaluate(manifest, new Version(2, 1, 3, 0), InstallKind.Msi)?.Package);
         Assert.Equal(zip, UpdateChecker.Evaluate(manifest, new Version(2, 1, 3, 0), InstallKind.ZipPerUser)?.Package);
         Assert.Equal(linuxX64, UpdateChecker.Evaluate(manifest, new Version(2, 1, 3, 0), InstallKind.LinuxTarball, Architecture.X64)?.Package);
         Assert.Equal(linuxArm64, UpdateChecker.Evaluate(manifest, new Version(2, 1, 3, 0), InstallKind.LinuxTarball, Architecture.Arm64)?.Package);
-        Assert.Equal(osxX64, UpdateChecker.Evaluate(manifest, new Version(2, 1, 3, 0), InstallKind.MacOsDmg, Architecture.X64)?.Package);
-        Assert.Equal(osxArm64, UpdateChecker.Evaluate(manifest, new Version(2, 1, 3, 0), InstallKind.MacOsDmg, Architecture.Arm64)?.Package);
+        Assert.Equal(osxX64, UpdateChecker.Evaluate(manifest, new Version(2, 1, 3, 0), InstallKind.MacOsDmg, Architecture.X64, isMacOs11: false)?.Package);
+        Assert.Equal(osxArm64, UpdateChecker.Evaluate(manifest, new Version(2, 1, 3, 0), InstallKind.MacOsDmg, Architecture.Arm64, isMacOs11: false)?.Package);
+        Assert.Equal(osxArm64Macos11, UpdateChecker.Evaluate(manifest, new Version(2, 1, 3, 0), InstallKind.MacOsDmg, Architecture.Arm64, isMacOs11: true)?.Package);
         Assert.Null(UpdateChecker.Evaluate(manifest, new Version(2, 1, 3, 0), InstallKind.None)?.Package);
     }
 

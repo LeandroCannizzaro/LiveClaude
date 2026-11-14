@@ -47,6 +47,15 @@
     <h1>Release Notes</h1>
     <p class="meta">Published releases of LiveClaude.</p>
 
+    <section id="v2.2.7" class="card">
+      <h2>v2.2.7</h2>
+      <div class="meta">Dual macOS packages: macOS 12+ (.NET 10) &amp; macOS 11 Big Sur (.NET 8)</div>
+      <ul>
+        <li><strong>Dual macOS builds:</strong> publishes standard <code>.dmg</code> packages on <code>net10.0</code> for macOS 12+ alongside <code>-macos11.dmg</code> packages on <code>net8.0</code> for macOS 11 Big Sur (Windows and Linux remain on <code>net10.0</code>).</li>
+        <li><strong>OS-version-aware download &amp; auto-update:</strong> the product site detects macOS 11 vs 12+ via browser Client Hints and offers direct links for both; <code>Updates.cs</code> automatically selects <code>-macos11.dmg</code> when running on macOS 11.</li>
+      </ul>
+    </section>
+
     <section id="v2.2.6" class="card">
       <h2>v2.2.6</h2>
       <div class="meta">Lower macOS Info.plist minimum version to 11.0</div>
