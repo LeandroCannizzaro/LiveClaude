@@ -1,6 +1,9 @@
 using System.Runtime.InteropServices;
+using LiveClaude.Abstractions;
 using LiveClaude.App.Services;
+using LiveClaude.Core.Config;
 using LiveClaude.Core.Model;
+using LiveClaude.Core.Supervision;
 using Xunit;
 
 namespace LiveClaude.Tests;
@@ -85,5 +88,39 @@ public class UpdatesAndThemeTests
         Assert.Equal(10, ThemeService.Presets.Count);
         Assert.True(ThemeService.GetPreset("Solarized Light").IsLight);
         Assert.False(ThemeService.GetPreset("Dracula").IsLight);
+    }
+
+    [Fact]
+    public async Task SupervisorSaveSettingsPersistsTheme()
+    {
+        var tempDir = Directory.CreateTempSubdirectory("liveclaude-supervisor-theme-");
+        try
+        {
+            var store = new ConfigStore(Path.Combine(tempDir.FullName, "config.json"));
+            store.Save(new AppConfig());
+
+            await using var supervisor = new Supervisor(store);
+            var updated = store.Load();
+            updated.Backoff.MaxRestarts = 5;
+            updated.Theme = new ThemeSettings
+            {
+                PresetName = "Dracula",
+                CustomColors = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+                {
+                    ["AccentColor"] = "#FF79C6"
+                }
+            };
+
+            await supervisor.SaveSettingsAsync(updated);
+
+            var reloaded = store.Load();
+            Assert.Equal(5, reloaded.Backoff.MaxRestarts);
+            Assert.Equal("Dracula", reloaded.Theme.PresetName);
+            Assert.Equal("#FF79C6", reloaded.Theme.CustomColors["AccentColor"]);
+        }
+        finally
+        {
+            tempDir.Delete(recursive: true);
+        }
     }
 }

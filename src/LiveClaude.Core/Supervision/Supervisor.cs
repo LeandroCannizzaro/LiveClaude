@@ -211,6 +211,7 @@ public sealed class Supervisor : IAsyncDisposable
         current.UsePseudoConsole = config.UsePseudoConsole;
         current.GracefulStopSeconds = config.GracefulStopSeconds;
         current.Backoff = config.Backoff;
+        current.Theme = (config.Theme ?? new ThemeSettings()).Clone();
         current.Version = ConfigMigration.CurrentVersion;
         _store.Save(current);
         await ReconcileAsync(current, startAutoStart: false, ct).ConfigureAwait(false);
