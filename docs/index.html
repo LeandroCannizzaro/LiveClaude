@@ -47,9 +47,9 @@
       <a class="btn" href="release-notes.html">Release Notes</a>
       <a class="btn" href="https://github.com/LeandroCannizzaro/LiveClaude">View on GitHub</a>
     </div>
-    <p class="download-meta">
+    <p class="download-meta" id="download-meta">
       Direct installer button automatically picks <code>.msi</code> (Windows x64), <code>.dmg</code> (macOS Intel / Apple Silicon),
-      or <code>.rpm</code> (Linux x64 / ARM64). Also available as <code>.deb</code>, <code>.tar.gz</code>, portable <code>.zip</code>, and <code>winget</code>.
+      or <code>.deb</code> / <code>.rpm</code> (Linux x64 / ARM64). Also available as <code>.tar.gz</code>, portable <code>.zip</code>, and <code>winget</code>.
     </p>
     <p id="installations" style="margin-top:18px">
       <a href="https://hits.sh/leandrocannizzaro.github.io/liveclaude/installations/" target="_blank" rel="noopener noreferrer">
@@ -262,8 +262,13 @@
       </div>
 
       <div id="inst-linux" class="panel" role="tabpanel" hidden>
-        <p>Install automatically with the one-line script, or download <code>.rpm</code> / <code>.deb</code> / <code>.tar.gz</code> directly:</p>
+        <p>Install automatically with the one-line script (detects <code>.deb</code>, <code>.rpm</code>, or tarball for your distro):</p>
 <pre><code>curl -fsSL https://leandrocannizzaro.github.io/LiveClaude/install.sh | sh</code></pre>
+        <ul>
+          <li><strong>Ubuntu / Debian / Linux Mint (<code>.deb</code>):</strong> download <code>liveclaude_&lt;version&gt;_amd64.deb</code> (or <code>_arm64.deb</code>) and double-click to open in App Center / Software Install, or run <code>sudo apt install ./liveclaude_*.deb</code>.</li>
+          <li><strong>Fedora / RHEL / openSUSE (<code>.rpm</code>):</strong> download <code>liveclaude-&lt;version&gt;-1.x86_64.rpm</code> (or <code>.aarch64.rpm</code>) and run <code>sudo dnf install ./liveclaude-*.rpm</code>.</li>
+          <li><strong>Other distros:</strong> extract <code>LiveClaude-&lt;version&gt;-linux-x64.tar.gz</code> (or <code>-linux-arm64.tar.gz</code>).</li>
+        </ul>
         <p>Packages install to <code>/opt/liveclaude</code> and register desktop entries for <code>LiveClaude</code>.</p>
       </div>
 
@@ -704,9 +709,10 @@
     sections.forEach(function (s) { observer.observe(s); });
   })();
 
-  // Direct download button (.msi / .dmg / .rpm) based on OS and CPU architecture
+  // Direct download button (.msi / .dmg / .deb / .rpm) based on OS and CPU architecture
   (async function () {
     var btn = document.getElementById('download-btn');
+    var meta = document.getElementById('download-meta');
     if (!btn) return;
 
     var ua = navigator.userAgent || '';
@@ -728,9 +734,11 @@
 
     if (os === 'unknown') return;
 
+    var isRpmDistro = /Fedora|Red Hat|RHEL|CentOS|AlmaLinux|Rocky|openSUSE|SUSE/i.test(ua);
     var labelSuffix = os === 'windows' ? (isArm64 ? 'Windows ARM64 (.zip)' : 'Windows (.msi)')
       : os === 'macos' ? (isArm64 ? 'macOS Apple Silicon (.dmg)' : 'macOS Intel (.dmg)')
-      : (isArm64 ? 'Linux ARM64 (.rpm)' : 'Linux x64 (.rpm)');
+      : isRpmDistro ? (isArm64 ? 'Linux ARM64 (.rpm)' : 'Linux x64 (.rpm)')
+      : (isArm64 ? 'Linux Ubuntu/Debian ARM64 (.deb)' : 'Linux Ubuntu/Debian x64 (.deb)');
 
     btn.textContent = 'Download for ' + labelSuffix;
 
@@ -746,13 +754,28 @@
         ? (isArm64 ? function (n) { return /-win-arm64\.zip$/i.test(n); } : function (n) { return /-x64\.msi$/i.test(n); })
         : os === 'macos'
         ? (isArm64 ? function (n) { return /-osx-arm64\.dmg$/i.test(n); } : function (n) { return /-osx-x64\.dmg$/i.test(n); })
-        : (isArm64 ? function (n) { return /\.aarch64\.rpm$/i.test(n); } : function (n) { return /\.x86_64\.rpm$/i.test(n); });
+        : isRpmDistro
+        ? (isArm64 ? function (n) { return /\.aarch64\.rpm$/i.test(n); } : function (n) { return /\.x86_64\.rpm$/i.test(n); })
+        : (isArm64 ? function (n) { return /_arm64\.deb$/i.test(n); } : function (n) { return /_amd64\.deb$/i.test(n); });
 
       var asset = assets.find(function (a) { return a && a.name && matcher(a.name); });
       if (asset && asset.browser_download_url) {
         btn.href = asset.browser_download_url;
         var ver = release.tag_name ? ' ' + release.tag_name : '';
         btn.textContent = 'Download' + ver + ' — ' + labelSuffix;
+      }
+
+      if (os === 'linux' && meta) {
+        var debAsset = assets.find(function (a) { return a && a.name && (isArm64 ? /_arm64\.deb$/i : /_amd64\.deb$/i).test(a.name); });
+        var rpmAsset = assets.find(function (a) { return a && a.name && (isArm64 ? /\.aarch64\.rpm$/i : /\.x86_64\.rpm$/i).test(a.name); });
+        var tarAsset = assets.find(function (a) { return a && a.name && (isArm64 ? /-linux-arm64\.tar\.gz$/i : /-linux-x64\.tar\.gz$/i).test(a.name); });
+        var links = [];
+        if (debAsset) links.push('<a href="' + debAsset.browser_download_url + '">Ubuntu / Debian (.deb)</a>');
+        if (rpmAsset) links.push('<a href="' + rpmAsset.browser_download_url + '">Fedora / RHEL (.rpm)</a>');
+        if (tarAsset) links.push('<a href="' + tarAsset.browser_download_url + '">Portable (.tar.gz)</a>');
+        if (links.length) {
+          meta.innerHTML = 'Linux packages: ' + links.join(' · ') + ' · or run <code>curl -fsSL https://leandrocannizzaro.github.io/LiveClaude/install.sh | sh</code>';
+        }
       }
     } catch (_) {}
   })();
