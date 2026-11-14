@@ -9,6 +9,11 @@
 
   <Border Classes="card" Margin="20" Padding="24">
     <StackPanel>
+      <Border CornerRadius="12" ClipToBounds="True" Height="175" Margin="0,0,0,18"
+              BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1">
+        <Image Source="avares://LiveClaude/Assets/about-banner.png" Stretch="UniformToFill" />
+      </Border>
+
       <Grid ColumnDefinitions="Auto,*">
         <Border Grid.Column="0" Width="76" Height="76" CornerRadius="14"
                 Background="{DynamicResource SurfaceAltBrush}"
